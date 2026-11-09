@@ -244,3 +244,29 @@ def test_empty_marker_targets_are_unresolved(call: CallFn, store: ArtifactStore)
     )
     report = store.get_model(ref.id, CompletenessReport)
     assert report.unresolved_markers == ["[K:]", "[A:]"]
+
+
+def test_raw_html_in_sections_and_title_is_escaped(call: CallFn, store: ArtifactStore) -> None:
+    sections = DocumentSections(
+        template_id=TEMPLATE,
+        sections=[
+            DocumentSection(
+                section_id="executive_summary",
+                body_md='Hello <script>alert(1)</script> <a href="#" onclick="x()">link</a>',
+            )
+        ],
+    )
+    sid = store.put_model(sections, kind="document_sections").id
+    out = RenderOutput.model_validate(
+        call(
+            "doc-renderer",
+            "render_document",
+            RenderDocumentInput(
+                template_id=TEMPLATE, sections_id=sid, title="<script>alert(2)</script>"
+            ),
+        ).structured_content
+    )
+    html = store.get(out.html.id).decode()
+    assert "<script>" not in html and "<a href" not in html
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
+    assert "&lt;script&gt;alert(2)&lt;/script&gt;" in html

@@ -105,7 +105,7 @@ def _environment(ctx: ToolContext, template_id: str) -> Environment:
 
 
 def _to_html(title: str, markdown: str) -> str:
-    body = MarkdownIt("commonmark").render(markdown)
+    body = MarkdownIt("commonmark", {"html": False}).render(markdown)
     return (
         '<!doctype html><html><head><meta charset="utf-8">'
         f"<title>{html.escape(title)}</title><style>{_STYLE}</style></head>"
