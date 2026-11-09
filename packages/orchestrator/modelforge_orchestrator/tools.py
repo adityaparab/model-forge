@@ -43,6 +43,7 @@ __all__ = [
     "ToolError",
     "extract_refs",
     "parse_error",
+    "server_environment",
 ]
 
 ALL_SERVERS: tuple[ServerName, ...] = get_args(ServerName)
@@ -350,6 +351,35 @@ class BaseToolClient:
         raise AssertionError("unreachable")
 
 
+_PASSED_THROUGH = ("PATH", "HOME", "LANG", "VIRTUAL_ENV", "PYTHONPATH", "TMPDIR")
+
+
+def server_environment(
+    settings: Settings, parent: Mapping[str, str] | None = None
+) -> dict[str, str]:
+    """The environment of a stdio server: an allowlist of ``parent``, never its secrets.
+
+    Passes ``PATH``, ``HOME``, ``LANG``, ``LC_*``, ``VIRTUAL_ENV``, ``PYTHONPATH`` and ``TMPDIR``
+    when present, the three directory settings, and ``MODELFORGE_LOG_LEVEL`` (``WARNING`` unless
+    the parent sets it). ``MODELFORGE_DATABASE_URL`` and everything else stay behind.
+    """
+    source = os.environ if parent is None else parent
+    env = {
+        key: value
+        for key, value in source.items()
+        if key in _PASSED_THROUGH or key.startswith("LC_")
+    }
+    env.update(
+        {
+            "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
+            "MODELFORGE_DATA_DIR": str(settings.data_dir),
+            "MODELFORGE_TEMPLATES_DIR": str(settings.templates_dir),
+            "MODELFORGE_LOG_LEVEL": source.get("MODELFORGE_LOG_LEVEL", "WARNING"),
+        }
+    )
+    return env
+
+
 class StdioToolClient(BaseToolClient):
     """Each server is a `python -m modelforge_mcp <server>` subprocess (or `mcp_command`).
 
@@ -370,12 +400,7 @@ class StdioToolClient(BaseToolClient):
             else (sys.executable, "-m", "modelforge_mcp")
         )
         self.marker = uuid.uuid4().hex
-        env = {
-            **os.environ,
-            "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
-            "MODELFORGE_DATA_DIR": str(settings.data_dir),
-            "MODELFORGE_TEMPLATES_DIR": str(settings.templates_dir),
-        }
+        self.server_env = env = server_environment(settings)
 
         def factory(name: ServerName) -> ClientFactory:
             params = StdioServerParameters(

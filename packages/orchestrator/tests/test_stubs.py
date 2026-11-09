@@ -43,6 +43,12 @@ def test_format_number() -> None:
         format_number(float("nan")),
         format_number(None),
     ) == ("0.8123", "43405", "n/a", "n/a")
+    assert (format_number("NaN"), format_number("Infinity"), format_number("-Infinity")) == (
+        "n/a",
+        "n/a",
+        "n/a",
+    )
+    assert format_number(True) == "n/a"
 
 
 @pytest.mark.db

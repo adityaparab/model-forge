@@ -39,7 +39,7 @@ development: >-
   {n_features_selected} [A:{selection_id}#selected] were selected. The final model was
   estimated with the {fit_method} [A:{champion_id}#fit_method] procedure and uses the
   features {features} [A:{champion_id}#features]. Predicted probabilities were calibrated
-  on the development sample.
+  on the validation split.
 performance: >-
   The champion's AUC is {auc_val} [A:{discrimination_id}#by_split.val.auc] on the validation
   sample and {auc_oot} [A:{discrimination_id}#by_split.oot.auc] on the out-of-time sample.

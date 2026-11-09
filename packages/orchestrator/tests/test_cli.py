@@ -48,6 +48,7 @@ def test_cli_status_json_and_unknown_run(cli: Cli) -> None:
     document = json.loads(status.stdout)
     assert document["run"]["id"] == run_id and document["run"]["status"] == "queued"
     assert document["steps"] == [] and document["refs"] == {}
+    assert document["gate_prompt"] is None
     assert cli("status", "run_000000000000").returncode == 2
 
 
@@ -59,8 +60,66 @@ def test_cli_resume_and_abort(cli: Cli, settings: Settings) -> None:
     assert cli("abort", run_id).returncode == 0
     assert cli("status", run_id).stdout.splitlines()[0] == f"{run_id} aborted"
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        queued = conn.execute("select 1 from run_queue where run_id = %s", (run_id,)).fetchone()
+        assert queued is None  # aborting a queued run releases its queue row
         conn.execute("update runs set status = 'completed' where id = %s", (run_id,))
     assert cli("abort", run_id).returncode == 2
+
+
+@pytest.mark.db
+def test_cli_abort_refuses_running_run(cli: Cli, settings: Settings) -> None:
+    run_id = run_id_from(cli("run", str(SYNTHETIC), "--requester", "alice", "--detach").stdout)
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        conn.execute("update runs set status = 'running' where id = %s", (run_id,))
+    result = cli("abort", run_id)
+    assert result.returncode == 2 and "no cancellation" in result.stderr
+    assert cli("status", run_id).stdout.splitlines()[0] == f"{run_id} running"
+
+
+@pytest.mark.db
+def test_cli_run_unknown_threshold_exits_2_without_a_run(
+    cli: Cli, settings: Settings, tmp_path: Path
+) -> None:
+    text = SYNTHETIC.read_text()
+    assert "thresholds: {}" in text
+    brief = tmp_path / "b.yaml"
+    brief.write_text(text.replace("thresholds: {}", "thresholds: {auc_minimum: 0.75}"))
+
+    def count() -> int:
+        with psycopg.connect(settings.database_url, autocommit=True) as conn:
+            row = conn.execute("select count(*) from runs").fetchone()
+        assert row is not None
+        return row[0]
+
+    before = count()
+    result = cli("run", str(brief), "--requester", "alice")
+    assert result.returncode == 2 and "auc_minimum" in result.stderr
+    assert result.stdout == "" and count() == before
+
+
+@pytest.mark.db
+def test_cli_run_records_brief_artifact_and_shows_gate_prompt(cli: Cli, settings: Settings) -> None:
+    result = cli("run", str(SYNTHETIC), "--requester", "alice")
+    assert result.returncode == 0, result.stderr
+    run_id = run_id_from(result.stdout)
+    lines = result.stdout.splitlines()
+    assert lines[:2] == [f"{run_id} awaiting_scope", "gate: scope"]
+    assert lines[2].startswith("summary: {") and '"plan":{' in lines[2]
+    status = cli("status", run_id, "--json")
+    assert status.returncode == 0, status.stderr
+    prompt = json.loads(status.stdout)["gate_prompt"]
+    assert prompt["gate"] == "scope" and "plan" in prompt["summary"]
+    plain = cli("status", run_id).stdout
+    prompt_line = next(line for line in plain.splitlines() if line.startswith("gate prompt: "))
+    assert json.loads(prompt_line.removeprefix("gate prompt: "))["gate"] == "scope"
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        row = conn.execute(
+            "select a.id from artifacts a join runs r on r.id = a.run_id"
+            " where a.run_id = %s and a.kind = 'brief'",
+            (run_id,),
+        ).fetchone()
+        brief_ref = conn.execute("select brief_ref from runs where id = %s", (run_id,)).fetchone()
+    assert row is not None and brief_ref is not None and row[0] == brief_ref[0]
 
 
 @pytest.mark.db

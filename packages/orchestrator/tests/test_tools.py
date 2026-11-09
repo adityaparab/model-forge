@@ -22,6 +22,7 @@ from modelforge_orchestrator.tools import (
     ToolError,
     extract_refs,
     parse_error,
+    server_environment,
 )
 
 
@@ -131,3 +132,32 @@ def test_tool_error_str_and_dict() -> None:
         "code": "timeout",
         "message": "slow",
     }
+
+
+def test_stdio_servers_get_an_allowlisted_environment(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    parent = {
+        "PATH": "/bin",
+        "HOME": "/home/u",
+        "LC_ALL": "C.UTF-8",
+        "VIRTUAL_ENV": "/venv",
+        "MODELFORGE_DATABASE_URL": "postgresql://u:secret@h/db",
+        "AWS_SECRET_ACCESS_KEY": "x",
+    }
+    env = server_environment(settings, parent)
+    assert "MODELFORGE_DATABASE_URL" not in env and "AWS_SECRET_ACCESS_KEY" not in env
+    assert {k: env[k] for k in ("PATH", "HOME", "LC_ALL", "VIRTUAL_ENV")} == {
+        k: parent[k] for k in ("PATH", "HOME", "LC_ALL", "VIRTUAL_ENV")
+    }
+    assert env["MODELFORGE_ARTIFACT_DIR"] == str(settings.artifact_dir)
+    assert env["MODELFORGE_DATA_DIR"] == str(settings.data_dir)
+    assert env["MODELFORGE_TEMPLATES_DIR"] == str(settings.templates_dir)
+    assert env["MODELFORGE_LOG_LEVEL"] == "WARNING"
+    assert (
+        server_environment(settings, {"MODELFORGE_LOG_LEVEL": "DEBUG"})["MODELFORGE_LOG_LEVEL"]
+        == "DEBUG"
+    )
+    monkeypatch.setenv("MODELFORGE_DATABASE_URL", "postgresql://u:secret@h/db")
+    client = StdioToolClient(settings, servers=["data-profiler"])
+    assert "MODELFORGE_DATABASE_URL" not in client.server_env

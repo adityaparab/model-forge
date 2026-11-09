@@ -21,13 +21,13 @@ from modelforge_lineage.events import list_events
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import ArtifactRef, GateDecision, GateName, RunRecord
 from modelforge_lineage.observability import configure_logging
-from modelforge_lineage.queue import enqueue
-from modelforge_lineage.steps import list_steps
+from modelforge_lineage.queue import enqueue, release
+from modelforge_lineage.steps import insert_artifact, list_steps
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
 from modelforge_lineage.verify import verify_run
 from pydantic import ValidationError
 
-from modelforge_orchestrator.briefs import BriefError, brief_hash, load_brief
+from modelforge_orchestrator.briefs import BriefError, brief_hash, load_brief, plan_from_brief
 from modelforge_orchestrator.config import Settings, load_settings
 from modelforge_orchestrator.graph import build_graph
 from modelforge_orchestrator.replay import ReplayError, create_replay
@@ -82,18 +82,20 @@ def _refs(db: Database, run_id: str) -> dict[str, ArtifactRef]:
     return {name: ArtifactRef.model_validate(ref) for name, ref in values.get("refs", {}).items()}
 
 
-def _gate_summary_keys(db: Database, run_id: str) -> list[str]:
+def _gate_prompt(db: Database, run_id: str) -> dict[str, Any] | None:
+    """The payload of the run's latest ``gate.requested`` event; `None` when none exists."""
     with db.connection() as conn:
         events = list_events(conn, run_id)
     requested = [e for e in events if e.type == "gate.requested"]
-    return list(requested[-1].payload.get("summary", {})) if requested else []
+    return requested[-1].payload if requested else None
 
 
 def _run_lines(db: Database, run: RunRecord) -> list[str]:
     lines = [f"{run.id} {run.status}"]
     if run.status in _GATE_OF_STATUS:
         lines.append(f"gate: {_GATE_OF_STATUS[run.status]}")
-        lines.append(f"summary keys: {', '.join(_gate_summary_keys(db, run.id))}")
+        prompt = _gate_prompt(db, run.id) or {}
+        lines.append(f"summary: {json.dumps(prompt.get('summary', {}), separators=(',', ':'))}")
     if run.status == "needs_attention" and run.error is not None:
         detail = run.error.get("error", {})
         message = detail.get("message", json.dumps(detail)) if isinstance(detail, dict) else detail
@@ -133,6 +135,10 @@ def run(
             _fail(f"invalid brief {brief_path}: {exc}")
         if brief.dataset.adapter not in ADAPTERS:
             _fail(f"unknown dataset adapter {brief.dataset.adapter!r}; known: {sorted(ADAPTERS)}")
+        try:
+            plan_from_brief(brief)
+        except ValueError as exc:
+            _fail(f"invalid brief {brief_path}: {exc}")
         ref = store.put(data, kind="brief", media_type=MEDIA_YAML)
         run_id = new_id("run")
         with db.transaction() as conn:
@@ -145,6 +151,9 @@ def run(
                 brief_ref=ref.id,
                 dataset_ref=brief.dataset.as_string(),
                 seed=brief.dataset.seed,
+            )
+            insert_artifact(
+                conn, run_id=run_id, ref=ref, uri=store.uri(ref.id), producer_step_id=None
             )
             enqueue(conn, run_id, "start")
         if not detach:
@@ -232,7 +241,14 @@ def abort(run_id: Annotated[str, typer.Argument(metavar="RUN_ID")]) -> None:
         current = _get_run(db, run_id)
         if current.status in ("completed", "rejected"):
             _fail(f"run {run_id} is {current.status} and cannot be aborted")
+        if current.status == "running":
+            _fail(
+                f"run {run_id} is running; SP2 has no cancellation, abort it after it parks"
+                " at a gate or in needs_attention"
+            )
         with db.transaction() as conn:
+            if current.status == "queued":
+                release(conn, run_id)
             runs.set_status(conn, run_id, "aborted")
         _print_run(db, _get_run(db, run_id), as_json=False)
     finally:
@@ -256,10 +272,12 @@ def status(
                 "run": record.model_dump(mode="json"),
                 "steps": [s.model_dump(mode="json") for s in steps],
                 "refs": {name: ref.model_dump(mode="json") for name, ref in refs.items()},
+                "gate_prompt": _gate_prompt(db, run_id),
             }
             typer.echo(json.dumps(document))
             return
         lines = _run_lines(db, record)
+        lines.append(f"gate prompt: {json.dumps(_gate_prompt(db, run_id))}")
         lines += [f"step {s.node} {s.attempt} {s.status}" for s in steps]
         lines += [
             f"ref {name} {ref.id} {json.dumps(ref.summary, sort_keys=True)}"

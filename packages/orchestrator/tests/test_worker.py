@@ -27,8 +27,9 @@ SYNTHETIC = REPO / "examples/briefs/synthetic.yaml"
 
 @pytest.mark.db
 def test_execute_parks_at_gates_and_completes(
-    settings: Settings, database: Database, store: ArtifactStore, checkpointer: PostgresSaver
+    settings: Settings, db: Database, store: ArtifactStore, checkpointer: PostgresSaver
 ) -> None:
+    database = db  # truncated: the empty-queue assertion below must not see other tests' runs
     run_id = queued_run(database, store, SYNTHETIC, requester="alice")
     run = run_once(
         settings,

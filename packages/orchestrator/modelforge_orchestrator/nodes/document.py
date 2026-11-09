@@ -32,9 +32,13 @@ SERVER = "doc-renderer"
 TEMPLATE_ID = "sr11-7-dev-doc"
 
 
-def format_number(x: float | int | None) -> str:
-    """4 significant figures for floats, plain digits for ints, ``n/a`` if absent or non-finite."""
-    if x is None:
+def format_number(x: float | int | str | None) -> str:
+    """4 significant figures for floats, plain digits for ints, ``n/a`` otherwise.
+
+    ``n/a`` covers absent values, non-finite floats, booleans and strings: the servers emit
+    non-finite floats as ``"NaN"``/``"Infinity"``/``"-Infinity"`` (``common.json_float``).
+    """
+    if x is None or isinstance(x, (str, bool)):
         return "n/a"
     if isinstance(x, int):
         return str(x)
