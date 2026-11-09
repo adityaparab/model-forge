@@ -17,10 +17,13 @@ from modelforge_mcp.schemas import DatasetRef
 from modelforge_orchestrator.briefs import BriefError, brief_hash, parse_brief
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
+from modelforge_orchestrator.nodes.build import build
+from modelforge_orchestrator.nodes.features import features
 from modelforge_orchestrator.nodes.intake import intake
 from modelforge_orchestrator.nodes.profile import profile
 from modelforge_orchestrator.nodes.scope import scope
 from modelforge_orchestrator.nodes.split import split
+from modelforge_orchestrator.nodes.validate import validate
 from modelforge_orchestrator.schemas import RunState, apply_update
 from modelforge_orchestrator.tools import InProcessToolClient
 
@@ -35,10 +38,12 @@ __all__ = [
     "prepared_state",
     "prepared_state_no_oot",
     "runtime",
+    "scoped_state",
     "settings",
     "state_no_oot",
     "store",
     "synthetic_state",
+    "validated_state",
 ]
 
 REPO = Path(__file__).resolve().parents[3]
@@ -153,6 +158,15 @@ def state_no_oot(db: Database, store: ArtifactStore, tmp_path: Path) -> RunState
     return make_run(db, store, path)
 
 
+@pytest.fixture
+def scoped_state(synthetic_state: RunState, runtime: Runtime[Deps]) -> RunState:
+    """``synthetic_state`` after `intake` and `scope`."""
+    state = synthetic_state
+    for node in (intake, scope):
+        state = apply_update(state, node(state, runtime))
+    return state
+
+
 def _prepare(state: RunState, runtime: Runtime[Deps]) -> RunState:
     """``state`` after `intake`, `scope`, `profile` and `split`, each update applied in turn."""
     for node in (intake, scope, profile, split):
@@ -168,3 +182,12 @@ def prepared_state(synthetic_state: RunState, runtime: Runtime[Deps]) -> RunStat
 @pytest.fixture
 def prepared_state_no_oot(state_no_oot: RunState, runtime: Runtime[Deps]) -> RunState:
     return _prepare(state_no_oot, runtime)
+
+
+@pytest.fixture
+def validated_state(prepared_state: RunState, runtime: Runtime[Deps]) -> RunState:
+    """``prepared_state`` after `features`, `build` and `validate`."""
+    state = prepared_state
+    for node in (features, build, validate):
+        state = apply_update(state, node(state, runtime))
+    return state
