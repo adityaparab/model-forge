@@ -1,0 +1,25 @@
+# local data and run outputs
+data/
+artifacts/
+.env
+.env.*
+
+# private notes (job targeting, interview prep drafts)
+notes/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+.pyright/
+
+# node
+node_modules/
+ui/dist/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
