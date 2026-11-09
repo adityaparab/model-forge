@@ -34,7 +34,7 @@ Success criteria:
 
 **In scope**
 
-- PD model development on retail-style tabular credit data with a wholesale flavour (corporate obligor financial ratios).
+- PD model development on tabular credit data where the obligors are companies (financial ratios as features), which gives the project its wholesale flavour.
 - Champion: WoE-binned logistic regression rendered as a JSON scorecard. Challenger model: LightGBM.
 - Validation: discrimination, calibration, stability, sensitivity, benchmark, threshold compliance.
 - Documentation generation with grounding checks.
@@ -59,7 +59,7 @@ Success criteria:
 One uv workspace. Python pinned to 3.12. Node 20+ for the console.
 
 ```
-modelforge/
+<repo root>/                     # project name: modelforge
   pyproject.toml                 # uv workspace root; shared tool config
   .python-version                # 3.12
   Makefile                       # demo, up, down, test, eval, lint, ui-dev
@@ -203,7 +203,7 @@ Common rules for every tool:
 | `profile_dataset` | dataset_ref | ProfileArtifact: row count, dtypes, missingness, descriptive stats, target rate overall and by vintage |
 | `check_leakage` | dataset_ref | LeakageReport: single-feature AUC > 0.9 flags, perfect separation, duplicate rows, identifier-like columns |
 | `compute_psi` | dataset_ref, base_vintages, compare_vintages, features? | PSIReport per feature |
-| `make_splits` | dataset_ref, strategy, oot_vintages, val_share, seed | SplitManifest: row-hash lists per split |
+| `make_splits` | dataset_ref, strategy (`vintage` or `stratified_random`), oot_vintages, val_share, seed | SplitManifest: row-hash lists per split; `oot_available` flag (false under `stratified_random`) |
 
 ### 6.2 credit-modeling v1
 
@@ -221,7 +221,7 @@ Common rules for every tool:
 | Tool | Input | Output |
 |---|---|---|
 | `discrimination_metrics` | scores_refs, split_ref | AUC, Gini, KS per split with bootstrap confidence intervals |
-| `calibration_tests` | scores_refs, split_ref, grades | binomial test per grade, Hosmer-Lemeshow, expected vs observed |
+| `calibration_tests` | scores_refs, split_ref, grades (default: 10 score deciles) | binomial test per grade, Hosmer-Lemeshow, expected vs observed |
 | `stability_tests` | scores_refs, dataset_ref, split_ref | PSI on scores, CSI per feature |
 | `sensitivity_analysis` | model_ref, dataset_ref, perturbations | coefficient sign checks, monotonicity, PD swing under bin shifts |
 | `benchmark_models` | champion_scores, challenger_scores, split_ref | AUC/KS deltas with confidence intervals |
@@ -317,11 +317,16 @@ Section by section, never one call. Template sections (SR 11-7 style development
 10. Governance and lineage
 11. Appendices: binning tables, scorecard, full metrics, citations
 
-A deterministic map (`templates/<id>/sections.yaml`) lists which artifact kinds each section may cite. The agent may call `search_regulation` up to 3 times per section. Citations are explicit markers: `[A:<artifact_id>#<path>]` and `[K:<citation_id>]`.
+A deterministic map (`templates/<id>/sections.yaml`) lists which artifact kinds each section may cite. Each section takes two gateway calls, so no tool-use loop is needed and the pattern works identically on local models:
+
+1. **Query planning** (structured output): given the section guidance and the artifact summaries, return up to 3 knowledge queries, or none. The orchestrator runs them through the knowledge MCP server.
+2. **Writing** (structured output): given the guidance, the artifact excerpts the map allows, and the retrieved passages, return the section body in Markdown plus the list of citations used.
+
+Citations are explicit markers: `[A:<artifact_id>#<path>]` and `[K:<citation_id>]`.
 
 Post-checks per section:
 
-- **Number grounding**: every numeric token in the text must match a value at the cited artifact path, with format tolerance (rounding, percent). Failing numbers are listed.
+- **Number grounding**: every numeric token in the text must match a value at the cited artifact path. Matching normalises both sides to 4 significant figures and treats percent and decimal forms as equivalent. Failing numbers are listed.
 - **Citation validity**: every marker resolves.
 - **Regulatory claims**: sentences naming a regulation or standard must carry a `[K:]` marker.
 
@@ -330,7 +335,8 @@ A failing section is regenerated once with the failure report appended. If it st
 ### 8.3 Challenger agent
 
 - Own prompt file, own routing purpose.
-- Context constructed only from lineage: rendered document, `ValidationReport`, `ModelingPlan`, and the knowledge tool. Never any field of developer-side state, prompts, or intermediate generations. A test constructs a run with sentinel strings in developer state and asserts they cannot appear in the challenger request.
+- Context constructed only from lineage: rendered document, `ValidationReport`, `ModelingPlan`, and knowledge passages. Never any field of developer-side state, prompts, or intermediate generations. A test constructs a run with sentinel strings in developer state and asserts they cannot appear in the challenger request.
+- Same two-call pattern as the documentation agent: a query-planning call returns up to 5 knowledge queries (for example, what SR 11-7 requires of a sensitivity analysis), the orchestrator runs them, then the review call receives document, report, plan and passages and returns the findings.
 - Deterministic pre-checks: template completeness; required sections present (conceptual soundness, data, methodology, performance, limitations, ongoing monitoring); every `fail` or `warn` in the validation report discussed in the document; out-of-time and sensitivity results present or explicitly marked not applicable with reason.
 - Output `FindingsList`: `id, round, severity (critical|high|medium|low), category (conceptual_soundness|data|methodology|performance|documentation|governance|limitations|monitoring), title, description, evidence[] (section ids, artifact ids, passage ids), required_action`.
 
@@ -353,7 +359,7 @@ Developer agent receives findings plus its own artifacts. Per finding: `accept` 
 
 | Table | Key columns |
 |---|---|
-| `runs` | id, created_at, status, profile, brief_hash, dataset_ref, plan_ref, cost_usd, manifest_hash |
+| `runs` | id, created_at, requester, status, profile, brief_hash, dataset_ref, plan_ref, cost_usd, cost_cap_usd, trace_id, manifest_hash |
 | `run_queue` | run_id, enqueued_at, claimed_by, claimed_at |
 | `steps` | id, run_id, node, attempt, started_at, finished_at, status, input_state_hash, output_state_hash |
 | `events` | id, run_id, step_id, ts, type, payload (jsonb), prev_hash, hash |
@@ -435,7 +441,7 @@ Baselines: `evals/baselines/<profile>.json`. Regression beyond tolerance fails. 
 
 ### 14.2 Workflows
 
-- `ci.yml` on pull request and push: ruff, pyright, import-linter, pytest layers 1 to 3 against a Postgres service container, console typecheck and build, Docker build.
+- `ci.yml` on pull request and push: ruff, pyright, import-linter, pytest layers 1 to 3 against a Postgres service container, console typecheck and build, Docker build. The workflow grows with the sub-projects: SP1 ships lint and unit tests only; Postgres, console and Docker steps arrive with SP2 and SP5.
 - `evals.yml` on push to main, nightly, and on PR label `run-evals`: layer 4 under `ci-cheap` with `ANTHROPIC_API_KEY` secret, hard spend cap, baseline comparison, report upload.
 
 ## 15. Threat model
@@ -489,7 +495,7 @@ Slip policy: SP5 compresses to gates and document viewer; SP6 drops the video to
 **`packages/core/modelforge_core`**
 
 - `schemas.py`: Pydantic models for every artifact kind named in section 6 (ProfileArtifact, LeakageReport, PSIReport, SplitManifest, BinningTables, FeatureSelection, Scorecard, GBMModelRef, CalibrationMap, Scores, DiscriminationMetrics, CalibrationTests, StabilityTests, SensitivityResults, BenchmarkResults, ValidationReport, ModelingPlan, thresholds).
-- `datasets/`: `base.py` (adapter protocol, canonical schema `obligor_id, vintage, default_flag, f_1..f_n`, column dictionary), `download.py` (HTTP fetch with SHA-256 pin, cache), `polish.py` (UCI Polish companies bankruptcy, ARFF parsing, five horizon files mapped to `vintage` 1 to 5 with the proxy documented), `taiwan.py` (UCI Taiwanese bankruptcy, CSV, no time column: pseudo-vintage by stratified random assignment, `oot_available=False`), `registry.py`.
+- `datasets/`: `base.py` (adapter protocol, canonical schema `obligor_id, vintage, default_flag, f_1..f_n`, column dictionary), `download.py` (HTTP fetch with SHA-256 pin, cache), `polish.py` (UCI Polish companies bankruptcy, ARFF parsing, five horizon files mapped to `vintage` 1 to 5 with the proxy documented; the example brief trains and validates on vintages 1 to 4 and holds out vintage 5 as out-of-time), `taiwan.py` (UCI Taiwanese bankruptcy, CSV, no time column: pseudo-vintage by stratified random assignment, `oot_available=False`), `registry.py`.
 - `profiling.py`, `leakage.py`, `psi.py`, `splits.py`.
 - `binning.py` (WoE and IV; quantile and tree-based binning; monotonic enforcement; missing as its own bin), `selection.py`.
 - `logistic.py` (WoE-logistic fit; coefficient table; conversion to `Scorecard`), `scorecard.py` (apply scorecard to a frame; points scaling), `gbm.py` (LightGBM fit and native text export), `calibration.py`, `scoring.py`.
