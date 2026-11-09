@@ -17,14 +17,16 @@ def intake(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
         brief = brief_of(state, deps.store)
         if state.replay_of is None:
             with deps.lineage.transaction() as conn:
-                inventory.create_stub(
-                    conn,
-                    run_id=state.run_id,
-                    name=brief.model_name,
-                    owner=state.requester,
-                    intended_use=brief.intended_use,
-                    tier=brief.tier,
-                )
+                # Idempotent: a re-run of intake for this run keeps its existing entry.
+                if inventory.get_for_run(conn, state.run_id) is None:
+                    inventory.create_stub(
+                        conn,
+                        run_id=state.run_id,
+                        name=brief.model_name,
+                        owner=state.requester,
+                        intended_use=brief.intended_use,
+                        tier=brief.tier,
+                    )
         step.event(
             "intake.validated",
             {"model_name": brief.model_name, "dataset_ref": state.dataset_ref.as_string()},

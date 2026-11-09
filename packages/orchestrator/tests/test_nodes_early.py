@@ -53,6 +53,21 @@ def test_profile_skips_psi_and_split_is_random_without_oot(
 
 
 @pytest.mark.db
+def test_intake_is_idempotent(
+    deps: Deps, runtime: Runtime[Deps], synthetic_state: RunState
+) -> None:
+    intake(synthetic_state, runtime)
+    intake(synthetic_state, runtime)
+    with deps.lineage.connection() as conn:
+        rows = conn.execute(
+            "select model_id, status from model_inventory where run_id = %s",
+            (synthetic_state.run_id,),
+        ).fetchall()
+    assert len(rows) == 1
+    assert rows[0]["status"] == "draft" and rows[0]["model_id"].endswith("@v1")
+
+
+@pytest.mark.db
 def test_intake_rejects_malformed_brief(
     deps: Deps, runtime: Runtime[Deps], db: Database, store: ArtifactStore
 ) -> None:
