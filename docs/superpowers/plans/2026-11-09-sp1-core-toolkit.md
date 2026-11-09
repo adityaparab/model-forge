@@ -1197,7 +1197,7 @@ Test IDs and rules (pinned). `overall` is the worst status among tests, ignoring
 | `disc.auc.val` | val AUC | same bands |
 | `disc.ks.oot` | OOT KS | `not_applicable` as above; pass `>= ks_min`; else fail |
 | `disc.gap.train_oot` | train AUC minus OOT AUC | `not_applicable` as above; pass `<= gap_max`; warn `<= gap_fail`; else fail |
-| `cal.binomial` | share of grades with `passed == False` | pass if 0; warn if `<= grade_fail_share_warn`; else fail |
+| `cal.binomial` | share of grades with `p_value < thresholds.calibration_alpha` (recomputed from p-values; the artifact's stored `passed` flag is ignored so that `Thresholds` is the single authority) | pass if 0; warn if `<= grade_fail_share_warn`; else fail |
 | `cal.hl` | `hl_p_value` | pass if `>= hl_p_min`; warn otherwise, including NaN (message says too few grades) |
 | `cal.eo` | `eo_ratio` | pass if `eo_low <= value <= eo_high`; else warn |
 | `stab.psi.score` | `score_psi` | `score_psi_band` |
@@ -1230,7 +1230,7 @@ def test_bands_and_overall_worst(synthetic: pd.DataFrame) -> None:
     strict = Thresholds(auc_min=0.99, auc_warn=0.98)
     report = evaluate_thresholds(**inputs, model_name="m", thresholds=strict, oot_available=True)
     assert report.get("disc.auc.oot").status == "fail" and report.overall == "fail"
-    lenient = Thresholds(auc_min=0.50, auc_warn=0.40, ks_min=0.0, gap_max=1.0, psi_fail=9.0, psi_warn=8.0, hl_p_min=0.0, eo_low=0.0, eo_high=99.0, grade_fail_share_warn=1.0, benchmark_gap=1.0)
+    lenient = Thresholds(auc_min=0.50, auc_warn=0.40, ks_min=0.0, gap_max=1.0, gap_fail=1.0, psi_fail=9.0, psi_warn=8.0, calibration_alpha=0.0, hl_p_min=0.0, eo_low=0.0, eo_high=99.0, grade_fail_share_warn=1.0, benchmark_gap=1.0, iv_max=9.0)
     assert evaluate_thresholds(**inputs, model_name="m", thresholds=lenient, oot_available=True).overall == "pass"
 
 def test_hl_nan_is_warn_with_message(synthetic: pd.DataFrame) -> None:
