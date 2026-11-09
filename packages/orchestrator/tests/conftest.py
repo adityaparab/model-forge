@@ -8,10 +8,12 @@ import pytest
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.runtime import Runtime
 from modelforge_lineage import runs
+from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.facade import Lineage
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import GateDecision
+from modelforge_lineage.queue import enqueue
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
 from modelforge_lineage.testing import database, database_url, db
 from modelforge_mcp.schemas import DatasetRef
@@ -30,10 +32,12 @@ from modelforge_orchestrator.nodes.split import split
 from modelforge_orchestrator.nodes.validate import validate
 from modelforge_orchestrator.schemas import RunState, apply_update
 from modelforge_orchestrator.tools import InProcessToolClient
+from modelforge_orchestrator.worker import run_once
 
 __all__ = [
     "REPO",
     "checkpointer",
+    "completed_run_id",
     "database",
     "database_url",
     "db",
@@ -41,6 +45,7 @@ __all__ = [
     "make_run",
     "prepared_state",
     "prepared_state_no_oot",
+    "queued_run",
     "runtime",
     "scoped_state",
     "settings",
@@ -124,6 +129,36 @@ def make_run(
         replay_of=replay_of,
         status="running",
     )
+
+
+def queued_run(
+    db: Database, store: ArtifactStore, brief_path: Path, *, requester: str = "alice"
+) -> str:
+    """`make_run` followed by enqueueing the run as a ``start``; return the run id."""
+    run_id = make_run(db, store, brief_path, requester=requester).run_id
+    with db.transaction() as conn:
+        enqueue(conn, run_id, "start")
+    return run_id
+
+
+@pytest.fixture
+def completed_run_id(
+    settings: Settings, database: Database, store: ArtifactStore, checkpointer: PostgresSaver
+) -> str:
+    """A fresh synthetic run driven through the three gates by the worker; return its id."""
+    del checkpointer  # the checkpoint tables must exist before the worker runs
+    run_id = queued_run(database, store, SYNTHETIC_BRIEF)
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    for decision in (
+        GateDecision(gate="scope", decision="approve", approver="alice"),
+        GateDecision(gate="model", decision="accept", approver="bob"),
+        GateDecision(gate="signoff", decision="approve", approver="bob"),
+    ):
+        with database.transaction() as conn:
+            record_approval(conn, run_id, decision, current_plan=None)
+            enqueue(conn, run_id, "resume")
+        run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    return run_id
 
 
 @pytest.fixture
