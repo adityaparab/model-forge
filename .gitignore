@@ -23,3 +23,6 @@ ui/dist/
 .DS_Store
 .idea/
 .vscode/
+
+# superpowers SDD scratch (ledger, briefs, review packages)
+.superpowers/
