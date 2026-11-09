@@ -8,10 +8,13 @@ from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
-from psycopg import sql
+from psycopg import Connection, sql
+from psycopg.rows import DictRow
 
 from modelforge_lineage.db import Database
 from modelforge_lineage.migrate import TABLES, apply
+from modelforge_lineage.models import RunRecord
+from modelforge_lineage.runs import create_run
 
 DEFAULT_DATABASE_URL = "postgresql://modelforge:modelforge@localhost:5432/modelforge"
 
@@ -63,3 +66,19 @@ def db(database: Database) -> Iterator[Database]:
     with database.transaction() as conn:
         conn.execute(truncate)
     yield database
+
+
+def create_test_run(
+    conn: Connection[DictRow], run_id: str = "run_a", *, requester: str = "alice"
+) -> RunRecord:
+    """Create a queued run with fixed values; call inside a transaction."""
+    return create_run(
+        conn,
+        run_id=run_id,
+        requester=requester,
+        profile="default",
+        brief_hash="h",
+        brief_ref="b" * 64,
+        dataset_ref="synthetic_credit",
+        seed=42,
+    )
