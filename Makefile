@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down
 
 lint:
 	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports
@@ -32,3 +32,9 @@ migrate:
 
 worker:
 	uv run modelforge worker
+
+up:
+	docker compose up -d --build --wait
+
+down:
+	docker compose down

@@ -15,5 +15,19 @@ services:
       timeout: 3s
       retries: 20
 
+  worker:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MODELFORGE_DATABASE_URL: postgresql://modelforge:modelforge@postgres:5432/modelforge
+      MODELFORGE_LOG_LEVEL: INFO
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./data:/data/datasets
+    command: ["worker"]
+    restart: unless-stopped
+
 volumes:
   pgdata:

@@ -8,6 +8,23 @@ on:
 jobs:
   lint-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: modelforge
+          POSTGRES_PASSWORD: modelforge
+          POSTGRES_DB: modelforge
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U modelforge"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      MODELFORGE_DATABASE_URL: postgresql://modelforge:modelforge@localhost:5432/modelforge
+      MODELFORGE_REQUIRE_DB: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -21,3 +38,16 @@ jobs:
           key: uci-datasets-v1
       - run: make lint
       - run: make test
+      - run: uv run modelforge-mcp goldens --artifact-dir /tmp/goldens-artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: goldens-linux
+          path: packages/mcp/contracts/goldens/
+          if-no-files-found: error
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - run: docker build -t modelforge:ci .

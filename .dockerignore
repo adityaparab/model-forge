@@ -1,0 +1,11 @@
+.git
+.venv
+data
+artifacts
+out
+node_modules
+.superpowers
+notes
+**/__pycache__
+.pytest_cache
+.ruff_cache
