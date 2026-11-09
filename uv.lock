@@ -808,7 +808,9 @@ dependencies = [
     { name = "mcp" },
     { name = "modelforge-core" },
     { name = "modelforge-lineage" },
+    { name = "pandas" },
     { name = "pyyaml" },
+    { name = "structlog" },
 ]
 
 [package.metadata]
@@ -818,7 +820,9 @@ requires-dist = [
     { name = "mcp", specifier = ">=2.3" },
     { name = "modelforge-core", editable = "packages/core" },
     { name = "modelforge-lineage", editable = "packages/lineage" },
+    { name = "pandas", specifier = ">=2.2" },
     { name = "pyyaml", specifier = ">=6" },
+    { name = "structlog", specifier = ">=26" },
 ]
 
 [[package]]

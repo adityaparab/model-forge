@@ -153,7 +153,15 @@ def register_tool[I: BaseModel, O: BaseModel](
             raise
         except Exception as exc:
             payload = _error_payload(exc)
-            log.warning("tool.error", code=payload.code, duration_ms=_elapsed_ms(started))
+            if payload.code == "internal":
+                log.error(
+                    "tool.error",
+                    code=payload.code,
+                    duration_ms=_elapsed_ms(started),
+                    exc_info=exc,
+                )
+            else:
+                log.warning("tool.error", code=payload.code, duration_ms=_elapsed_ms(started))
             raise ToolError(payload.model_dump_json()) from exc
         log.info(
             "tool.end",
