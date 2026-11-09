@@ -1,7 +1,12 @@
 import os
 from pathlib import Path
 
+import pandas as pd
 import pytest
+
+from .synthetic import make_synthetic_credit_frame
+
+__all__ = ["make_synthetic_credit_frame"]
 
 
 @pytest.fixture
@@ -15,3 +20,8 @@ def data_dir() -> Path:
     path = Path(os.environ.get("MODELFORGE_DATA_DIR", str(default)))
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+@pytest.fixture
+def synthetic() -> pd.DataFrame:
+    return make_synthetic_credit_frame()

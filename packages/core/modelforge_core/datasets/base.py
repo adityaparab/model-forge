@@ -77,3 +77,8 @@ def validate_canonical(frame: pd.DataFrame) -> None:
     duplicated = sorted(set(ids[ids.duplicated()].tolist()), key=str)
     if duplicated:
         raise CanonicalSchemaError(f"duplicate 'obligor_id' values: {duplicated[:10]}")
+
+
+def feature_columns(frame: pd.DataFrame) -> list[str]:
+    """Return the feature columns (names matching f_<n>) in frame order."""
+    return [str(col) for col in frame.columns if FEATURE_PATTERN.match(str(col))]
