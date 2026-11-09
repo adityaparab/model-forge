@@ -17,7 +17,11 @@ from modelforge_mcp.schemas import DatasetRef
 from modelforge_orchestrator.briefs import BriefError, brief_hash, parse_brief
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
-from modelforge_orchestrator.schemas import RunState
+from modelforge_orchestrator.nodes.intake import intake
+from modelforge_orchestrator.nodes.profile import profile
+from modelforge_orchestrator.nodes.scope import scope
+from modelforge_orchestrator.nodes.split import split
+from modelforge_orchestrator.schemas import RunState, apply_update
 from modelforge_orchestrator.tools import InProcessToolClient
 
 __all__ = [
@@ -28,6 +32,8 @@ __all__ = [
     "db",
     "deps",
     "make_run",
+    "prepared_state",
+    "prepared_state_no_oot",
     "runtime",
     "settings",
     "state_no_oot",
@@ -145,3 +151,20 @@ def state_no_oot(db: Database, store: ArtifactStore, tmp_path: Path) -> RunState
     path = tmp_path / "synthetic-no-oot.yaml"
     path.write_text(text.replace("oot_vintages: [5]", "oot_vintages: []"))
     return make_run(db, store, path)
+
+
+def _prepare(state: RunState, runtime: Runtime[Deps]) -> RunState:
+    """``state`` after `intake`, `scope`, `profile` and `split`, each update applied in turn."""
+    for node in (intake, scope, profile, split):
+        state = apply_update(state, node(state, runtime))
+    return state
+
+
+@pytest.fixture
+def prepared_state(synthetic_state: RunState, runtime: Runtime[Deps]) -> RunState:
+    return _prepare(synthetic_state, runtime)
+
+
+@pytest.fixture
+def prepared_state_no_oot(state_no_oot: RunState, runtime: Runtime[Deps]) -> RunState:
+    return _prepare(state_no_oot, runtime)
