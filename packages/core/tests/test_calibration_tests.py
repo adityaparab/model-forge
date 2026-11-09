@@ -25,6 +25,7 @@ def test_binomial_grades_on_perfect_calibration() -> None:
         and ct.grades[0].grade == 1
         and ct.grades[0].expected_pd < ct.grades[-1].expected_pd
     )
+    assert [g.grade for g in ct.grades] == list(range(1, ct.n_grades + 1))
     assert sum(not g.passed for g in ct.grades) <= 2
     assert ct.hl_p_value > 0.01 and 0.95 < ct.eo_ratio < 1.05
 
@@ -61,6 +62,6 @@ def test_heavy_ties_collapse_grades_and_hl_is_nan() -> None:
         }
     )
     ct = calibration_tests(scores, split="val")
-    assert ct.n_grades < 3 and math.isnan(
-        ct.hl_p_value
-    )  # qcut with duplicates="drop" collapses to 1 or 2 grades
+    # qcut with duplicates="drop" collapses to 1 or 2 grades
+    assert ct.n_grades < 3 and math.isnan(ct.hl_p_value)
+    assert [g.grade for g in ct.grades] == list(range(1, ct.n_grades + 1))

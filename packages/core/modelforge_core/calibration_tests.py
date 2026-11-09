@@ -12,7 +12,7 @@ _HL_EPS = 1e-12
 
 
 def _grades(pd_values: np.ndarray, n_grades: int) -> np.ndarray:
-    """PD-quantile grades starting at 1 (lowest PD); identical PDs collapse to a single grade."""
+    """Contiguous PD-quantile grades 1..k (1 = lowest PD); identical PDs collapse to one grade."""
     try:
         labels = np.asarray(
             pd.qcut(pd_values, n_grades, labels=False, duplicates="drop"), dtype=float
@@ -22,7 +22,9 @@ def _grades(pd_values: np.ndarray, n_grades: int) -> np.ndarray:
     # pandas 3 returns all-NaN labels instead of raising when every PD is identical.
     if np.isnan(labels).all():
         return np.ones(len(pd_values), dtype=int)
-    return labels.astype(int) + 1
+    # Empty quantile bins can leave gaps in the labels; renumber the labels present to 1..k.
+    _, dense = np.unique(labels.astype(int), return_inverse=True)
+    return dense + 1
 
 
 def calibration_tests(
