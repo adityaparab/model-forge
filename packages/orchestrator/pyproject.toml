@@ -10,6 +10,7 @@ dependencies = [
     "modelforge-core",
     "modelforge-lineage",
     "modelforge-mcp",
+    "modelforge-gateway",
     "langgraph>=1.2",
     "langgraph-checkpoint-postgres>=3.2",
     "typer>=0.28",

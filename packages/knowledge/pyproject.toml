@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "modelforge-knowledge"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "modelforge-core",
+    "modelforge-lineage",
+    "pyyaml>=6",
+    "pydantic>=2.7",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["modelforge_knowledge"]

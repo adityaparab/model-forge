@@ -14,6 +14,8 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_PREFERENCE=only-system
 COPY pyproject.toml uv.lock .python-version ./
 COPY packages/core/pyproject.toml packages/core/pyproject.toml
 COPY packages/lineage/pyproject.toml packages/lineage/pyproject.toml
+COPY packages/knowledge/pyproject.toml packages/knowledge/pyproject.toml
+COPY packages/gateway/pyproject.toml packages/gateway/pyproject.toml
 COPY packages/mcp/pyproject.toml packages/mcp/pyproject.toml
 COPY packages/orchestrator/pyproject.toml packages/orchestrator/pyproject.toml
 RUN uv sync --frozen --no-dev --no-install-workspace
