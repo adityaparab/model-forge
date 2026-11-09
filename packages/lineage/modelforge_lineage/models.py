@@ -170,4 +170,5 @@ class VerifyReport(StrictModel):
     artifacts_missing: list[str]
     artifacts_corrupt: list[str]
     manifest_ok: bool
+    events_head_anchored: bool
     ok: bool

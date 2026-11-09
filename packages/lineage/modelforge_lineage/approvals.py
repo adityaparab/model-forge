@@ -4,6 +4,7 @@ from typing import Any
 
 from modelforge_core.schemas import ModelingPlan
 from psycopg import Connection
+from psycopg.pq import TransactionStatus
 from psycopg.rows import DictRow
 from psycopg.types.json import Jsonb
 
@@ -81,6 +82,8 @@ def record_approval(
     loop_bound: int = 3,
 ) -> ApprovalRecord:
     """Validate and record a gate decision; call inside a transaction. Raises before any write."""
+    if conn.info.transaction_status == TransactionStatus.IDLE:
+        raise RuntimeError("record_approval requires an open transaction")
     run = conn.execute(
         "select status, requester from runs where id = %s for update", (run_id,)
     ).fetchone()

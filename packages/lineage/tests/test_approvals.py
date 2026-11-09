@@ -135,3 +135,18 @@ def test_invalid_decisions_and_loop_bound(db: Database) -> None:
             record_approval(conn, "run_a", adjust, current_plan=PLAN)
         with pytest.raises(LoopBoundError):
             record_approval(conn, "run_a", adjust, current_plan=PLAN)
+
+
+@pytest.mark.db
+def test_record_approval_requires_transaction(db: Database) -> None:
+    with db.transaction() as conn:
+        _awaiting(conn, "scope")
+    with db.connection() as conn:
+        with pytest.raises(RuntimeError, match="record_approval requires an open transaction"):
+            record_approval(
+                conn,
+                "run_a",
+                GateDecision(gate="scope", decision="approve", approver="alice"),
+                current_plan=PLAN,
+            )
+        assert list_approvals(conn, "run_a") == []
