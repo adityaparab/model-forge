@@ -20,7 +20,7 @@
 - WoE convention: `woe = ln(dist_good / dist_bad)` with additive smoothing 0.5 per bin. Higher WoE means lower risk. Logistic coefficients on WoE features are therefore expected negative.
 - Default thresholds (spec 17.1): AUC OOT pass `>= 0.70`, warn `>= 0.65`; KS `>= 0.25`; train minus OOT AUC gap pass `<= 0.05`, warn `<= 0.10`; PSI/CSI pass `< 0.10`, warn `< 0.25`, else fail; binomial alpha `0.05`; Hosmer-Lemeshow p `>= 0.05`; IV kept in `[0.02, 0.5]`; correlation pruning `|r| > 0.7`; champion within `0.03` AUC of challenger.
 - Every function that uses randomness takes an explicit `seed: int`.
-- Commit after every task; commit messages in conventional-commit style; end with `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+- Commit after every task; commit messages in conventional-commit style; end with the `Co-Authored-By` trailer of the model that authored the commit (controller commits name Claude Fable 5.1; implementer-subagent commits name their own model).
 
 ## Review Focus
 
