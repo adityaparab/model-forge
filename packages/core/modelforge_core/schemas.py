@@ -22,7 +22,7 @@ FEATURE_PATTERN = re.compile(r"^f_\d+$")
 class StrictModel(BaseModel):
     """Base for all artifacts: unknown fields are rejected."""
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", ser_json_inf_nan="strings")
 
 
 # --- Column dictionary ---

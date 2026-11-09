@@ -1,5 +1,8 @@
+import math
+
 import pytest
 from modelforge_core.schemas import (
+    CalibrationTests,
     PointsScaling,
     Scorecard,
     ScorecardBin,
@@ -68,3 +71,19 @@ def test_split_manifest_ids_empty_when_absent() -> None:
         digests={"train": "x", "val": "y"},
     )
     assert m.ids("oot") == []
+
+
+def test_non_finite_floats_round_trip_json() -> None:
+    ct = CalibrationTests(
+        split="val",
+        alpha=0.05,
+        n_grades=2,
+        grades=[],
+        hl_statistic=0.0,
+        hl_p_value=float("nan"),
+        expected_total=3.0,
+        observed_total=0,
+        eo_ratio=float("inf"),
+    )
+    again = CalibrationTests.model_validate_json(ct.model_dump_json())
+    assert math.isnan(again.hl_p_value) and again.eo_ratio == float("inf")
