@@ -24,11 +24,23 @@ def test_polish_end_to_end(data_dir: Path, tmp_path: Path) -> None:
     auc_oot = report.get("disc.auc.oot").value
     assert auc_oot is not None and auc_oot > 0.65
     assert len(report.tests) == 13 and report.get("sens.signs").status == "pass"
-    assert (tmp_path / "polish_bankruptcy" / "scorecard.json").exists()
+    written = {p.name for p in (tmp_path / "polish_bankruptcy").iterdir()}
+    assert written == {
+        "scorecard.json",
+        "gbm_model.txt",
+        "validation_report.json",
+        "binning_tables.json",
+        "column_dictionary.json",
+        "profile.json",
+    }
     scorecard_text = (tmp_path / "polish_bankruptcy" / "scorecard.json").read_text()
     assert from_json(scorecard_text).model_name == "polish_bankruptcy_pd"
     assert 5 <= len(result.selection.selected) <= 20
-    assert any(d.reason == "wrong_sign" for d in result.selection.dropped)
+    assert set(result.selection.selected).isdisjoint(d.feature for d in result.selection.dropped)
+    in_model = {f.feature for f in result.scorecard.features}
+    assert all(
+        d.feature not in in_model for d in result.selection.dropped if d.reason == "wrong_sign"
+    )
 
 
 @pytest.mark.slow

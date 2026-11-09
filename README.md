@@ -12,13 +12,15 @@ make lint test   # ruff, pyright, import-linter, then the full suite (slow tests
 make example     # end-to-end run on the Polish data, out-of-time vintage 5
 ```
 
-`make example` downloads the dataset into `data/` on first use, prints one line per validation test plus the overall status, and writes `scorecard.json`, `gbm_model.txt`, `validation_report.json`, `binning_tables.json` and `column_dictionary.json` under `out/polish_bankruptcy/`. For the second dataset:
+`make example` downloads the dataset into `data/` on first use, prints one line per validation test plus the overall status, and writes `scorecard.json`, `gbm_model.txt`, `validation_report.json`, `binning_tables.json`, `column_dictionary.json` and `profile.json` under `out/polish_bankruptcy/`. For the second dataset:
 
 ```bash
 uv run python examples/core_pipeline.py --dataset taiwan_bankruptcy --oot-vintages ""
 ```
 
 Other flags: `--data-dir` (default `data`), `--out` (default `out`), `--seed` (default 42), `--max-features` (default 20).
+
+The slow tests read the cached datasets from `data/` at the repository root; set `MODELFORGE_DATA_DIR` to point them at another directory (for example a shared cache).
 
 ## Commands
 
@@ -32,7 +34,7 @@ make example    # end-to-end example pipeline
 ## Datasets
 
 - Polish companies bankruptcy data, UCI Machine Learning Repository, DOI 10.24432/C5F600, licensed CC BY 4.0.
-- Taiwanese bankruptcy prediction, UCI Machine Learning Repository.
+- Taiwanese bankruptcy prediction, UCI Machine Learning Repository, DOI 10.24432/C5004D, licensed CC BY 4.0.
 
 Both are corporate bankruptcy datasets, not retail credit data, so two proxies are documented and applied:
 

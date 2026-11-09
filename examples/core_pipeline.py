@@ -34,6 +34,7 @@ from modelforge_core.schemas import (
     ColumnDictionary,
     FeatureSelection,
     GBMModel,
+    ProfileArtifact,
     Scorecard,
     SplitManifest,
     ValidationReport,
@@ -60,6 +61,7 @@ class PipelineResult:
     tables: BinningTables
     manifest: SplitManifest
     dictionary: ColumnDictionary
+    profile: ProfileArtifact
 
 
 @dataclass(frozen=True)
@@ -71,15 +73,17 @@ class _Fitted:
     calibration: CalibrationMap
 
 
-def _load_and_screen(dataset: str, data_dir: Path) -> tuple[LoadedDataset, list[str]]:
-    """Load, profile and leakage-screen; return the dataset and the candidate features."""
+def _load_and_screen(
+    dataset: str, data_dir: Path
+) -> tuple[LoadedDataset, ProfileArtifact, list[str]]:
+    """Load, profile and leakage-screen; return the dataset, its profile and the candidates."""
     ds = load_dataset(dataset, data_dir)
-    profile(ds.frame, dataset=dataset)
+    summary = profile(ds.frame, dataset=dataset)
     leakage = check_leakage(ds.frame, dataset=dataset)
     for flag in leakage.flags:
         print(f"leakage: {flag.feature} {flag.kind} {flag.detail}")
     flagged = {flag.feature for flag in leakage.flags}
-    return ds, [c for c in feature_columns(ds.frame) if c not in flagged]
+    return ds, summary, [c for c in feature_columns(ds.frame) if c not in flagged]
 
 
 def _split(
@@ -186,6 +190,7 @@ def _write_outputs(out: Path, result: PipelineResult) -> None:
     (out / "validation_report.json").write_text(result.report.model_dump_json(indent=2))
     (out / "binning_tables.json").write_text(result.tables.model_dump_json(indent=2))
     (out / "column_dictionary.json").write_text(result.dictionary.model_dump_json(indent=2))
+    (out / "profile.json").write_text(result.profile.model_dump_json(indent=2))
 
 
 def run_pipeline(
@@ -197,7 +202,7 @@ def run_pipeline(
     seed: int = 42,
     max_features: int = 20,
 ) -> PipelineResult:
-    ds, candidates = _load_and_screen(dataset, data_dir)
+    ds, summary, candidates = _load_and_screen(dataset, data_dir)
     manifest, train, val = _split(ds, oot_vintages, seed)
     fitted = _fit(dataset, train, val, candidates, seed=seed, max_features=max_features)
     report = _validate(ds.frame, manifest, fitted, seed=seed)
@@ -209,6 +214,7 @@ def run_pipeline(
         tables=fitted.tables,
         manifest=manifest,
         dictionary=ds.dictionary,
+        profile=summary,
     )
     _write_outputs(out_dir / dataset, result)
     return result
@@ -242,7 +248,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         max_features=args.max_features,
     )
     for test in result.report.tests:
-        print(f"{test.status + ':':>14} {test.test_id:<22} {test.value}")
+        print(f"{test.status + ':':>15} {test.test_id:<22} {test.value}")
     print(f"overall: {result.report.overall}")
     return 0
 
