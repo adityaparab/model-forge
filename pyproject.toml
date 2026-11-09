@@ -40,4 +40,3 @@ type = "forbidden"
 source_modules = ["modelforge_core"]
 forbidden_modules = ["anthropic", "ollama", "openai", "httpx", "requests", "langgraph", "langchain", "langchain_core", "langchain_anthropic", "langchain_ollama", "langchain_openai", "mcp"]
 ignore_imports = ["modelforge_core.datasets.download -> httpx"]
-unmatched_ignore_imports_alerting = "warn"
