@@ -65,3 +65,21 @@ def test_heavy_ties_collapse_grades_and_hl_is_nan() -> None:
     # qcut with duplicates="drop" collapses to 1 or 2 grades
     assert ct.n_grades < 3 and math.isnan(ct.hl_p_value)
     assert [g.grade for g in ct.grades] == list(range(1, ct.n_grades + 1))
+
+
+def test_grades_are_contiguous_when_qcut_leaves_empty_bins() -> None:
+    pdv = np.array([0.1, 0.1, 0.3, 0.3])
+    y = np.array([0, 1, 0, 1])
+    scores = pd.DataFrame(
+        {
+            "obligor_id": ["a", "b", "c", "d"],
+            "vintage": 1,
+            "default_flag": y,
+            "split": "val",
+            "score": pdv,
+            "pd": pdv,
+        }
+    )
+    ct = calibration_tests(scores, split="val")
+    assert ct.n_grades == 2 and [g.grade for g in ct.grades] == [1, 2]
+    assert ct.grades[0].expected_pd < ct.grades[1].expected_pd
