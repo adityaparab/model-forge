@@ -42,7 +42,7 @@ Success criteria:
 - Lineage, artifact store, replay, model inventory, approval gates.
 - FastAPI control plane serving a React console as an SPA.
 - Eval harness with CI gating.
-- Three LLM providers behind one gateway: Anthropic (default), Ollama, LM Studio.
+- Three LLM providers behind one gateway: Anthropic (default), Ollama, LM Studio. All LLM communication goes through the LangChain and LangGraph ecosystem; no direct provider SDK calls anywhere in the codebase.
 
 **Out of scope**
 
@@ -67,7 +67,7 @@ One uv workspace. Python pinned to 3.12. Node 20+ for the console.
   packages/
     core/          modelforge_core          deterministic credit toolkit; no LLM imports
     mcp/           modelforge_mcp           five MCP servers + shared call logging
-    gateway/       modelforge_gateway       LLM interface; anthropic | ollama | lmstudio
+    gateway/       modelforge_gateway       governance wrapper over LangChain chat models; anthropic | ollama | lmstudio
     knowledge/     modelforge_knowledge     ingest, chunk, embed, retrieve, cite
     orchestrator/  modelforge_orchestrator  LangGraph graph, agents, state, gates, worker
     lineage/       modelforge_lineage       Postgres models, events, artifacts, inventory
@@ -92,7 +92,7 @@ knowledge  <-  mcp (knowledge server)
 evals  ->  everything (test-only)
 ```
 
-`core` may not import `anthropic`, `ollama`, `httpx`, `requests`, `langgraph`, `langchain*`, or `mcp`. Only `gateway` and `core.datasets.download` may import an HTTP client.
+`core` may not import `anthropic`, `ollama`, `openai`, `httpx`, `requests`, `langgraph`, `langchain*`, or `mcp`. Only `gateway` may import `langchain_anthropic`, `langchain_ollama` or `langchain_openai`. No package may import `anthropic`, `ollama` or `openai` directly. Only `core.datasets.download` may import an HTTP client.
 
 ### 4.2 Runtime topology
 
@@ -244,6 +244,8 @@ Common rules for every tool:
 
 ## 7. LLM gateway
 
+**Rule:** every call to a language model goes through a LangChain chat model (`langchain-core` `BaseChatModel`) selected and wrapped by the gateway. The orchestrator is LangGraph. No package other than `gateway` imports a LangChain provider integration, and no package imports a provider SDK directly. The gateway adds what LangChain does not: routing by purpose, redaction, prompt hashing, cost accounting, lineage rows and OpenTelemetry spans.
+
 ### 7.1 Interface
 
 ```
@@ -266,13 +268,15 @@ CompletionResult:
   raw_ref: ArtifactRef
 ```
 
-Gateway pipeline: resolve route from profile by purpose -> redaction scan -> canonical JSON -> prompt hash -> adapter call -> schema validation -> usage and cost -> OTel span -> lineage `llm_calls` row -> result.
+Gateway pipeline: resolve route from profile by purpose -> build LangChain messages (`SystemMessage`, `HumanMessage`) -> redaction scan -> canonical JSON -> prompt hash -> `chat_model.with_structured_output(schema)` or plain invoke -> schema validation -> usage and cost from `usage_metadata` -> OTel span -> lineage `llm_calls` row -> result.
 
-### 7.2 Adapters
+The gateway is itself a LangChain `Runnable`, so it composes inside LangGraph nodes. Governance hooks are a `BaseCallbackHandler` (start, end, error, token usage) plus the pre-call redaction and hashing step in the runnable. The same handler serves every provider.
 
-- **Anthropic**: official `anthropic` Python SDK. Default model `claude-opus-5-5`. Adaptive thinking (parameter omitted). `output_config.effort` set per purpose. Structured output via the SDK parse helper with the Pydantic schema. Streaming with the final-message helper for document sections. `fallbacks: "default"` with the server-side fallback beta so a safety refusal does not crash a run; the fallback model is recorded. Prompt caching breakpoint after the stable prefix (system prompt, template guidance, modeling standards). Checks `stop_reason` for `max_tokens` and `refusal`.
-- **Ollama**: `ollama` Python client, `chat` with `format` set to the JSON schema. Model name from profile.
-- **LM Studio**: local OpenAI-compatible HTTP server via `httpx`, `response_format` of type `json_schema`. Model name from profile. No additional SDK.
+### 7.2 Providers (LangChain integrations)
+
+- **Anthropic**: `langchain-anthropic` `ChatAnthropic`. Default model `claude-opus-5-5`. Adaptive thinking and per-purpose effort are configured through the integration; any parameter the integration does not yet expose first-class is passed through its model-kwargs passthrough, and the exact spelling is verified against the installed version at the start of SP3. Structured output via `with_structured_output` with the Pydantic schema. Streaming via `.stream` for document sections. Prompt caching by marking the stable system content block (system prompt, template guidance, modeling standards) with `cache_control`; cache read and write tokens are read from `usage_metadata.input_token_details`. A safety refusal is detected from `response_metadata.stop_reason` and parks the run in `needs_attention` with the reason recorded.
+- **Ollama**: `langchain-ollama` `ChatOllama` with JSON-schema structured output. Model name from profile.
+- **LM Studio**: `langchain-openai` `ChatOpenAI` with `base_url` pointed at LM Studio's local OpenAI-compatible server and a placeholder API key; `with_structured_output(method="json_schema")`. Model name from profile. This is the one place `langchain-openai` is imported, and it only ever talks to localhost.
 
 ### 7.3 Routing profiles
 
@@ -395,6 +399,7 @@ Champion PD model: JSON scorecard. Challenger model: LightGBM native text. Table
 - Exporter: OTLP to Jaeger. `trace_id` stored on `runs`; console links to the Jaeger trace.
 - Logs: structured JSON via `structlog`, bound with run_id and step_id.
 - Cost: accumulated per step and per run, shown live in the console.
+- LangSmith tracing can be switched on with its standard environment variables since every LLM call is a LangChain runnable. It is optional; OpenTelemetry to Jaeger is the primary trace path and the only one the demo depends on.
 
 ## 12. API
 
@@ -421,7 +426,7 @@ Non-API routes serve the SPA (section 4.3).
 
 ## 13. Console
 
-React 18, Vite, TypeScript, TanStack Query, Tailwind, a small headless component set. SSE via `EventSource`.
+React 19, Vite, TypeScript, TanStack Query, Tailwind, a small headless component set. SSE via `EventSource`.
 
 Views: Runs; Run detail (fourteen-step stepper, live event feed, per-step cards for tool calls, LLM calls with cost, artifacts, trace link); Gates (editable plan form with diff; validation table of test, result, threshold, status; sign-off with findings, responses, decision, conditions); Document viewer (citation hover shows the artifact value or passage; grounding indicator per number); Findings board; Inventory; Artifacts.
 
@@ -479,9 +484,9 @@ Three weeks full-time. Each sub-project starts with a short spec and a plan, and
 |---|---|---|---|
 | 1 | 1 to 4 | repo skeleton and tooling; `core` toolkit; dataset adapters; unit tests; `ci.yml` lint and test | `core` public functions and Pydantic artifact schemas; canonical dataset schema |
 | 2 | 5 to 8 | `lineage` (schema, events, artifact store); data-profiler, credit-modeling, validation, doc-renderer servers; orchestrator deterministic nodes and gates with stubbed LLM nodes; worker and queue; CLI `run`, `approve`, `replay`, `verify`; Compose with Postgres | `RunState`; tool call log; MCP client wiring; CLI approvals |
-| 3 | 9 to 11 | `gateway` with three adapters, profiles, prompts, redaction, cost; `knowledge` and knowledge server; corpus; scope agent; documentation agent with grounding checks | `CompletionRequest/Result`; citation markers; document artifacts |
+| 3 | 9 to 11 | `gateway` over LangChain chat models (`langchain-anthropic`, `langchain-ollama`, `langchain-openai` for LM Studio), profiles, prompts, redaction, cost; `knowledge` and knowledge server; corpus; scope agent; documentation agent with grounding checks | `CompletionRequest/Result`; citation markers; document artifacts |
 | 4 | 12 to 15 | challenger agent and pre-checks; remediation loop; eval harness layers 1 to 5; `evals.yml`; baselines | findings and responses tables; eval reports |
-| 5 | 16 to 18 | `api`; SSE; SPA serving; console; OpenTelemetry and Jaeger | the demo |
+| 5 | 16 to 18 | `api`; SSE; SPA serving; React 19 console; OpenTelemetry and Jaeger | the demo |
 | 6 | 19 to 21 | README; architecture diagram; MRM-style design memo; threat model doc; trade-off and cost tables; domain primer; demo video; fresh-clone test of `make demo` | the public repo |
 
 Slip policy: SP5 compresses to gates and document viewer; SP6 drops the video to a scripted walkthrough.
@@ -520,6 +525,7 @@ Default thresholds (configurable per plan): AUC on out-of-time >= 0.70 pass, 0.6
 - **Anthropic credentials** are not in the environment yet. SP3 cannot run live until they are. SP1 and SP2 need no key.
 - **Local model quality.** Small local models may fail structured output or grounding checks more often. That is a measured result, not a defect, and goes in the parity table.
 - **Python 3.15** on the host is too new for ML wheels; uv pins 3.12.
+- **LangChain integration lag.** Newer Anthropic parameters (adaptive thinking, effort, cache token details) may trail the raw API in `langchain-anthropic`. SP3 starts by verifying each against the installed version and uses the model-kwargs passthrough where needed. If a parameter cannot be passed at all, the spec is amended rather than bypassing LangChain.
 
 ## 19. Glossary
 
