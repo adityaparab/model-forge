@@ -8,7 +8,7 @@ from modelforge_lineage.events import list_events
 from modelforge_lineage.inventory import get_for_run
 from modelforge_lineage.models import GateDecision
 from modelforge_lineage.queue import claim, enqueue
-from modelforge_lineage.runs import set_error
+from modelforge_lineage.runs import get_run, set_error
 from modelforge_lineage.steps import list_artifacts, list_steps
 from modelforge_lineage.store import ArtifactStore
 from modelforge_orchestrator.config import Settings
@@ -28,14 +28,19 @@ def test_execute_parks_at_gates_and_completes(
 ) -> None:
     run_id = queued_run(database, store, SYNTHETIC, requester="alice")
     run = run_once(
-        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+        settings,
+        database,
+        store,
+        run_id=run_id,
+        tool_client_factory=InProcessToolClient,
+        worker_id="worker-test:1",
     )
     assert run is not None and run.status == "awaiting_scope"
     with database.connection() as conn:
-        assert [e.type for e in list_events(conn, run_id)][-2:] == [
-            "gate.requested",
-            "run.status_changed",
-        ]
+        events = list_events(conn, run_id)
+        assert [e.type for e in events][-2:] == ["gate.requested", "run.status_changed"]
+        claimed = next(e for e in events if e.type == "run.claimed")
+        assert claimed.payload["worker_id"] == "worker-test:1"
         assert claim(conn, "x") is None
     for decision in (
         GateDecision(gate="scope", decision="approve", approver="bob"),
@@ -123,6 +128,26 @@ def test_replay_reproduces_every_deterministic_ref(
     report = store.get_model(report_ref.id, ReplayReport)
     assert report.ok and report.mismatched == [] and report.missing == []
     assert {"champion", "champion_scores", "validation", "document_md"} <= set(report.matched)
+
+
+@pytest.mark.db
+def test_resume_claim_for_sealed_run_is_rejected_untouched(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    completed_run_id: str,
+) -> None:
+    with database.transaction() as conn:
+        enqueue(conn, completed_run_id, "resume")
+    run = run_once(
+        settings, database, store, run_id=completed_run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "completed" and run.error is None
+    with database.connection() as conn:
+        assert get_run(conn, completed_run_id).status == "completed"
+        assert claim(conn, "x", run_id=completed_run_id) is None
+        assert list_events(conn, completed_run_id)[-1].type == "worker.rejected_claim"
 
 
 @pytest.mark.db

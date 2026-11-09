@@ -157,7 +157,10 @@ def completed_run_id(
         with database.transaction() as conn:
             record_approval(conn, run_id, decision, current_plan=None)
             enqueue(conn, run_id, "resume")
-        run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+        run = run_once(
+            settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+        )
+    assert run is not None and run.status == "completed"
     return run_id
 
 

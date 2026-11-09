@@ -58,7 +58,8 @@ def worker_id() -> str:
     return f"{socket.gethostname()}:{os.getpid()}"
 
 
-_this_worker_id = worker_id  # `run_once` takes a `worker_id` argument that shadows the function
+# `execute` and `run_once` take a `worker_id` argument that shadows the function.
+_this_worker_id = worker_id
 
 
 def initial_state(run: RunRecord) -> RunState:
@@ -82,11 +83,17 @@ def setup_checkpointer(db: Database) -> PostgresSaver:
 
 
 def _graph_input(db: Database, run: RunRecord, kind: str) -> RunState | Command[Any] | None:
-    if kind in ("start", "replay"):
+    """The graph input for a ``kind`` claim of ``run``; `WorkerError` when they do not fit."""
+    if kind in ("start", "replay") and run.status == "queued":
         return initial_state(run)
     if kind == "resume" and run.status in _GATE_OF:
+        gate = _GATE_OF[run.status]
         with db.connection() as conn:
-            approvals = list_approvals(conn, run.id, gate=_GATE_OF[run.status])
+            approvals = list_approvals(conn, run.id, gate=gate)
+        if not approvals:
+            raise WorkerError(
+                f"run {run.id}: resume claimed at gate {gate} with no recorded approval"
+            )
         return Command(resume=approvals[-1].payload.model_dump(mode="json"))
     if kind == "resume" and run.status == "needs_attention":
         return None
@@ -117,6 +124,7 @@ def execute(
     queued: QueuedRun,
     *,
     tool_client_factory: ToolClientFactory = StdioToolClient,
+    worker_id: str | None = None,
 ) -> RunRecord:
     """Run a claimed run until it parks at a gate, finishes, or fails; release its queue row."""
     run_id = queued.run_id
@@ -126,13 +134,24 @@ def execute(
     try:
         with db.connection() as conn:
             run = runs.get_run(conn, run_id)
+        try:
+            graph_input = _graph_input(db, run, queued.kind)
+        except WorkerError as exc:
+            # A claim that does not fit the run leaves its status and checkpoint untouched.
+            with db.transaction() as conn:
+                append_event(
+                    conn,
+                    run_id,
+                    "worker.rejected_claim",
+                    {"kind": queued.kind, "status": run.status, "message": str(exc)},
+                )
+            log.warning("run.claim_rejected", kind=queued.kind, status=run.status, error=str(exc))
+            return run
+        claimant = worker_id if worker_id is not None else _this_worker_id()
         with db.transaction() as conn:
             runs.set_status(conn, run_id, "running")
-            append_event(
-                conn, run_id, "run.claimed", {"worker_id": worker_id(), "kind": queued.kind}
-            )
+            append_event(conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind})
         log.info("run.claimed", kind=queued.kind, prior_status=run.status)
-        graph_input = _graph_input(db, run, queued.kind)
         with tool_client_factory(settings) as tools:
             deps = Deps(tools=tools, lineage=Lineage(db), store=store, settings=settings)
             result = graph.invoke(graph_input, config, context=deps)
@@ -174,11 +193,14 @@ def run_once(
     worker_id: str | None = None,
 ) -> RunRecord | None:
     """Claim one queued run (``run_id`` only, when given) and execute it; `None` when idle."""
+    claimant = worker_id if worker_id is not None else _this_worker_id()
     with db.transaction() as conn:
-        queued = queue.claim(conn, worker_id or _this_worker_id(), run_id=run_id)
+        queued = queue.claim(conn, claimant, run_id=run_id)
     if queued is None:
         return None
-    return execute(settings, db, store, queued, tool_client_factory=tool_client_factory)
+    return execute(
+        settings, db, store, queued, tool_client_factory=tool_client_factory, worker_id=claimant
+    )
 
 
 def run_loop(settings: Settings, *, once: bool = False, poll_interval_s: float = 2.0) -> None:
