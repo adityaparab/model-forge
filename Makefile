@@ -1,10 +1,10 @@
-.PHONY: lint format test test-fast sync
+.PHONY: lint format test test-fast sync example
 
 lint:
-	uv run ruff check packages && uv run ruff format --check packages && uv run pyright && uv run lint-imports
+	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports
 
 format:
-	uv run ruff format packages && uv run ruff check --fix packages
+	uv run ruff format packages examples && uv run ruff check --fix packages examples
 
 test:
 	uv run pytest
@@ -14,3 +14,6 @@ test-fast:
 
 sync:
 	uv sync --all-groups
+
+example:
+	uv run python examples/core_pipeline.py
