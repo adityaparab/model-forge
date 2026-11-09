@@ -217,3 +217,30 @@ def test_tool_versions_are_published(settings: ServerSettings) -> None:
         "check_completeness",
     }
     assert all(t.meta == {"version": "1.0.0"} and t.output_schema is not None for t in tools)
+
+
+def test_empty_marker_targets_are_unresolved(call: CallFn, store: ArtifactStore) -> None:
+    body = "Empty knowledge [K:] and empty artifact [A:] markers."
+    sid = store.put_model(
+        DocumentSections(
+            template_id=TEMPLATE,
+            sections=[DocumentSection(section_id="executive_summary", body_md=body)],
+        ),
+        kind="document_sections",
+    ).id
+    doc = RenderOutput.model_validate(
+        call(
+            "doc-renderer",
+            "render_document",
+            RenderDocumentInput(template_id=TEMPLATE, sections_id=sid, title="t"),
+        ).structured_content
+    )
+    ref = ArtifactRef.model_validate(
+        call(
+            "doc-renderer",
+            "check_completeness",
+            CheckCompletenessInput(document_id=doc.markdown.id, template_id=TEMPLATE),
+        ).structured_content
+    )
+    report = store.get_model(ref.id, CompletenessReport)
+    assert report.unresolved_markers == ["[K:]", "[A:]"]
