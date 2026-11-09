@@ -36,3 +36,5 @@ def test_max_features_cap_records_dropped(synthetic: pd.DataFrame) -> None:
     assert sel.selected == uncapped.selected[:2]
     capped = {d.feature for d in sel.dropped if d.reason == "max_features"}
     assert all(f in capped for f in uncapped.selected[2:])
+    detail = next(d.detail for d in sel.dropped if d.feature == uncapped.selected[2])
+    assert detail == "ranked 3 by IV; cap is 2"
