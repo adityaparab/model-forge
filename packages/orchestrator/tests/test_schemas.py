@@ -2,7 +2,14 @@ from typing import get_args
 
 from modelforge_lineage.models import ArtifactRef
 from modelforge_mcp.schemas import DatasetRef
-from modelforge_orchestrator.schemas import DETERMINISTIC_REFS, RefName, RunState, merge_dicts
+from modelforge_orchestrator.schemas import (
+    DETERMINISTIC_REFS,
+    ApprovalSummary,
+    Manifest,
+    RefName,
+    RunState,
+    merge_dicts,
+)
 
 
 def test_run_state_round_trips_and_merges() -> None:
@@ -20,3 +27,34 @@ def test_run_state_round_trips_and_merges() -> None:
     assert set(DETERMINISTIC_REFS) < set(get_args(RefName))
     assert "document_sections" not in DETERMINISTIC_REFS
     assert len(get_args(RefName)) == 27 and len(DETERMINISTIC_REFS) == 22
+
+
+def test_manifest_carries_no_timestamp() -> None:
+    assert "ts" not in ApprovalSummary.model_fields
+    manifest = Manifest(
+        run_id="run_a",
+        replay_of=None,
+        brief_hash="h",
+        dataset_ref=DatasetRef(adapter="synthetic_credit"),
+        dataset_id="d" * 64,
+        seed=42,
+        profile="default",
+        initial_plan_ref="p" * 64,
+        plan_ref="p" * 64,
+        refs={},
+        tool_versions={},
+        approvals=[ApprovalSummary(gate="scope", decision="approve", approver="bob")],
+        outcome="completed",
+        core_version="0.1.0",
+        orchestrator_version="0.1.0",
+        events_head_hash="e" * 64,
+    )
+
+    def keys(value: object) -> set[str]:
+        if isinstance(value, dict):
+            return set(value) | {k for v in value.values() for k in keys(v)}
+        if isinstance(value, list):
+            return {k for v in value for k in keys(v)}
+        return set()
+
+    assert "ts" not in keys(manifest.model_dump(mode="json"))

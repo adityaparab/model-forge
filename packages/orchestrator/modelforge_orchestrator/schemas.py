@@ -108,10 +108,11 @@ class RunState(StrictModel):
 
 
 class ApprovalSummary(StrictModel):
+    """No timestamp: approval times live in the approvals table and `gate.decided` events."""
+
     gate: GateName
     decision: str
     approver: str
-    ts: str
 
 
 class Manifest(StrictModel):
