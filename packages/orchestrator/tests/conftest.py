@@ -34,7 +34,7 @@ from modelforge_orchestrator.nodes.split import split
 from modelforge_orchestrator.nodes.validate import validate
 from modelforge_orchestrator.schemas import RunState, apply_update
 from modelforge_orchestrator.tools import InProcessToolClient
-from modelforge_orchestrator.worker import run_once
+from modelforge_orchestrator.worker import run_once, setup_checkpointer
 
 __all__ = [
     "REPO",
@@ -140,9 +140,7 @@ def completed_cli_run(cli: Cli) -> str:
 
 @pytest.fixture(scope="session")
 def checkpointer(database: Database) -> Iterator[PostgresSaver]:
-    saver = PostgresSaver(database.pool)
-    saver.setup()
-    yield saver
+    yield setup_checkpointer(database)
 
 
 def make_run(

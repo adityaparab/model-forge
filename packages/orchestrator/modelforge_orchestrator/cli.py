@@ -11,7 +11,6 @@ from typing import Annotated, Any, Literal, NoReturn
 
 import typer
 import yaml
-from langgraph.checkpoint.postgres import PostgresSaver
 from modelforge_core.datasets.registry import ADAPTERS
 from modelforge_core.schemas import ModelingPlan
 from modelforge_lineage import migrate as lineage_migrate
@@ -26,13 +25,19 @@ from modelforge_lineage.queue import enqueue
 from modelforge_lineage.steps import list_steps
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
 from modelforge_lineage.verify import verify_run
+from pydantic import ValidationError
 
 from modelforge_orchestrator.briefs import BriefError, brief_hash, load_brief
 from modelforge_orchestrator.config import Settings, load_settings
 from modelforge_orchestrator.graph import build_graph
 from modelforge_orchestrator.replay import ReplayError, create_replay
 from modelforge_orchestrator.schemas import ReplayReport
-from modelforge_orchestrator.worker import run_loop, run_once, setup_checkpointer
+from modelforge_orchestrator.worker import (
+    make_checkpointer,
+    run_loop,
+    run_once,
+    setup_checkpointer,
+)
 
 __all__ = ["app"]
 
@@ -72,7 +77,7 @@ def _get_run(db: Database, run_id: str) -> RunRecord:
 
 def _refs(db: Database, run_id: str) -> dict[str, ArtifactRef]:
     """The run's refs from its latest checkpoint; empty when none exists."""
-    graph = build_graph(PostgresSaver(db.pool))
+    graph = build_graph(make_checkpointer(db))
     values: dict[str, Any] = graph.get_state({"configurable": {"thread_id": run_id}}).values
     return {name: ArtifactRef.model_validate(ref) for name, ref in values.get("refs", {}).items()}
 
@@ -166,11 +171,12 @@ def approve(
     """Record a gate decision, enqueue the resume, and execute it to the next gate or the end."""
     settings, db, store = _context()
     try:
-        new_plan = (
-            ModelingPlan.model_validate(yaml.safe_load(plan.read_text()))
-            if plan is not None
-            else None
-        )
+        new_plan: ModelingPlan | None = None
+        if plan is not None:
+            try:
+                new_plan = ModelingPlan.model_validate(yaml.safe_load(plan.read_text()))
+            except (OSError, yaml.YAMLError, ValidationError) as exc:
+                _fail(f"invalid plan {plan}: {exc}")
         gate_decision = GateDecision(
             gate=gate,
             decision=decision,
@@ -317,12 +323,19 @@ def replay(
         except runs.RunNotFound:
             _fail(f"run not found: {run_id}")
         if detach:
-            typer.echo(f"{record.id} queued")
+            if as_json:
+                typer.echo(json.dumps({"run": record.model_dump(mode="json"), "report": None}))
+                typer.echo(f"replay {record.id} queued; no report until a worker runs it", err=True)
+            else:
+                typer.echo(f"{record.id} queued")
             return
         record = _execute(settings, db, store, record.id)
         ref = _refs(db, record.id).get("replay_report")
         if ref is None:
-            typer.echo("\n".join(_run_lines(db, record)))
+            if as_json:
+                typer.echo(json.dumps({"run": record.model_dump(mode="json"), "report": None}))
+            else:
+                typer.echo("\n".join(_run_lines(db, record)))
             typer.echo(f"replay {record.id} produced no replay report", err=True)
             raise typer.Exit(code=1)
         report = store.get_model(ref.id, ReplayReport)

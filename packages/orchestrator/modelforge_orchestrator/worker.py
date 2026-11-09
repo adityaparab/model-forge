@@ -4,6 +4,7 @@ One `execute` call runs a claimed run until the graph pauses at a gate, finishes
 The run's status, `gate.requested` events and errors are written here; the nodes write the rest.
 """
 
+import importlib
 import os
 import socket
 import time
@@ -13,6 +14,7 @@ from typing import Any
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.types import Command
 from modelforge_lineage import migrate, queue, runs
 from modelforge_lineage.approvals import list_approvals
@@ -23,6 +25,7 @@ from modelforge_lineage.models import GateName, QueuedRun, RunRecord, RunStatus
 from modelforge_lineage.observability import configure_logging, get_logger
 from modelforge_lineage.store import ArtifactStore
 from modelforge_mcp.schemas import DatasetRef
+from pydantic import BaseModel
 
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
@@ -31,9 +34,11 @@ from modelforge_orchestrator.schemas import ErrorRecord, GatePrompt, RunState
 from modelforge_orchestrator.tools import StdioToolClient, ToolClient
 
 __all__ = [
+    "STATE_MODULES",
     "WorkerError",
     "execute",
     "initial_state",
+    "make_checkpointer",
     "run_loop",
     "run_once",
     "setup_checkpointer",
@@ -75,9 +80,45 @@ def initial_state(run: RunRecord) -> RunState:
     )
 
 
+STATE_MODULES: tuple[tuple[str, ...], ...] = (
+    ("modelforge_orchestrator", "schemas"),
+    ("modelforge_lineage", "models"),
+    ("modelforge_core", "schemas"),
+    ("modelforge_mcp", "schemas"),
+)
+"""The modules whose Pydantic models the run state checkpoints."""
+
+
+def _state_types() -> tuple[tuple[str, str], ...]:
+    """``(module, class)`` for every Pydantic model defined in `STATE_MODULES`.
+
+    The msgpack allowlist matches exact ``(module, class)`` keys, not module prefixes.
+    """
+    found: list[tuple[str, str]] = []
+    for path in STATE_MODULES:
+        module = importlib.import_module(".".join(path))
+        for name, value in vars(module).items():
+            if (
+                isinstance(value, type)
+                and issubclass(value, BaseModel)
+                and value.__module__ == module.__name__
+            ):
+                found.append((module.__name__, name))
+    return tuple(found)
+
+
+def make_checkpointer(db: Database) -> PostgresSaver:
+    """A saver over ``db``'s pool whose deserializer allows exactly the run state's models.
+
+    An explicit allowlist: the default serializer is permissive and ignores `with_allowlist`.
+    """
+    serde = JsonPlusSerializer(allowed_msgpack_modules=_state_types())
+    return PostgresSaver(db.pool, serde=serde)
+
+
 def setup_checkpointer(db: Database) -> PostgresSaver:
-    """A checkpointer over ``db``'s pool with its tables created (idempotent)."""
-    saver = PostgresSaver(db.pool)
+    """`make_checkpointer` with its tables created (idempotent)."""
+    saver = make_checkpointer(db)
     saver.setup()
     return saver
 
@@ -130,7 +171,7 @@ def execute(
     run_id = queued.run_id
     log = get_logger(component="worker", run_id=run_id)
     config: RunnableConfig = {"configurable": {"thread_id": run_id}}
-    graph = build_graph(PostgresSaver(db.pool))
+    graph = build_graph(make_checkpointer(db))
     try:
         with db.connection() as conn:
             run = runs.get_run(conn, run_id)
