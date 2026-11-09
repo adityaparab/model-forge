@@ -11,5 +11,10 @@ def test_no_pickle_in_any_package() -> None:
     packages = Path(__file__).resolve().parents[3] / "packages"
     roots = sorted(p for p in packages.glob("*/modelforge_*") if p.is_dir())
     assert len(roots) >= 4
-    offenders = [p for root in roots for p in root.rglob("*.py") if FORBIDDEN.search(p.read_text())]
+    examples = packages.parent / "examples"
+    assert examples.is_dir()
+    scanned = [*roots, examples]
+    offenders = [
+        p for root in scanned for p in root.rglob("*.py") if FORBIDDEN.search(p.read_text())
+    ]
     assert offenders == []

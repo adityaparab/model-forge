@@ -209,6 +209,7 @@ class Scorecard(StrictModel):
     c: float
     n_rows: int
     woe_convention: Literal["ln_good_over_bad"] = "ln_good_over_bad"
+    fit_method: Literal["single", "stepwise_wrong_sign"] = "single"
 
 
 # --- Challenger ---

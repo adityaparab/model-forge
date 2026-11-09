@@ -42,3 +42,10 @@ def test_stepwise_fit_rejects_empty_features(synthetic: pd.DataFrame) -> None:
     tables = fit_binning(synthetic, ["f_1"])
     with pytest.raises(ValueError):
         fit_woe_logistic_stepwise(synthetic, tables, [], model_name="m")
+
+
+def test_stepwise_records_fit_method(synthetic: pd.DataFrame) -> None:
+    tables = fit_binning(synthetic, ["f_1", "f_2", "f_3"])
+    sc, _ = fit_woe_logistic_stepwise(synthetic, tables, ["f_1", "f_2", "f_3"], model_name="m")
+    assert sc.fit_method == "stepwise_wrong_sign"
+    assert fit_woe_logistic(synthetic, tables, ["f_1"], model_name="m").fit_method == "single"

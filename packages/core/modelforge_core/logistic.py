@@ -110,7 +110,7 @@ def fit_woe_logistic_stepwise(
         )
         wrong = [f for f in scorecard.features if f.coefficient >= 0]
         if not wrong or len(names) == 1:
-            return scorecard, dropped
+            return scorecard.model_copy(update={"fit_method": "stepwise_wrong_sign"}), dropped
         worst = max(wrong, key=lambda f: f.coefficient)
         dropped.append(
             DroppedFeature(

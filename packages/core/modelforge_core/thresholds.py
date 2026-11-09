@@ -331,30 +331,42 @@ def _stab_csi_max(s: StabilityTests, t: Thresholds) -> ValidationTest:
     )
 
 
-def _sens_signs(s: SensitivityResults) -> ValidationTest:
+_NO_SENSITIVITY = "No sensitivity analysis was supplied."
+_NO_BENCHMARK = "No challenger benchmark was supplied."
+
+
+def _sens_signs(s: SensitivityResults | None) -> ValidationTest:
+    test_id, name = "sens.signs", "Coefficient signs"
+    threshold = "0 wrong signs pass, else fail"
+    if s is None:
+        return _not_applicable(test_id, name, threshold, _NO_SENSITIVITY)
     bad = [c.feature for c in s.sign_checks if not c.ok]
     status: Band = "pass" if not bad else "fail"
     return ValidationTest(
-        test_id="sens.signs",
-        name="Coefficient signs",
+        test_id=test_id,
+        name=name,
         status=status,
         value=float(len(bad)),
-        threshold="0 wrong signs pass, else fail",
+        threshold=threshold,
         message=f"{len(bad)} of {len(s.sign_checks)} coefficients have the wrong sign, "
         f"which is {status}.",
         evidence={"failed": len(bad), "n_checks": len(s.sign_checks), "features": bad},
     )
 
 
-def _sens_monotonic(s: SensitivityResults) -> ValidationTest:
+def _sens_monotonic(s: SensitivityResults | None) -> ValidationTest:
+    test_id, name = "sens.monotonic", "WoE monotonicity"
+    threshold = "0 non-monotone pass, else warn"
+    if s is None:
+        return _not_applicable(test_id, name, threshold, _NO_SENSITIVITY)
     bad = [m.feature for m in s.monotonicity if not m.monotone]
     status: Band = "pass" if not bad else "warn"
     return ValidationTest(
-        test_id="sens.monotonic",
-        name="WoE monotonicity",
+        test_id=test_id,
+        name=name,
         status=status,
         value=float(len(bad)),
-        threshold="0 non-monotone pass, else warn",
+        threshold=threshold,
         message=f"{len(bad)} of {len(s.monotonicity)} features are not monotone, "
         f"which is {status}.",
         evidence={
@@ -365,9 +377,11 @@ def _sens_monotonic(s: SensitivityResults) -> ValidationTest:
     )
 
 
-def _bench_gap(b: BenchmarkResults, t: Thresholds) -> ValidationTest:
+def _bench_gap(b: BenchmarkResults | None, t: Thresholds) -> ValidationTest:
     test_id, name = "bench.gap", "Champion versus challenger AUC gap"
     threshold = f"challenger - champion AUC <= {t.benchmark_gap:.2f} pass, else warn"
+    if b is None:
+        return _not_applicable(test_id, name, threshold, _NO_BENCHMARK)
     split = next((s for s in b.by_split if s.split == b.decided_on), None)
     if split is None:
         return _not_applicable(
@@ -432,8 +446,8 @@ def evaluate_thresholds(
     discrimination: DiscriminationMetrics,
     calibration: CalibrationTests,
     stability: StabilityTests,
-    sensitivity: SensitivityResults,
-    benchmark: BenchmarkResults,
+    sensitivity: SensitivityResults | None,
+    benchmark: BenchmarkResults | None,
     selection: FeatureSelection,
     tables: BinningTables,
     oot_available: bool,

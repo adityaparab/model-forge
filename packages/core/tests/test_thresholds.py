@@ -199,3 +199,15 @@ def test_single_class_oot_is_not_applicable_with_reason(synthetic: pd.DataFrame)
         t = report.get(test_id)
         assert t.status == "not_applicable"
         assert "out-of-time" in t.message.lower() and "single class" in t.message
+
+
+def test_missing_sensitivity_and_benchmark_are_not_applicable(synthetic: pd.DataFrame) -> None:
+    inputs = dict(_pipeline(synthetic))
+    inputs["sensitivity"] = None
+    inputs["benchmark"] = None
+    report = evaluate_thresholds(
+        **inputs, model_name="m", thresholds=Thresholds(), oot_available=True
+    )
+    statuses = {report.get(t).status for t in ("sens.signs", "sens.monotonic", "bench.gap")}
+    assert statuses == {"not_applicable"}
+    assert "sensitivity" in report.get("sens.signs").message.lower()

@@ -1,10 +1,13 @@
 import numpy as np
 import pandas as pd
 import pytest
-from modelforge_core.calibration import apply_calibration, fit_calibration
+from modelforge_core.binning import fit_binning
+from modelforge_core.calibration import apply_calibration, calibrate_split, fit_calibration
+from modelforge_core.logistic import fit_woe_logistic
 from modelforge_core.schemas import CalibrationMap
+from modelforge_core.scorecard import predict_pd
 from modelforge_core.scoring import score_frame
-from modelforge_core.splits import make_splits
+from modelforge_core.splits import apply_split, make_splits
 
 
 def test_platt_recovers_identity_on_calibrated_scores() -> None:
@@ -41,3 +44,18 @@ def test_score_frame_applies_calibration(synthetic: pd.DataFrame) -> None:
     assert np.allclose(scores["score"], 0.1) and np.allclose(
         scores["pd"], 1 / (1 + np.exp(-(np.log(0.1 / 0.9) + 1.0)))
     )
+
+
+def test_calibrate_split_matches_manual_fit(synthetic: pd.DataFrame) -> None:
+    manifest = make_splits(synthetic, strategy="vintage", seed=42, oot_vintages=[5])
+    train = apply_split(synthetic, manifest, "train")
+    tables = fit_binning(train, ["f_1", "f_2"])
+    sc = fit_woe_logistic(train, tables, ["f_1", "f_2"], model_name="m")
+    val = apply_split(synthetic, manifest, "val")
+    manual = fit_calibration(
+        predict_pd(sc, val), val["default_flag"].to_numpy(), method="platt", fitted_on="val"
+    )
+    cal = calibrate_split(
+        synthetic, manifest, lambda f: predict_pd(sc, f), split="val", method="platt"
+    )
+    assert cal == manual

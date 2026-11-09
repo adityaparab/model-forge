@@ -1,12 +1,15 @@
 """Score calibration: Platt scaling, isotonic regression, or identity."""
 
-from typing import Literal
+from collections.abc import Callable
+from typing import Literal, cast
 
 import numpy as np
+import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 from sklearn.linear_model import LogisticRegression
 
-from modelforge_core.schemas import CalibrationMap, Split
+from modelforge_core.schemas import CalibrationMap, Split, SplitManifest
+from modelforge_core.splits import apply_split
 
 _EPS = 1e-6
 
@@ -63,3 +66,17 @@ def apply_calibration(cal: CalibrationMap, scores: np.ndarray) -> np.ndarray:
             raise ValueError("isotonic calibration map requires isotonic_x and isotonic_y")
         return np.interp(s, cal.isotonic_x, cal.isotonic_y)
     return s
+
+
+def calibrate_split(
+    frame: pd.DataFrame,
+    manifest: SplitManifest,
+    predict: Callable[[pd.DataFrame], np.ndarray],
+    *,
+    split: Split,
+    method: Literal["platt", "isotonic", "none"],
+) -> CalibrationMap:
+    """Score the rows of ``split`` with ``predict`` and fit a calibration map on them."""
+    rows = apply_split(frame, manifest, split)
+    y = cast(pd.Series, rows["default_flag"]).to_numpy()
+    return fit_calibration(predict(rows), y, method=method, fitted_on=split)
