@@ -779,6 +779,7 @@ version = "0.1.0"
 source = { editable = "packages/lineage" }
 dependencies = [
     { name = "modelforge-core" },
+    { name = "pandas" },
     { name = "psycopg", extra = ["binary"] },
     { name = "psycopg-pool" },
     { name = "pyarrow" },
@@ -789,6 +790,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "modelforge-core", editable = "packages/core" },
+    { name = "pandas", specifier = ">=2.2" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3" },
     { name = "psycopg-pool", specifier = ">=3.3" },
     { name = "pyarrow", specifier = ">=16" },

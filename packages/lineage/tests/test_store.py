@@ -52,3 +52,12 @@ def test_partial_write_never_lands_under_a_valid_id(
     with pytest.raises(OSError):
         store.put(b"data", kind="k", media_type="text/plain")
     assert not store.exists(hashlib.sha256(b"data").hexdigest())
+
+
+def test_invalid_ids_are_rejected(tmp_path: Path) -> None:
+    store = ArtifactStore(tmp_path)
+    assert store.exists("../../etc/passwd") is False
+    with pytest.raises(ArtifactNotFound):
+        store.get("../x")
+    with pytest.raises(ArtifactNotFound):
+        store.get("A" * 64)

@@ -2,6 +2,7 @@
 
 import io
 import os
+import re
 import uuid
 from pathlib import Path
 from typing import Any, TypeVar
@@ -27,18 +28,24 @@ class ArtifactNotFound(KeyError):  # noqa: N818 - name fixed by the lineage inte
     pass
 
 
+def _is_artifact_id(artifact_id: str) -> bool:
+    return re.fullmatch(r"[0-9a-f]{64}", artifact_id) is not None
+
+
 class ArtifactStore:
     def __init__(self, root: Path) -> None:
         self.root = root
 
     def path(self, artifact_id: str) -> Path:
+        if not _is_artifact_id(artifact_id):
+            raise ArtifactNotFound(artifact_id)
         return self.root / artifact_id[:2] / artifact_id[2:4] / artifact_id
 
     def uri(self, artifact_id: str) -> str:
         return self.path(artifact_id).resolve().as_uri()
 
     def exists(self, artifact_id: str) -> bool:
-        return self.path(artifact_id).is_file()
+        return _is_artifact_id(artifact_id) and self.path(artifact_id).is_file()
 
     def put(
         self,
@@ -51,7 +58,7 @@ class ArtifactStore:
     ) -> ArtifactRef:
         artifact_id = sha256_hex(data)
         final_path = self.path(artifact_id)
-        if final_path.exists():
+        if final_path.is_file():
             size = final_path.stat().st_size
         else:
             tmp_dir = self.root / "tmp"
