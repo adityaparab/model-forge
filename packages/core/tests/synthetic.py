@@ -18,7 +18,7 @@ def make_synthetic_credit_frame(
     """
     rng = np.random.default_rng(seed)
     features = {f"f_{j}": rng.normal(size=n) for j in range(1, n_features + 1)}
-    coefficients = {"f_1": 0.8, "f_2": -0.6, "f_3": 0.4}
+    coefficients = {"f_1": 0.7, "f_2": -0.6, "f_3": 0.4}
     logit = np.full(n, -2.6)
     for name, coef in coefficients.items():
         if name in features:
