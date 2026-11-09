@@ -3,6 +3,14 @@
 The section bodies come from ``fixtures/sections.yaml`` (in template order), filled from the
 summaries on the run's refs, and every number carries the citation marker of the artifact it
 was read from.
+
+Citation paths: an ``[A:<artifact_id>#<path>]`` marker's path is a dotted sequence of steps into
+the artifact's JSON. A step applied to an object selects that key; a step applied to a list of
+objects selects the element whose discriminator field equals the step, where the discriminator
+is ``split`` for ``by_split``, ``test_id`` for ``tests``, ``feature`` for feature lists and
+``grade`` for ``grades``. So ``by_split.oot.auc`` is the ``auc`` of the ``by_split`` element
+whose ``split`` is ``oot``. The fixture bodies follow this grammar and the SP3 grounding
+resolver implements it.
 """
 
 import math

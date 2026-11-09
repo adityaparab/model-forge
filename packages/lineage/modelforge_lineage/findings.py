@@ -16,11 +16,13 @@ class FindingNotFound(KeyError):  # noqa: N818 - matches RunNotFound and Invento
 
 
 def insert_findings(conn: Connection[DictRow], run_id: str, rows: list[dict[str, Any]]) -> None:
+    """Insert ``rows``; a row whose id already exists is left as it is, so a re-run is a no-op."""
     for row in rows:
         conn.execute(
             "insert into findings (id, run_id, round, severity, category, title, description,"
             " evidence, required_action, status, response, response_evidence)"
-            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            " on conflict (id) do nothing",
             (
                 row["id"],
                 run_id,

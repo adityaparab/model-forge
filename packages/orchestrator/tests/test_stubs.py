@@ -1,3 +1,5 @@
+import re
+
 import pytest
 import yaml
 from langgraph.runtime import Runtime
@@ -21,6 +23,17 @@ def test_build_sections_is_grounded_and_deterministic(
     perf = next(s for s in a.sections if s.section_id == "performance").body_md
     assert f"[A:{validated_state.refs['discrimination'].id}#by_split.oot.auc]" in perf
     assert format_number(validated_state.refs["discrimination"].summary["auc"]["oot"]) in perf
+
+
+@pytest.mark.db
+def test_every_artifact_marker_cites_a_run_ref(validated_state: RunState, deps: Deps) -> None:
+    sections = build_sections(validated_state, deps.store)
+    cited = {
+        m.group(1)
+        for s in sections.sections
+        for m in re.finditer(r"\[A:([^#\]\s]*)#[^\]\s]*\]", s.body_md)
+    }
+    assert cited and cited <= {ref.id for ref in validated_state.refs.values()}
 
 
 def test_format_number() -> None:

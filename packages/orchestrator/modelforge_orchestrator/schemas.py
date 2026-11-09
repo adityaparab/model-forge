@@ -136,7 +136,8 @@ class Manifest(StrictModel):
     replay_of: str | None
     brief_hash: str
     dataset_ref: DatasetRef
-    dataset_id: str
+    dataset_id: str | None
+    """``None`` for a run rejected at the scope gate, sealed before `profile` loads the dataset."""
     seed: int
     profile: str
     initial_plan_ref: str

@@ -48,3 +48,15 @@ def test_insert_set_response_and_list(db: Database) -> None:
         None,
         ["e" * 64],
     )
+
+
+@pytest.mark.db
+def test_insert_findings_twice_is_idempotent(db: Database) -> None:
+    with db.transaction() as conn:
+        create_test_run(conn)
+        insert_findings(conn, "run_a", [_row("F-1"), _row("F-2")])
+    with db.transaction() as conn:
+        insert_findings(conn, "run_a", [_row("F-1"), _row("F-2")])
+    with db.connection() as conn:
+        rows = list_findings(conn, "run_a")
+    assert [r["id"] for r in rows] == ["run_a/F-1", "run_a/F-2"]

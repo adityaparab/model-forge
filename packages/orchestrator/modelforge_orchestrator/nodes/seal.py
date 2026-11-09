@@ -41,8 +41,7 @@ def build_manifest(
         replay_of=state.replay_of,
         brief_hash=state.brief_hash,
         dataset_ref=state.dataset_ref,
-        # a run rejected at the scope gate is sealed before `profile` loads the dataset
-        dataset_id=run.dataset_id or "",
+        dataset_id=run.dataset_id,
         seed=state.seed,
         profile=state.profile,
         initial_plan_ref=initial_plan_ref,
@@ -110,11 +109,12 @@ def seal(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
         manifest_ref = step.store(manifest, kind="manifest")
         with deps.lineage.transaction() as conn:
             runs.set_manifest_hash(conn, state.run_id, manifest_ref.id)
-        step.event("run.sealed", {"manifest_id": manifest_ref.id, "outcome": outcome})
-        refs = {"manifest": manifest_ref}
+        # finalise before `run.sealed`, so a sealed run never has an unfinalised inventory entry
         if state.replay_of is None:
             _finalise_inventory(state, deps)
-        else:
+        step.event("run.sealed", {"manifest_id": manifest_ref.id, "outcome": outcome})
+        refs = {"manifest": manifest_ref}
+        if state.replay_of is not None:
             report = compare_refs(original_manifest(state, deps), manifest)
             refs["replay_report"] = step.store(
                 report,
@@ -126,7 +126,10 @@ def seal(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
                 },
             )
             payload = {"ok": report.ok, "n_mismatched": len(report.mismatched)}
-            step.event("replay.completed", payload)
+            # one transaction, so neither run carries the event without the other
             with deps.lineage.transaction() as conn:
+                append_event(
+                    conn, state.run_id, "replay.completed", payload, step_id=step.record.id
+                )
                 append_event(conn, state.replay_of, "replay.completed", payload)
         return step.complete({"refs": refs, "status": outcome})
