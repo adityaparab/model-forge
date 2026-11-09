@@ -32,7 +32,8 @@ def test_max_features_cap_records_dropped(synthetic: pd.DataFrame) -> None:
     woe = transform_woe(synthetic, tables)
     uncapped = select_features(tables, woe, iv_min=0.02, iv_max=0.5, corr_max=0.7)
     sel = select_features(tables, woe, iv_min=0.02, iv_max=0.5, corr_max=0.7, max_features=2)
-    assert len(sel.selected) == 2
+    assert len(sel.selected) == 2 and sel.max_features == 2
+    assert uncapped.max_features is None
     assert sel.selected == uncapped.selected[:2]
     capped = {d.feature for d in sel.dropped if d.reason == "max_features"}
     assert all(f in capped for f in uncapped.selected[2:])

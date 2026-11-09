@@ -174,6 +174,7 @@ class FeatureSelection(StrictModel):
     corr_max: float
     selected: list[str]
     dropped: list[DroppedFeature]
+    max_features: int | None = None
 
 
 # --- Scorecard ---

@@ -83,5 +83,10 @@ def select_features(
             )
         selected = selected[:max_features]
     return FeatureSelection(
-        iv_min=iv_min, iv_max=iv_max, corr_max=corr_max, selected=selected, dropped=dropped
+        iv_min=iv_min,
+        iv_max=iv_max,
+        corr_max=corr_max,
+        selected=selected,
+        dropped=dropped,
+        max_features=max_features,
     )

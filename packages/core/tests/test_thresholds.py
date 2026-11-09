@@ -157,3 +157,45 @@ def test_hl_nan_is_warn_with_message(synthetic: pd.DataFrame) -> None:
         **inputs, model_name="m", thresholds=Thresholds(), oot_available=True
     ).get("cal.hl")
     assert t.status == "warn" and "grades" in t.message
+    assert t.value is None
+
+
+def test_sensitivity_evidence_lists_feature_names(synthetic: pd.DataFrame) -> None:
+    report = evaluate_thresholds(
+        **_pipeline(synthetic), model_name="m", thresholds=Thresholds(), oot_available=True
+    )
+    for test_id in ("sens.signs", "sens.monotonic"):
+        assert isinstance(report.get(test_id).evidence["features"], list)
+
+
+def test_negative_gap_message_says_oot_exceeds_train(synthetic: pd.DataFrame) -> None:
+    inputs = _pipeline(synthetic)
+    disc = inputs["discrimination"]
+    inputs["discrimination"] = disc.model_copy(
+        update={
+            "by_split": [
+                m.model_copy(update={"auc": 0.5}) if m.split == "train" else m
+                for m in disc.by_split
+            ]
+        }
+    )
+    t = evaluate_thresholds(
+        **inputs, model_name="m", thresholds=Thresholds(), oot_available=True
+    ).get("disc.gap.train_oot")
+    assert t.value is not None and t.value < 0
+    assert t.message.startswith("Out-of-time AUC exceeds train AUC by ")
+
+
+def test_single_class_oot_is_not_applicable_with_reason(synthetic: pd.DataFrame) -> None:
+    inputs = _pipeline(synthetic)
+    disc = inputs["discrimination"]
+    inputs["discrimination"] = disc.model_copy(
+        update={"by_split": [m for m in disc.by_split if m.split != "oot"]}
+    )
+    report = evaluate_thresholds(
+        **inputs, model_name="m", thresholds=Thresholds(), oot_available=True
+    )
+    for test_id in ("disc.auc.oot", "disc.ks.oot", "disc.gap.train_oot"):
+        t = report.get(test_id)
+        assert t.status == "not_applicable"
+        assert "out-of-time" in t.message.lower() and "single class" in t.message

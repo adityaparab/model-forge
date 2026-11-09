@@ -60,6 +60,15 @@ def _not_applicable(test_id: str, name: str, threshold: str, message: str) -> Va
 
 
 _NO_OOT = "No out-of-time split is available, so this test is not applicable."
+_OOT_SINGLE_CLASS = (
+    "The out-of-time split has a single class, so the metric is undefined and this test "
+    "is not applicable."
+)
+
+
+def _no_oot_message(*, oot_available: bool) -> str:
+    """Why an out-of-time test is skipped: no split at all, or a split with one class."""
+    return _OOT_SINGLE_CLASS if oot_available else _NO_OOT
 
 
 def _disc_auc_oot(
@@ -69,7 +78,9 @@ def _disc_auc_oot(
     threshold = f">= {t.auc_min:.2f} pass, >= {t.auc_warn:.2f} warn"
     oot = d.get("oot")
     if not oot_available or oot is None:
-        return _not_applicable(test_id, name, threshold, _NO_OOT)
+        return _not_applicable(
+            test_id, name, threshold, _no_oot_message(oot_available=oot_available)
+        )
     status = _higher_is_better(oot.auc, t.auc_min, t.auc_warn)
     return ValidationTest(
         test_id=test_id,
@@ -119,7 +130,9 @@ def _disc_ks_oot(d: DiscriminationMetrics, t: Thresholds, *, oot_available: bool
     threshold = f">= {t.ks_min:.2f} pass, else fail"
     oot = d.get("oot")
     if not oot_available or oot is None:
-        return _not_applicable(test_id, name, threshold, _NO_OOT)
+        return _not_applicable(
+            test_id, name, threshold, _no_oot_message(oot_available=oot_available)
+        )
     status: Band = "pass" if oot.ks >= t.ks_min else "fail"
     return ValidationTest(
         test_id=test_id,
@@ -138,17 +151,30 @@ def _disc_gap_train_oot(
     test_id, name = "disc.gap.train_oot", "Train to out-of-time AUC gap"
     threshold = f"<= {t.gap_max:.2f} pass, <= {t.gap_fail:.2f} warn"
     train, oot = d.get("train"), d.get("oot")
-    if not oot_available or oot is None or train is None:
-        return _not_applicable(test_id, name, threshold, _NO_OOT)
+    if not oot_available or oot is None:
+        return _not_applicable(
+            test_id, name, threshold, _no_oot_message(oot_available=oot_available)
+        )
+    if train is None:
+        return _not_applicable(
+            test_id,
+            name,
+            threshold,
+            "No train split metrics exist to compare with out-of-time, so this is skipped.",
+        )
     gap = train.auc - oot.auc
     status = _lower_is_better(gap, t.gap_max, t.gap_fail)
+    if gap < 0:
+        message = f"Out-of-time AUC exceeds train AUC by {_fmt(abs(gap))}, which is {status}."
+    else:
+        message = f"Train AUC exceeds out-of-time AUC by {_fmt(gap)}, which is {status}."
     return ValidationTest(
         test_id=test_id,
         name=name,
         status=status,
         value=gap,
         threshold=threshold,
-        message=f"Train AUC exceeds out-of-time AUC by {_fmt(gap)}, which is {status}.",
+        message=message,
         evidence={"train_auc": train.auc, "oot_auc": oot.auc, "gap": gap},
     )
 
@@ -209,7 +235,7 @@ def _cal_hl(c: CalibrationTests, t: Thresholds) -> ValidationTest:
             test_id=test_id,
             name=name,
             status="warn",
-            value=p,
+            value=None,
             threshold=threshold,
             message=(
                 f"Only {c.n_grades} grades formed on the {c.split} split, too few grades "
@@ -316,7 +342,7 @@ def _sens_signs(s: SensitivityResults) -> ValidationTest:
         threshold="0 wrong signs pass, else fail",
         message=f"{len(bad)} of {len(s.sign_checks)} coefficients have the wrong sign, "
         f"which is {status}.",
-        evidence={"failed": len(bad), "n_checks": len(s.sign_checks), "features": ", ".join(bad)},
+        evidence={"failed": len(bad), "n_checks": len(s.sign_checks), "features": bad},
     )
 
 
@@ -334,7 +360,7 @@ def _sens_monotonic(s: SensitivityResults) -> ValidationTest:
         evidence={
             "failed": len(bad),
             "n_checks": len(s.monotonicity),
-            "features": ", ".join(bad),
+            "features": bad,
         },
     )
 
