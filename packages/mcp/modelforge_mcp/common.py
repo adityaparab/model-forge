@@ -1,5 +1,6 @@
 """Shared envelope for every ModelForge MCP server: settings, typed errors, tool registration."""
 
+import math
 import os
 import time
 from collections.abc import Callable, Mapping
@@ -87,6 +88,15 @@ def load_frame(ctx: ToolContext, artifact_id: str) -> pd.DataFrame:
         return ctx.store.get_frame(artifact_id)
     except ArtifactNotFound:
         fail("artifact_not_found", f"artifact {artifact_id!r} not found")
+
+
+def json_float(x: float) -> float | str:
+    """Encode a float for a JSON summary: non-finite values become "NaN"/"Infinity"/"-Infinity"."""
+    if math.isnan(x):
+        return "NaN"
+    if math.isinf(x):
+        return "Infinity" if x > 0 else "-Infinity"
+    return float(x)
 
 
 def producer(ctx: ToolContext, tool: str, version: str) -> Producer:
