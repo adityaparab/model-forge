@@ -53,6 +53,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("command", help=f"one of: {', '.join([*COMMANDS, *TOOL_COMMANDS])}")
     parser.add_argument("--out", type=Path, help="contracts: snapshot output directory")
     parser.add_argument("--artifact-dir", type=Path, help="goldens: artifact store directory")
+    parser.add_argument("--marker", help="ignored; tags a server process so its owner can find it")
     args = parser.parse_args(argv)
     if args.command == "contracts":
         return _contracts(args.out)

@@ -9,24 +9,27 @@ through `ToolClient.call`, which schedules each call onto that loop.
 import asyncio
 import concurrent.futures
 import os
+import subprocess
 import sys
 import threading
 import time
+import uuid
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Protocol, Self, get_args
 
-from mcp import Client
+from mcp import Client, MCPError
 from mcp.client.stdio import StdioServerParameters
-from mcp.types import CallToolResult
+from mcp.types import REQUEST_TIMEOUT, CallToolResult
 from modelforge_core.schemas import StrictModel
 from modelforge_lineage.canonical import canonical_json, sha256_hex
 from modelforge_lineage.models import ArtifactRef
 from modelforge_lineage.observability import get_logger
 from modelforge_mcp.common import ServerName, ToolErrorPayload
 from modelforge_mcp.registry import TOOLS, build_server
+from pydantic import ValidationError
 
 from modelforge_orchestrator.config import Settings, server_settings
 
@@ -293,6 +296,9 @@ class BaseToolClient:
                 result = self._bridge.call_tool(server, tool, arguments, timeout_s=timeout)
             except concurrent.futures.TimeoutError:
                 failure = error("timeout", f"no response within {timeout}s")
+            except MCPError as exc:
+                code = "timeout" if exc.code == REQUEST_TIMEOUT else "transport"
+                failure = error(code, f"MCPError: {exc.message}")
             except Exception as exc:
                 failure = error("transport", f"{type(exc).__name__}: {exc}")
             else:
@@ -302,7 +308,12 @@ class BaseToolClient:
                     text = getattr(result.content[0], "text", "") if result.content else ""
                     raise error(*parse_error(text))
                 else:
-                    output = spec.output_model.model_validate(result.structured_content)
+                    try:
+                        output = spec.output_model.model_validate(result.structured_content)
+                    except ValidationError as exc:
+                        raise error(
+                            "internal", f"output does not match the contract: {exc}"
+                        ) from exc
                     duration_ms = int((time.perf_counter() - started) * 1000)
                     _log.info(
                         "tool.call",
@@ -337,7 +348,11 @@ class BaseToolClient:
 
 
 class StdioToolClient(BaseToolClient):
-    """Each server is a `python -m modelforge_mcp <server>` subprocess (or `mcp_command`)."""
+    """Each server is a `python -m modelforge_mcp <server>` subprocess (or `mcp_command`).
+
+    Every subprocess is started with `--marker <uuid>`, so `server_pids` can find exactly the
+    processes this client started.
+    """
 
     def __init__(
         self,
@@ -351,6 +366,7 @@ class StdioToolClient(BaseToolClient):
             if settings.mcp_command
             else (sys.executable, "-m", "modelforge_mcp")
         )
+        self.marker = uuid.uuid4().hex
         env = {
             **os.environ,
             "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
@@ -359,7 +375,9 @@ class StdioToolClient(BaseToolClient):
         }
 
         def factory(name: ServerName) -> ClientFactory:
-            params = StdioServerParameters(command=command[0], args=[*command[1:], name], env=env)
+            params = StdioServerParameters(
+                command=command[0], args=[*command[1:], name, "--marker", self.marker], env=env
+            )
             return lambda: Client(params)
 
         super().__init__(
@@ -367,6 +385,11 @@ class StdioToolClient(BaseToolClient):
             default_timeout_s=settings.tool_timeout_s,
             backoff_s=backoff_s,
         )
+
+    def server_pids(self) -> list[int]:
+        """Pids of the live processes whose command line carries this client's marker."""
+        found = subprocess.run(["pgrep", "-f", self.marker], capture_output=True, text=True)
+        return [int(pid) for pid in found.stdout.split()]
 
 
 class InProcessToolClient(BaseToolClient):
