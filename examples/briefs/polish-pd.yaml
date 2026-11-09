@@ -1,0 +1,11 @@
+model_name: polish_bankruptcy_pd
+portfolio: Polish non-financial companies (UCI bankruptcy data)
+dataset: {adapter: polish_bankruptcy, seed: 42}
+target: {event: "bankruptcy within the forecasting horizon, as a proxy for default", horizon: "1 to 5 years by horizon file"}
+intended_use: reference PD model for a wholesale credit portfolio; demonstration only
+regulatory_scope: [SR 11-7, SR 26-2]
+tier: 2
+vintage_policy: {oot_vintages: [5]}
+feature_policy: {exclusions: [], max_features: 20, iv_min: 0.02, iv_max: 0.5, corr_max: 0.7}
+thresholds: {}            # overrides of Thresholds fields; defaults otherwise
+constraints: "No raw rows leave the toolkit; document the horizon-files-as-vintages proxy."

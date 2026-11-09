@@ -1,0 +1,10 @@
+model_name: synthetic_pd
+portfolio: Synthetic credit frame for offline demonstration
+dataset: {adapter: synthetic_credit, seed: 42}
+target: {event: "synthetic default event", horizon: "five synthetic vintages"}
+intended_use: offline demonstration of the ModelForge pipeline; not for credit decisions
+regulatory_scope: [SR 11-7, SR 26-2]
+tier: 3
+vintage_policy: {oot_vintages: [5]}
+feature_policy: {exclusions: [], max_features: 20, iv_min: 0.02, iv_max: 0.5, corr_max: 0.7}
+thresholds: {}            # overrides of Thresholds fields; defaults otherwise
