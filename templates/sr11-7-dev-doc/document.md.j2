@@ -1,0 +1,19 @@
+# {{ title }}
+
+{% if context %}
+{% for key, value in context.items() %}**{{ key }}**: {{ value }}{% if not loop.last %}  {% endif %}{% endfor %}
+
+
+{% endif %}
+{% for section in sections %}
+## {{ section.index }}. {{ section.title }}
+
+{% if section.body is none %}
+{{ banner }}
+{% else %}
+{{ section.body }}
+{% endif %}
+{% if not loop.last %}
+
+{% endif %}
+{% endfor %}

@@ -1,0 +1,79 @@
+# Sections of the SR 11-7 style model development document, in document order.
+- id: executive_summary
+  title: Executive summary
+  required: true
+  artifact_kinds: []
+  guidance: >-
+    Summarise the model, its intended use, the headline performance and validation outcome,
+    and the material limitations a reader must know before relying on it.
+- id: purpose_and_use
+  title: Model purpose and intended use
+  required: true
+  artifact_kinds: []
+  guidance: >-
+    State the business problem the model addresses, the portfolio and decisions it supports,
+    and the uses for which it is not intended.
+- id: regulatory_context
+  title: Regulatory and policy context
+  required: true
+  artifact_kinds: []
+  guidance: >-
+    Identify the supervisory guidance, accounting standards and internal policies that apply
+    to the model, citing each regulatory statement to a knowledge passage.
+- id: data
+  title: Data
+  required: true
+  artifact_kinds: [profile, leakage, psi, split_manifest, column_dictionary]
+  guidance: >-
+    Describe the data sources, target definition, observation window and exclusions, then
+    report data quality, leakage checks and the development, validation and out-of-time splits.
+- id: methodology
+  title: Methodology and conceptual soundness
+  required: true
+  artifact_kinds: [modeling_plan, binning_tables]
+  guidance: >-
+    Justify the chosen modelling approach, the alternatives considered and the challenger model,
+    and state the assumptions the approach relies on.
+- id: development
+  title: Model development
+  required: true
+  artifact_kinds: [binning_tables, feature_selection, scorecard, gbm_model, calibration_map]
+  guidance: >-
+    Walk through feature engineering, feature selection, estimation and calibration, ending with
+    the final model specification.
+- id: performance
+  title: Performance and validation results
+  required: true
+  artifact_kinds:
+    [validation_report, discrimination, calibration_tests, stability, sensitivity, benchmark]
+  guidance: >-
+    Report discrimination, calibration, stability, sensitivity and benchmark results against the
+    agreed thresholds, per split.
+- id: limitations
+  title: Limitations and weaknesses
+  required: true
+  artifact_kinds: []
+  guidance: >-
+    List the known limitations and weaknesses of the data, method and results, with their
+    expected impact and any compensating controls.
+- id: monitoring
+  title: Ongoing monitoring plan
+  required: true
+  artifact_kinds: []
+  guidance: >-
+    Define the metrics, thresholds, frequency and escalation path used to monitor the model
+    once it is in use.
+- id: governance
+  title: Governance and lineage
+  required: true
+  artifact_kinds: [manifest]
+  guidance: >-
+    Record ownership, approvals and the lineage from input data to every reported artifact,
+    so the results can be reproduced.
+- id: appendices
+  title: Appendices
+  required: false
+  artifact_kinds: [binning_tables, scorecard, validation_report]
+  guidance: >-
+    Include supporting detail such as binning tables, the scorecard, full metrics and the
+    list of citations.
