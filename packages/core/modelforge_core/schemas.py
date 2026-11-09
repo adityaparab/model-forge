@@ -162,7 +162,9 @@ class BinningTables(StrictModel):
 
 class DroppedFeature(StrictModel):
     feature: str
-    reason: Literal["iv_below_min", "iv_above_max", "correlated", "constant"]
+    reason: Literal[
+        "iv_below_min", "iv_above_max", "correlated", "constant", "max_features", "wrong_sign"
+    ]
     detail: str
 
 

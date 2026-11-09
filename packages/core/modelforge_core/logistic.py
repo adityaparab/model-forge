@@ -11,6 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from modelforge_core.binning import transform_woe
 from modelforge_core.schemas import (
     BinningTables,
+    DroppedFeature,
     PointsScaling,
     Scorecard,
     ScorecardBin,
@@ -74,3 +75,48 @@ def fit_woe_logistic(
         c=c,
         n_rows=len(frame),
     )
+
+
+def fit_woe_logistic_stepwise(
+    frame: pd.DataFrame,
+    tables: BinningTables,
+    features: Sequence[str],
+    *,
+    model_name: str,
+    target: str = "default_flag",
+    penalty: Literal["l2", "none"] = "l2",
+    c: float = 1.0,
+    scaling: PointsScaling | None = None,
+) -> tuple[Scorecard, list[DroppedFeature]]:
+    """Fit, then repeatedly drop the feature with the largest non-negative coefficient and refit.
+
+    On WoE inputs every coefficient should be negative; a coefficient ``>= 0`` is a wrong sign,
+    usually from multicollinearity. Stops when all signs are right or one feature remains.
+    """
+    names = list(features)
+    if not names:
+        raise ValueError("fit_woe_logistic_stepwise needs at least one feature")
+    dropped: list[DroppedFeature] = []
+    while True:
+        scorecard = fit_woe_logistic(
+            frame,
+            tables,
+            names,
+            model_name=model_name,
+            target=target,
+            penalty=penalty,
+            c=c,
+            scaling=scaling,
+        )
+        wrong = [f for f in scorecard.features if f.coefficient >= 0]
+        if not wrong or len(names) == 1:
+            return scorecard, dropped
+        worst = max(wrong, key=lambda f: f.coefficient)
+        dropped.append(
+            DroppedFeature(
+                feature=worst.feature,
+                reason="wrong_sign",
+                detail=f"coefficient {worst.coefficient:+.4f} in a {len(names)}-feature fit",
+            )
+        )
+        names.remove(worst.feature)

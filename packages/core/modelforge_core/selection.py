@@ -1,4 +1,4 @@
-"""Feature selection: constant and IV filters, then greedy WoE-correlation pruning."""
+"""Feature selection: constant and IV filters, greedy WoE-correlation pruning, optional cap."""
 
 from typing import cast
 
@@ -14,12 +14,14 @@ def select_features(
     iv_min: float,
     iv_max: float,
     corr_max: float,
+    max_features: int | None = None,
 ) -> FeatureSelection:
     """Drop constant, low-IV and suspiciously high-IV features, then prune correlated ones.
 
     Survivors are walked in IV-descending order (feature name breaks ties); a candidate is dropped
     when its Pearson correlation on ``woe_frame`` with any already-kept feature exceeds
-    ``corr_max`` in absolute value.
+    ``corr_max`` in absolute value. If ``max_features`` is set, only the first ``max_features``
+    survivors in that order are kept; the rest are recorded with reason ``max_features``.
     """
     dropped: list[DroppedFeature] = []
     survivors: list[FeatureBinning] = []
@@ -70,6 +72,16 @@ def select_features(
                     detail=f"correlation {r:.3f} with kept feature {kept} exceeds {corr_max}",
                 )
             )
+    if max_features is not None and len(selected) > max_features:
+        for rank, feature in enumerate(selected[max_features:], start=max_features + 1):
+            dropped.append(
+                DroppedFeature(
+                    feature=feature,
+                    reason="max_features",
+                    detail=f"ranked {rank} by IV; cap is {max_features}",
+                )
+            )
+        selected = selected[:max_features]
     return FeatureSelection(
         iv_min=iv_min, iv_max=iv_max, corr_max=corr_max, selected=selected, dropped=dropped
     )

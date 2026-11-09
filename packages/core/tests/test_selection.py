@@ -25,3 +25,14 @@ def test_selection_drops_by_iv_constant_and_correlation(synthetic: pd.DataFrame)
     assert all(
         reasons.get(f) == "iv_below_min" for f in ("f_4", "f_5", "f_6") if f not in sel.selected
     )
+
+
+def test_max_features_cap_records_dropped(synthetic: pd.DataFrame) -> None:
+    tables = fit_binning(synthetic, [f"f_{i}" for i in range(1, 7)])
+    woe = transform_woe(synthetic, tables)
+    uncapped = select_features(tables, woe, iv_min=0.02, iv_max=0.5, corr_max=0.7)
+    sel = select_features(tables, woe, iv_min=0.02, iv_max=0.5, corr_max=0.7, max_features=2)
+    assert len(sel.selected) == 2
+    assert sel.selected == uncapped.selected[:2]
+    capped = {d.feature for d in sel.dropped if d.reason == "max_features"}
+    assert all(f in capped for f in uncapped.selected[2:])
