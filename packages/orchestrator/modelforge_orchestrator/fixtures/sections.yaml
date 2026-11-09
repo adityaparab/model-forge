@@ -1,0 +1,68 @@
+# Deterministic stand-in for the documentation agent: one Markdown body per section of the
+# sr11-7-dev-doc template, as Python format strings over the run's artifact summaries. Every
+# number is followed by the [A:<artifact_id>#<path>] marker of the artifact it is read from.
+executive_summary: >-
+  {model_name} is a logistic scorecard estimating the probability of default for the
+  portfolio described as: {portfolio}. It was developed on {n_rows} [A:{profile_id}#n_rows] observations
+  with an observed event rate of {target_rate} [A:{profile_id}#target_rate], and uses
+  {n_features_selected} [A:{selection_id}#selected] features. Its out-of-time AUC is
+  {auc_oot} [A:{discrimination_id}#by_split.oot.auc] and the overall validation outcome is
+  {overall} [A:{validation_id}#overall]. The material limitations are the proxies used for
+  the default event and for origination vintages, described in the limitations section.
+purpose_and_use: >-
+  The model ranks and quantifies default risk for the portfolio described as: {portfolio}.
+  Its intended use
+  is: {intended_use}. It is not intended for uses outside that statement, for portfolios other
+  than the one it was developed on, or for decisions the approved conditions exclude.
+regulatory_context: >-
+  The model is developed and documented under the following supervisory guidance:
+  {regulatory_scope} [K:sr11-7-overview] [K:sr26-2-scope]. SR 11-7 established the
+  expectations for model development, implementation, use and validation, including effective
+  challenge and documentation detailed enough for an independent party to understand the model,
+  and this document follows its structure [K:sr11-7-overview]. SR 26-2 replaced SR 11-7 as the
+  supervisory guidance on model risk management and excludes generative AI and agentic systems
+  from its scope, so the agents that assist in producing this document are governed separately
+  from the model it describes [K:sr26-2-scope].
+data: >-
+  The development data is the dataset {dataset}. After profiling it holds {n_rows}
+  [A:{profile_id}#n_rows] rows with an event rate of {target_rate}
+  [A:{profile_id}#target_rate]. Data quality, leakage and population stability were checked
+  before modelling, and the data was split into development, validation and out-of-time
+  samples by vintage.
+methodology: >-
+  The champion is a weight-of-evidence logistic regression scorecard, chosen for its
+  transparency and its monotone, explainable relationship between each feature and the
+  predicted risk. A gradient-boosted model was built on the same features as a challenger to
+  benchmark the discrimination the scorecard gives up for that transparency.
+development: >-
+  Features were binned, screened on information value and correlation, and
+  {n_features_selected} [A:{selection_id}#selected] were selected. The final model was
+  estimated with the {fit_method} [A:{champion_id}#fit_method] procedure and uses the
+  features {features} [A:{champion_id}#features]. Predicted probabilities were calibrated
+  on the development sample.
+performance: >-
+  The champion's AUC is {auc_val} [A:{discrimination_id}#by_split.val.auc] on the validation
+  sample and {auc_oot} [A:{discrimination_id}#by_split.oot.auc] on the out-of-time sample.
+  Discrimination, calibration, stability, sensitivity and the benchmark against the challenger
+  were evaluated against the agreed thresholds, with an overall outcome of {overall}
+  [A:{validation_id}#overall].
+limitations: >-
+  The default event is a proxy: where the public company-bankruptcy data is used, bankruptcy
+  within the forecast horizon stands in for default, so the model estimates bankruptcy risk
+  rather than credit default as a lender would define it. Origination vintages are also a
+  proxy: the dataset's horizon files are treated as vintages, so the out-of-time sample tests
+  stability across forecast horizons rather than across calendar time.
+monitoring: >-
+  Once in use, the model is monitored quarterly on discrimination, calibration and population
+  stability of the score and of each feature, against the thresholds used at validation. A
+  breach of any threshold is escalated to the model owner and triggers a review of whether
+  the model remains fit for its intended use.
+governance: >-
+  Every step of the run is recorded in a hash-chained event log, and every input, intermediate
+  result and output is a content-addressed artifact identified by the hash of its bytes, so
+  the lineage from the source data to each reported figure can be verified. The run's
+  approvals are recorded at each human gate, and the run can be reproduced and checked
+  against its manifest with modelforge replay.
+appendices: >-
+  Supporting artifacts include the binning tables, the scorecard, the full validation report
+  [A:{validation_id}#overall] and the citations listed with each section.

@@ -11,6 +11,7 @@ from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.facade import Lineage
 from modelforge_lineage.ids import new_id
+from modelforge_lineage.models import GateDecision
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
 from modelforge_lineage.testing import database, database_url, db
 from modelforge_mcp.schemas import DatasetRef
@@ -18,9 +19,12 @@ from modelforge_orchestrator.briefs import BriefError, brief_hash, parse_brief
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.nodes.build import build
+from modelforge_orchestrator.nodes.challenge import challenge
+from modelforge_orchestrator.nodes.document import document
 from modelforge_orchestrator.nodes.features import features
 from modelforge_orchestrator.nodes.intake import intake
 from modelforge_orchestrator.nodes.profile import profile
+from modelforge_orchestrator.nodes.remediate import remediate
 from modelforge_orchestrator.nodes.scope import scope
 from modelforge_orchestrator.nodes.split import split
 from modelforge_orchestrator.nodes.validate import validate
@@ -40,6 +44,7 @@ __all__ = [
     "runtime",
     "scoped_state",
     "settings",
+    "signed_off_state",
     "state_no_oot",
     "store",
     "synthetic_state",
@@ -191,3 +196,18 @@ def validated_state(prepared_state: RunState, runtime: Runtime[Deps]) -> RunStat
     for node in (features, build, validate):
         state = apply_update(state, node(state, runtime))
     return state
+
+
+@pytest.fixture
+def signed_off_state(validated_state: RunState, runtime: Runtime[Deps]) -> RunState:
+    """``validated_state`` after `document`, `challenge` and `remediate`, signed off."""
+    state = validated_state
+    for node in (document, challenge, remediate):
+        state = apply_update(state, node(state, runtime))
+    signoff = GateDecision(
+        gate="signoff",
+        decision="approve_with_conditions",
+        approver="bob",
+        conditions=["monitor PSI quarterly"],
+    )
+    return apply_update(state, {"gates": {"signoff": signoff}, "status": "completed"})
