@@ -1,6 +1,6 @@
 # local data and run outputs
-data/
-artifacts/
+data
+artifacts
 .env
 .env.*
 

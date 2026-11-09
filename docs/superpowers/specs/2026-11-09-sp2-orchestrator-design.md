@@ -59,7 +59,7 @@ The no-pickle scan extends to every `modelforge_*` package.
 
 Plain SQL through psycopg 3 (synchronous). No ORM. A `Database` object wraps a `psycopg_pool.ConnectionPool` built from `MODELFORGE_DATABASE_URL` and exposes `connection()` and `transaction()` context managers; every repository function takes a connection so a node's writes share one transaction. Pool connections are opened with `autocommit=True` and dict rows, which the LangGraph `PostgresSaver` requires, so lineage writes always use explicit `with conn.transaction():` blocks; the checkpointer is constructed on the same pool.
 
-Migrations are numbered files `modelforge_lineage/migrations/NNNN_<name>.sql`, applied in order by `modelforge_lineage.migrate.apply(db)` and recorded in `schema_migrations(version int primary key, name text, applied_at timestamptz)`. The same function calls the LangGraph `PostgresSaver.setup()` so the checkpoint tables live in the same database. `modelforge migrate` runs it; the worker runs it at start (idempotent).
+Migrations are numbered files `modelforge_lineage/migrations/NNNN_<name>.sql`, applied in order by `modelforge_lineage.migrate.apply(db)` and recorded in `schema_migrations(version int primary key, name text, applied_at timestamptz)`. The LangGraph checkpoint tables live in the same database but are created by the orchestrator (`modelforge_lineage` may not import `langgraph`): `modelforge migrate` applies the SQL migrations and then calls `PostgresSaver.setup()`; the worker does the same at start (both idempotent).
 
 ### 3.2 Tables
 
