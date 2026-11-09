@@ -597,7 +597,7 @@ git commit -m "feat(core): Taiwanese bankruptcy adapter and dataset registry"
 
 **Interfaces:**
 - Produces: `def profile(frame: pd.DataFrame, *, dataset: str) -> ProfileArtifact`; `def check_leakage(frame: pd.DataFrame, *, dataset: str, auc_threshold: float = LEAKAGE_AUC_THRESHOLD) -> LeakageReport`; `def feature_columns(frame: pd.DataFrame) -> list[str]` (in `datasets/base.py`, returns columns matching `FEATURE_PATTERN` in frame order).
-- `conftest.py`: `def make_synthetic_credit_frame(n: int = 4000, *, seed: int = 0, n_features: int = 6, vintages: tuple[int, ...] = (1, 2, 3, 4, 5), missing_share: float = 0.05) -> pd.DataFrame` exposed as fixture `synthetic` (n=4000, seed=0). Generation: `f_1..f_n ~ N(0,1)`; `logit = -2.6 + 0.8*f_1 - 0.6*f_2 + 0.4*f_3`; `default_flag ~ Bernoulli(sigmoid(logit))`; `vintage` uniform over `vintages`; `obligor_id = f"s_{i:05d}"`; 5% of `f_1` set to NaN. Expected default rate about 8 to 10 percent, AUC of the true logit about 0.75.
+- `conftest.py`: `def make_synthetic_credit_frame(n: int = 4000, *, seed: int = 0, n_features: int = 6, vintages: tuple[int, ...] = (1, 2, 3, 4, 5), missing_share: float = 0.05) -> pd.DataFrame` exposed as fixture `synthetic` (n=4000, seed=0). Generation: `f_1..f_n ~ N(0,1)`; `logit = -2.6 + 0.7*f_1 - 0.6*f_2 + 0.4*f_3`; `default_flag ~ Bernoulli(sigmoid(logit))`; `vintage` uniform over `vintages`; `obligor_id = f"s_{i:05d}"`; 5% of `f_1` set to NaN. Expected default rate about 8 to 10 percent, AUC of the true logit about 0.75.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1046,7 +1046,7 @@ def test_bootstrap_ci_brackets_point_estimate_and_is_seeded(synthetic: pd.DataFr
 
 def test_discrimination_metrics_per_split_and_single_class_skipped(synthetic: pd.DataFrame) -> None:
     manifest = make_splits(synthetic, strategy="vintage", seed=42, oot_vintages=[5])
-    scores = score_frame(synthetic, manifest, lambda f: 1 / (1 + np.exp(-(-2.6 + 0.8 * f["f_1"].fillna(0) - 0.6 * f["f_2"] + 0.4 * f["f_3"]))))
+    scores = score_frame(synthetic, manifest, lambda f: 1 / (1 + np.exp(-(-2.6 + 0.7 * f["f_1"].fillna(0) - 0.6 * f["f_2"] + 0.4 * f["f_3"]))))
     dm = discrimination_metrics(scores, model_name="true_logit", seed=0)
     assert [m.split for m in dm.by_split] == ["train", "val", "oot"]
     assert all(0.70 < m.auc < 0.82 and m.auc_ci_low < m.auc < m.auc_ci_high for m in dm.by_split)
@@ -1148,8 +1148,8 @@ def test_sensitivity_flags_positive_coefficient(synthetic: pd.DataFrame) -> None
 ```python
 def test_benchmark_prefers_oot_and_reports_gap(synthetic: pd.DataFrame) -> None:
     manifest = make_splits(synthetic, strategy="vintage", seed=42, oot_vintages=[5])
-    true_logit = lambda f: 1 / (1 + np.exp(-(-2.6 + 0.8 * f["f_1"].fillna(0) - 0.6 * f["f_2"] + 0.4 * f["f_3"])))
-    weak = lambda f: 1 / (1 + np.exp(-(-2.6 + 0.8 * f["f_1"].fillna(0))))
+    true_logit = lambda f: 1 / (1 + np.exp(-(-2.6 + 0.7 * f["f_1"].fillna(0) - 0.6 * f["f_2"] + 0.4 * f["f_3"])))
+    weak = lambda f: 1 / (1 + np.exp(-(-2.6 + 0.7 * f["f_1"].fillna(0))))
     champ, chal = score_frame(synthetic, manifest, weak), score_frame(synthetic, manifest, true_logit)
     b = benchmark(champ, chal, champion="weak", challenger="true", gap_threshold=0.01, seed=0)
     assert b.decided_on == "oot" and [s.split for s in b.by_split] == ["train", "val", "oot"]
