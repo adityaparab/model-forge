@@ -1,0 +1,126 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "base_vintages": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Base Vintages",
+        "type": "array"
+      },
+      "compare_vintages": {
+        "items": {
+          "type": "integer"
+        },
+        "title": "Compare Vintages",
+        "type": "array"
+      },
+      "dataset_id": {
+        "title": "Dataset Id",
+        "type": "string"
+      },
+      "features": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Features"
+      },
+      "n_bins": {
+        "default": 10,
+        "title": "N Bins",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "dataset_id",
+      "base_vintages",
+      "compare_vintages"
+    ],
+    "title": "ComputePsiInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "Producer": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "version"
+        ],
+        "title": "Producer",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "kind": {
+        "title": "Kind",
+        "type": "string"
+      },
+      "media_type": {
+        "title": "Media Type",
+        "type": "string"
+      },
+      "producer": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Producer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "size_bytes": {
+        "title": "Size Bytes",
+        "type": "integer"
+      },
+      "summary": {
+        "additionalProperties": true,
+        "title": "Summary",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "media_type",
+      "size_bytes"
+    ],
+    "title": "ArtifactRef",
+    "type": "object"
+  },
+  "server": "data-profiler",
+  "tool": "compute_psi",
+  "version": "1.0.0"
+}

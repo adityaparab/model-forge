@@ -1,0 +1,107 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "auc_threshold": {
+        "default": 0.9,
+        "title": "Auc Threshold",
+        "type": "number"
+      },
+      "dataset_id": {
+        "title": "Dataset Id",
+        "type": "string"
+      },
+      "dataset_name": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Dataset Name"
+      }
+    },
+    "required": [
+      "dataset_id"
+    ],
+    "title": "CheckLeakageInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "Producer": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "version"
+        ],
+        "title": "Producer",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "kind": {
+        "title": "Kind",
+        "type": "string"
+      },
+      "media_type": {
+        "title": "Media Type",
+        "type": "string"
+      },
+      "producer": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Producer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "size_bytes": {
+        "title": "Size Bytes",
+        "type": "integer"
+      },
+      "summary": {
+        "additionalProperties": true,
+        "title": "Summary",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "media_type",
+      "size_bytes"
+    ],
+    "title": "ArtifactRef",
+    "type": "object"
+  },
+  "server": "data-profiler",
+  "tool": "check_leakage",
+  "version": "1.0.0"
+}

@@ -1,0 +1,95 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "document_id": {
+        "title": "Document Id",
+        "type": "string"
+      },
+      "template_id": {
+        "title": "Template Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "document_id",
+      "template_id"
+    ],
+    "title": "CheckCompletenessInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "Producer": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "version"
+        ],
+        "title": "Producer",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "kind": {
+        "title": "Kind",
+        "type": "string"
+      },
+      "media_type": {
+        "title": "Media Type",
+        "type": "string"
+      },
+      "producer": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Producer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "size_bytes": {
+        "title": "Size Bytes",
+        "type": "integer"
+      },
+      "summary": {
+        "additionalProperties": true,
+        "title": "Summary",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "media_type",
+      "size_bytes"
+    ],
+    "title": "ArtifactRef",
+    "type": "object"
+  },
+  "server": "doc-renderer",
+  "tool": "check_completeness",
+  "version": "1.0.0"
+}

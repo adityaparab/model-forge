@@ -1,0 +1,125 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "context": {
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {},
+        "title": "Context",
+        "type": "object"
+      },
+      "sections_id": {
+        "title": "Sections Id",
+        "type": "string"
+      },
+      "template_id": {
+        "title": "Template Id",
+        "type": "string"
+      },
+      "title": {
+        "title": "Title",
+        "type": "string"
+      }
+    },
+    "required": [
+      "template_id",
+      "sections_id",
+      "title"
+    ],
+    "title": "RenderDocumentInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "ArtifactRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "producer": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Producer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "media_type",
+          "size_bytes"
+        ],
+        "title": "ArtifactRef",
+        "type": "object"
+      },
+      "Producer": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "version"
+        ],
+        "title": "Producer",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "html": {
+        "$ref": "#/$defs/ArtifactRef"
+      },
+      "markdown": {
+        "$ref": "#/$defs/ArtifactRef"
+      }
+    },
+    "required": [
+      "markdown",
+      "html"
+    ],
+    "title": "RenderOutput",
+    "type": "object"
+  },
+  "server": "doc-renderer",
+  "tool": "render_document",
+  "version": "1.0.0"
+}

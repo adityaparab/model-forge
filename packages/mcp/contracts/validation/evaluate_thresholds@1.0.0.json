@@ -1,0 +1,237 @@
+{
+  "input_schema": {
+    "$defs": {
+      "Thresholds": {
+        "additionalProperties": false,
+        "properties": {
+          "auc_min": {
+            "default": 0.7,
+            "title": "Auc Min",
+            "type": "number"
+          },
+          "auc_warn": {
+            "default": 0.65,
+            "title": "Auc Warn",
+            "type": "number"
+          },
+          "benchmark_gap": {
+            "default": 0.03,
+            "title": "Benchmark Gap",
+            "type": "number"
+          },
+          "calibration_alpha": {
+            "default": 0.05,
+            "title": "Calibration Alpha",
+            "type": "number"
+          },
+          "corr_max": {
+            "default": 0.7,
+            "title": "Corr Max",
+            "type": "number"
+          },
+          "eo_high": {
+            "default": 1.25,
+            "title": "Eo High",
+            "type": "number"
+          },
+          "eo_low": {
+            "default": 0.8,
+            "title": "Eo Low",
+            "type": "number"
+          },
+          "gap_fail": {
+            "default": 0.1,
+            "title": "Gap Fail",
+            "type": "number"
+          },
+          "gap_max": {
+            "default": 0.05,
+            "title": "Gap Max",
+            "type": "number"
+          },
+          "grade_fail_share_warn": {
+            "default": 0.2,
+            "title": "Grade Fail Share Warn",
+            "type": "number"
+          },
+          "hl_p_min": {
+            "default": 0.05,
+            "title": "Hl P Min",
+            "type": "number"
+          },
+          "iv_max": {
+            "default": 0.5,
+            "title": "Iv Max",
+            "type": "number"
+          },
+          "iv_min": {
+            "default": 0.02,
+            "title": "Iv Min",
+            "type": "number"
+          },
+          "ks_min": {
+            "default": 0.25,
+            "title": "Ks Min",
+            "type": "number"
+          },
+          "psi_fail": {
+            "default": 0.25,
+            "title": "Psi Fail",
+            "type": "number"
+          },
+          "psi_warn": {
+            "default": 0.1,
+            "title": "Psi Warn",
+            "type": "number"
+          }
+        },
+        "title": "Thresholds",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "benchmark_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Benchmark Id"
+      },
+      "binning_id": {
+        "title": "Binning Id",
+        "type": "string"
+      },
+      "calibration_id": {
+        "title": "Calibration Id",
+        "type": "string"
+      },
+      "discrimination_id": {
+        "title": "Discrimination Id",
+        "type": "string"
+      },
+      "model_name": {
+        "title": "Model Name",
+        "type": "string"
+      },
+      "oot_available": {
+        "title": "Oot Available",
+        "type": "boolean"
+      },
+      "selection_id": {
+        "title": "Selection Id",
+        "type": "string"
+      },
+      "sensitivity_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Sensitivity Id"
+      },
+      "stability_id": {
+        "title": "Stability Id",
+        "type": "string"
+      },
+      "thresholds": {
+        "$ref": "#/$defs/Thresholds"
+      }
+    },
+    "required": [
+      "model_name",
+      "thresholds",
+      "discrimination_id",
+      "calibration_id",
+      "stability_id",
+      "sensitivity_id",
+      "benchmark_id",
+      "selection_id",
+      "binning_id",
+      "oot_available"
+    ],
+    "title": "EvaluateThresholdsInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "Producer": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "version"
+        ],
+        "title": "Producer",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "kind": {
+        "title": "Kind",
+        "type": "string"
+      },
+      "media_type": {
+        "title": "Media Type",
+        "type": "string"
+      },
+      "producer": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Producer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "size_bytes": {
+        "title": "Size Bytes",
+        "type": "integer"
+      },
+      "summary": {
+        "additionalProperties": true,
+        "title": "Summary",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "kind",
+      "media_type",
+      "size_bytes"
+    ],
+    "title": "ArtifactRef",
+    "type": "object"
+  },
+  "server": "validation",
+  "tool": "evaluate_thresholds",
+  "version": "1.0.0"
+}

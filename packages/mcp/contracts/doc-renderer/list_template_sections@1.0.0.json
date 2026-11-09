@@ -1,0 +1,81 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "template_id": {
+        "title": "Template Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "template_id"
+    ],
+    "title": "ListTemplateSectionsInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "SectionSpec": {
+        "additionalProperties": false,
+        "description": "One section of a document template: heading, whether required, and its source artifacts.",
+        "properties": {
+          "artifact_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifact Kinds",
+            "type": "array"
+          },
+          "guidance": {
+            "title": "Guidance",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "required",
+          "artifact_kinds",
+          "guidance"
+        ],
+        "title": "SectionSpec",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "sections": {
+        "items": {
+          "$ref": "#/$defs/SectionSpec"
+        },
+        "title": "Sections",
+        "type": "array"
+      },
+      "template_id": {
+        "title": "Template Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "template_id",
+      "sections"
+    ],
+    "title": "TemplateSections",
+    "type": "object"
+  },
+  "server": "doc-renderer",
+  "tool": "list_template_sections",
+  "version": "1.0.0"
+}
