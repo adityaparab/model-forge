@@ -26,3 +26,4 @@ ui/dist/
 
 # superpowers SDD scratch (ledger, briefs, review packages)
 .superpowers/
+out/
