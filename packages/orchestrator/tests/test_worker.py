@@ -1,6 +1,7 @@
 from typing import Any
 
 import pytest
+import structlog
 from langgraph.checkpoint.postgres import PostgresSaver
 from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
@@ -11,11 +12,13 @@ from modelforge_lineage.queue import claim, enqueue
 from modelforge_lineage.runs import get_run, set_error
 from modelforge_lineage.steps import list_artifacts, list_steps
 from modelforge_lineage.store import ArtifactStore
+from modelforge_orchestrator import worker
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.replay import ReplayError, create_replay
 from modelforge_orchestrator.schemas import ReplayReport
 from modelforge_orchestrator.tools import InProcessToolClient, ToolError
-from modelforge_orchestrator.worker import run_once
+from modelforge_orchestrator.worker import run_loop, run_once
+from structlog.testing import capture_logs
 
 from .conftest import REPO, queued_run
 
@@ -155,3 +158,29 @@ def test_create_replay_requires_sealed_run(database: Database, store: ArtifactSt
     run_id = queued_run(database, store, SYNTHETIC)
     with database.transaction() as conn, pytest.raises(ReplayError):
         create_replay(conn, run_id)
+
+
+@pytest.mark.db
+def test_run_loop_logs_ready_with_redacted_url_and_idle(
+    settings: Settings, db: Database, checkpointer: PostgresSaver, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    del db, checkpointer  # an empty queue, so the single pass is idle
+    # `run_loop` configures JSON logging, which would replace the capturing configuration.
+    monkeypatch.setattr(worker, "configure_logging", lambda level: None)
+    assert "modelforge:modelforge@" in settings.database_url
+    # An earlier `configure_logging` may leave an INFO filter in place; start from the defaults.
+    saved = structlog.get_config()
+    structlog.reset_defaults()
+    try:
+        with capture_logs() as logs:
+            run_loop(settings, once=True)
+    finally:
+        structlog.configure(**saved)
+    ready = [e for e in logs if e["event"] == "worker.ready"]
+    assert len(ready) == 1
+    assert "modelforge:***@" in ready[0]["database_url"]
+    assert "modelforge:modelforge@" not in ready[0]["database_url"]
+    assert ready[0]["artifact_dir"] == str(settings.artifact_dir)
+    assert ready[0]["poll_interval_s"] == 2.0
+    assert ready[0]["worker_id"]
+    assert [e["log_level"] for e in logs if e["event"] == "worker.idle"] == ["debug"]

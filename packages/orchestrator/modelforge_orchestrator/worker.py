@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -252,8 +253,23 @@ def run_loop(settings: Settings, *, once: bool = False, poll_interval_s: float =
         store = ArtifactStore(settings.artifact_dir)
         migrate.apply(db)
         setup_checkpointer(db)
+        log = get_logger(component="worker")
+        url = urlsplit(settings.database_url)
+        if url.password is not None:
+            userinfo, _, host = url.netloc.rpartition("@")
+            user = userinfo.partition(":")[0]
+            url = url._replace(netloc=f"{user}:***@{host}")
+        log.info(
+            "worker.ready",
+            database_url=urlunsplit(url),
+            artifact_dir=str(settings.artifact_dir),
+            poll_interval_s=poll_interval_s,
+            worker_id=_this_worker_id(),
+        )
         while True:
             run = run_once(settings, db, store)
+            if run is None:
+                log.debug("worker.idle")
             if once:
                 return
             if run is None:
