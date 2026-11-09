@@ -1,6 +1,6 @@
 # SP2: Lineage, MCP Servers, Orchestrator, Worker and CLI
 
-**Status:** design approved in brainstorming; awaiting written review
+**Status:** approved 2026-11-09; implemented on branch `sp2-orchestrator`. Section 10 lists the as-built amendments made during execution (each is also a ruling in the SP2 hand-off note).
 **Date:** 2026-11-09
 **Parent:** `docs/superpowers/specs/2026-11-09-modelforge-architecture-design.md` (umbrella spec), section 17 row 2 and sections 4.2, 5, 6, 10, 11
 **Inputs:** `docs/superpowers/notes/2026-11-09-sp1-handoff.md`; `examples/core_pipeline.py` (the reference node sequence)
@@ -71,7 +71,7 @@ Umbrella 10.1 with the SP2 additions marked (+).
 | `run_queue` | `run_id text pk references runs`, `kind text check (kind in ('start','resume','replay'))` (+), `enqueued_at`, `claimed_by text null`, `claimed_at timestamptz null` |
 | `steps` | `id text pk`, `run_id`, `node text`, `attempt int`, `started_at`, `finished_at null`, `status text check in ('running','succeeded','failed')`, `input_state_hash text`, `output_state_hash text null` |
 | `events` | `id bigserial pk`, `run_id`, `step_id text null`, `ts timestamptz`, `type text`, `payload jsonb`, `prev_hash text`, `hash text`, `unique (run_id, hash)` |
-| `tool_calls` | `id text pk`, `step_id references steps`, `server text`, `tool text`, `version text`, `input_hash text`, `output_hash text`, `duration_ms int`, `artifact_ids text[]` |
+| `tool_calls` | `id text pk`, `step_id references steps`, `server text`, `tool text`, `version text`, `input_hash text`, `output_hash text`, `duration_ms int`, `artifact_ids text[]`, `seq bigserial` (+ added by migration `0002`, gives insertion order) |
 | `llm_calls` | as umbrella 10.1; created now, written from SP3 |
 | `artifacts` | `id text` (sha256), `run_id text`, `kind text`, `media_type text`, `size_bytes bigint`, `uri text`, `producer_step_id text null`, `schema_version text`, `created_at`; `primary key (id, run_id)` because the same content may be produced by several runs |
 | `approvals` | `id text pk`, `run_id`, `gate text`, `decision text`, `approver text`, `comment text`, `payload jsonb` (+ the full `GateDecision`, including an edited plan, so the worker can resume from the row), `plan_diff jsonb null`, `conditions text[] null` (+), `adjust_target text null` (+), `ts` |
@@ -88,7 +88,7 @@ Identifiers are prefixed hex strings from `uuid4`: `run_<12 hex>`, `step_<12 hex
 
 `append_event(conn, run_id, type, payload, step_id=None) -> EventRecord`. The body hashed is `{"type", "ts", "step_id", "payload"}` with `ts` an ISO-8601 UTC string at microsecond precision, so time and type are inside the chain (a deliberate widening of the umbrella's `canonical(payload)`); `hash = sha256(prev_hash + canonical(body))` with `canonical = json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False)`. The genesis `prev_hash` is 64 zeros. Appends to one run are serialised by `SELECT ... FOR UPDATE` on the run's row, so the chain cannot fork.
 
-Event types: `run.created`, `run.enqueued`, `run.claimed`, `run.status_changed`, `step.started`, `step.finished`, `tool.called`, `tool.failed`, `artifact.stored`, `gate.requested`, `gate.decided`, `error.recorded`, `run.sealed`, `replay.completed`.
+Event types: `run.created`, `run.enqueued`, `run.claimed`, `run.status_changed`, `step.started`, `step.finished`, `tool.called`, `tool.failed`, `artifact.stored`, `gate.requested`, `gate.decided`, `gate.applied`, `intake.validated`, `profile.psi_skipped`, `error.recorded`, `run.sealed`, `replay.completed`, `worker.rejected_claim`.
 
 `verify_chain(conn, run_id) -> ChainReport{events: int, ok: bool, first_bad_id: int | None}` recomputes every hash in id order.
 
@@ -167,8 +167,8 @@ Each tool call logs one structured line at start and end (`tool`, `version`, `du
 | Tool | Input | Output |
 |---|---|---|
 | `load_dataset` | `dataset_ref: DatasetRef` | `LoadDatasetOutput{dataset: ArtifactRef(dataset), dictionary: ArtifactRef(column_dictionary), oot_capable: bool, n_rows: int}`. Loads through `modelforge_core.datasets.registry.load_dataset` (downloading with the pinned SHA-256 if absent), stores the canonical frame as Parquet. The content-addressed store is the Parquet cache the SP1 reviewer asked for. |
-| `profile_dataset` | `dataset_id` | `ArtifactRef(profile)`; summary `n_rows, n_features, target_rate` |
-| `check_leakage` | `dataset_id, auc_threshold=0.9` | `ArtifactRef(leakage)`; summary `flagged: list[str], duplicate_rows` |
+| `profile_dataset` | `dataset_id, dataset_name: str | None` | `ArtifactRef(profile)`; summary `n_rows, n_features, target_rate`. `dataset_name` labels the artifact (the tool has no other source for a name); the artifact id is used when absent |
+| `check_leakage` | `dataset_id, dataset_name: str | None, auc_threshold=0.9` | `ArtifactRef(leakage)`; summary `flagged: list[str], duplicate_rows` |
 | `compute_psi` | `dataset_id, base_vintages, compare_vintages, features: list[str] | None, n_bins=10` | `ArtifactRef(psi)`; summary `max_psi, worst_feature` |
 | `make_splits` | `dataset_id, strategy, oot_vintages, val_share=0.2, seed` | `ArtifactRef(split_manifest)`; summary `rows: {train, val, oot}, oot_available` |
 
@@ -189,7 +189,7 @@ Each tool call logs one structured line at start and end (`tool`, `version`, `du
 |---|---|---|
 | `discrimination_metrics` | `scores_id, model_name, bootstrap_samples=200, seed` | `ArtifactRef(discrimination)`; summary `auc: {split: value}` |
 | `calibration_tests` | `scores_id, split, alpha=0.05, n_grades=10` | `ArtifactRef(calibration_tests)`; summary `n_grades, grades_failed, hl_p_value, eo_ratio` |
-| `stability_tests` | `scores_id, dataset_id, binning_id, features, base_split="train", compare_split, n_bins=10` | `ArtifactRef(stability)`; summary `score_psi, max_csi` |
+| `stability_tests` | `scores_id, dataset_id, binning_id, features, base_split="train", compare_split, n_bins=10, thresholds: Thresholds = Thresholds()` | `ArtifactRef(stability)`; summary `score_psi, max_csi`. The plan's thresholds set the stored PSI/CSI bands |
 | `sensitivity_analysis` | `model_id (scorecard), binning_id, dataset_id, shifts=[-1, 1]` | `ArtifactRef(sensitivity)`; summary `all_signs_ok, all_monotone` |
 | `benchmark_models` | `champion_scores_id, challenger_scores_id, champion, challenger, gap_threshold, bootstrap_samples=200, seed` | `ArtifactRef(benchmark)`; summary `decided_on, auc_delta, champion_within_gap` |
 | `evaluate_thresholds` | `model_name, thresholds: Thresholds, discrimination_id, calibration_id, stability_id, sensitivity_id: str | None, benchmark_id: str | None, selection_id, binning_id, oot_available` | `ArtifactRef(validation_report)`; summary `overall, statuses: {test_id: status}` |
@@ -205,6 +205,8 @@ Templates live under `templates/<template_id>/`: `sections.yaml` (ordered sectio
 | `check_completeness` | `document_id (document_md), template_id` | `ArtifactRef(completeness)` holding `CompletenessReport{missing_sections, unresolved_markers, uncited_regulatory_sentences, complete}`. Markers are `[A:<artifact_id>#<path>]` and `[K:<citation_id>]`; in SP2 a marker is unresolved when malformed; sentences naming a regulation from a fixed list (SR 11-7, SR 26-2, OCC 2026-13, CECL, IFRS 9, Basel) without a `[K:]` marker are listed |
 
 `DocumentSections(StrictModel)`: `template_id`, `sections: list[DocumentSection{section_id, body_md, citations: list[Citation{marker, kind: "A" | "K", target}]}]`. Lives in `modelforge_mcp.schemas` and is shared with the orchestrator's document stub and SP3's agent.
+
+Citation path grammar (for `[A:<artifact_id>#<path>]`): path steps are joined by `.`; a step applied to a list of objects selects the element whose discriminator field equals the step, where the discriminator is `split` for `by_split`, `test_id` for `tests`, `feature` for feature lists and `grade` for `grades` (so `by_split.oot.auc` and `tests.disc.auc.oot.value` are valid). SP3's grounding resolver implements it. The HTML renderer runs with raw HTML disabled, so markup inside a section body is escaped.
 
 PDF output is deferred to SP5 (recorded as a ruling).
 
@@ -290,7 +292,7 @@ class ToolClient(Protocol):
 
 `ToolCall{server, tool, version, input_hash, output: StrictModel, refs: list[ArtifactRef], duration_ms}`. `input_hash` is the SHA-256 of the canonical JSON of the request; `version` is the tool's `meta.version` read from `list_tools` at connect time; `refs` are the `ArtifactRef` fields of the validated output model (validated against `TOOLS[(server, tool)].output_model`).
 
-`StdioToolClient(settings)` is a context manager. On enter it starts one background thread running an asyncio loop, opens an `mcp.Client(StdioServerParameters(command, args, env))` per server (default command `[sys.executable, "-m", "modelforge_mcp", <server>]` with the artifact, data and templates directories in `env`; overridable through `MODELFORGE_MCP_COMMAND`), and lists tools. `call` schedules `client.call_tool(name, {"request": request.model_dump(mode="json")}, read_timeout_seconds=timeout_s)` on that loop and blocks on the future. On exit it closes the sessions and the subprocesses. One client lives for the duration of one run execution, so the four subprocesses start once per claim, not once per node.
+`StdioToolClient(settings)` is a context manager. On enter it starts one background thread running an asyncio loop, opens an `mcp.Client(StdioServerParameters(command, args, env))` per server (default command `[sys.executable, "-m", "modelforge_mcp", <server>, "--marker", <uuid>]` with the artifact, data and templates directories in `env` and nothing else from the parent environment beyond `PATH`-style basics; overridable through `MODELFORGE_MCP_COMMAND`, which must accept the trailing `<server> --marker <uuid>` arguments because the client tracks server processes by that marker), and lists tools. Checkpoint state is serialised with an explicit msgpack allowlist of the four schema modules' Pydantic models. `call` schedules `client.call_tool(name, {"request": request.model_dump(mode="json")}, read_timeout_seconds=timeout_s)` on that loop and blocks on the future. On exit it closes the sessions and the subprocesses. One client lives for the duration of one run execution, so the four subprocesses start once per claim, not once per node.
 
 `InProcessToolClient(servers)` uses the same bridge over `mcp.Client(server_instance)`; it is a real MCP round trip without subprocesses and is what unit tests of nodes use.
 
@@ -325,12 +327,12 @@ Cost accounting and the cost cap are carried as columns and state fields but not
 ```python
 class Manifest(StrictModel):
     run_id: str; replay_of: str | None
-    brief_hash: str; dataset_ref: DatasetRef; dataset_id: str; seed: int; profile: str
+    brief_hash: str; dataset_ref: DatasetRef; dataset_id: str | None; seed: int; profile: str   # dataset_id is None when the run was rejected before the dataset loaded
     initial_plan_ref: str                       # the scope node's plan, before any gate edit
     plan_ref: str                               # the final plan
     refs: dict[RefName, ArtifactRef]
     tool_versions: dict[str, str]               # "server/tool" -> version, from tool_calls
-    approvals: list[ApprovalSummary]            # gate, decision, approver, ts
+    approvals: list[ApprovalSummary]            # gate, decision, approver (no timestamp: approval times live in the approvals table)
     outcome: Literal["completed", "rejected"]
     core_version: str; orchestrator_version: str
     events_head_hash: str                       # hash of the run's last event before the manifest is stored
@@ -352,6 +354,8 @@ class Manifest(StrictModel):
 4. If the result carries `__interrupt__`, set status `awaiting_<gate>` from the interrupt value. Otherwise the state's status is terminal (`completed` or `rejected`).
 5. On exception: section 5.5.
 6. `release` the queue row.
+
+A claim whose kind does not fit the run's status (a `resume` for a sealed run, a `start` for a run that is not `queued`, a gate resume with no recorded approval) is rejected before any status write: the worker appends `worker.rejected_claim`, releases the queue row and leaves the run untouched.
 
 `worker_id` is `hostname:pid`. The same `execute` function serves the foreground CLI.
 
@@ -433,3 +437,19 @@ The no-pickle scan covers all four packages. Import-linter contracts are part of
 - **Parquet determinism** depends on a fixed pyarrow version; `uv.lock` pins it and a test asserts byte equality.
 - **LangGraph interrupt semantics** (`__interrupt__` in the invoke result; resuming a `needs_attention` run) are verified in the first orchestrator task before the worker is built.
 - **Subprocess lifecycle.** Four stdio servers per run execution; the client must terminate them on every exit path, including exceptions and `needs_attention`.
+
+## 10. As-built amendments (2026-11-09)
+
+Decisions made during execution that change or sharpen the text above; each is recorded with its reasoning in `docs/superpowers/notes/2026-11-09-sp2-handoff.md`.
+
+- The LangGraph checkpointer tables are created by the orchestrator (`modelforge migrate`, worker start), not by `modelforge_lineage.migrate`, which may not import LangGraph (3.1).
+- `tool_calls.seq` (migration `0002`) gives tool calls an insertion order (3.2). Findings rows are written through `modelforge_lineage.findings`; the row id is `<run_id>/<finding id>` because the table's primary key is `id` alone.
+- Event timestamps are rebuilt on read as UTC ISO-8601 microseconds so the hashed body survives the `timestamptz` round trip (3.3).
+- `ApprovalSummary` carries no timestamp, honouring the no-wall-clock rule for the manifest; `Manifest.dataset_id` is nullable; `Manifest.initial_plan_ref` is the earliest `modeling_plan` artifact of the run (5.6).
+- `profile_dataset` and `check_leakage` take an optional `dataset_name`; `stability_tests` takes the plan's `thresholds` (4.2, 4.4).
+- Citation path grammar for list-valued artifact fields; raw HTML disabled in the renderer (4.5).
+- Servers are launched with `--marker <uuid>` and tracked by it; the stdio client passes a minimal environment; checkpoint state uses an explicit msgpack allowlist (5.3).
+- The worker validates a claim against the run's status before writing `running` and rejects mismatches with `worker.rejected_claim` (5.8). `abort` refuses `running` runs (no cancellation in SP2) and releases the queue row of a `queued` run.
+- `run` validates the brief fully, including the threshold overrides, before creating a run (5.9). Plain output shows the gate prompt summary; `status --json` includes `gate_prompt`.
+- `verify` also anchors the chain on the manifest's `events_head_hash` and the run's brief artifact has an `artifacts` row (3.8).
+- Shared Postgres test fixtures are imported into each package's `conftest.py` (pytest rejects `pytest_plugins` below the rootdir); CLI tests drive the installed entry point as a subprocess because the MCP stdio transport needs a real stderr file descriptor (7).
