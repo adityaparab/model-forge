@@ -157,7 +157,13 @@ def _validate(
         thresholds=DEFAULT_THRESHOLDS,
         discrimination=discrimination_metrics(champ_scores, model_name=sc.model_name, seed=seed),
         calibration=calibration_tests(champ_scores, split=eval_split),
-        stability=stability_tests(champ_scores, frame, fitted.tables, compare_split=eval_split),
+        stability=stability_tests(
+            champ_scores,
+            frame,
+            fitted.tables,
+            compare_split=eval_split,
+            features=[f.feature for f in sc.features],
+        ),
         sensitivity=sensitivity_analysis(sc, fitted.tables, frame),
         benchmark=benchmark(
             champ_scores,
