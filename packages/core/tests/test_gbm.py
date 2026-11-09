@@ -1,3 +1,4 @@
+import lightgbm
 import numpy as np
 import pandas as pd
 from modelforge_core.gbm import fit_gbm, predict_gbm
@@ -32,6 +33,8 @@ def test_gbm_early_stopping_uses_val(synthetic: pd.DataFrame) -> None:
         val_frame=apply_split(synthetic, m, "val"),
     )
     assert 1 <= model.num_trees <= 300
+    assert lightgbm.Booster(model_str=model.model_text).num_trees() == model.num_trees
+    assert model.num_trees < 300
 
 
 def test_gbm_handles_missing_natively(synthetic: pd.DataFrame) -> None:
