@@ -107,6 +107,22 @@ class RunState(StrictModel):
     status: RunStatus = "running"
 
 
+def apply_update(state: RunState, update: dict[str, Any]) -> RunState:
+    """``state`` after a node's ``update``, with the reducers LangGraph applies to `RunState`.
+
+    ``refs`` and ``gates`` merge (keys in the update win), ``errors`` concatenate, and every
+    other key is replaced.
+    """
+    merged = dict(update)
+    if "refs" in update:
+        merged["refs"] = merge_dicts(state.refs, update["refs"])
+    if "gates" in update:
+        merged["gates"] = merge_dicts(state.gates, update["gates"])
+    if "errors" in update:
+        merged["errors"] = state.errors + list(update["errors"])
+    return state.model_copy(update=merged)
+
+
 class ApprovalSummary(StrictModel):
     """No timestamp: approval times live in the approvals table and `gate.decided` events."""
 
