@@ -62,7 +62,10 @@ def list_runs(conn: Connection[DictRow], *, limit: int = 50) -> list[RunRecord]:
 
 
 def set_status(conn: Connection[DictRow], run_id: str, status: RunStatus) -> None:
-    old = get_run(conn, run_id).status
+    row = conn.execute("select status from runs where id = %s for update", (run_id,)).fetchone()
+    if row is None:
+        raise RunNotFound(run_id)
+    old = row["status"]
     conn.execute("update runs set status = %s, updated_at = now() where id = %s", (status, run_id))
     append_event(conn, run_id, "run.status_changed", {"from": old, "to": status})
 

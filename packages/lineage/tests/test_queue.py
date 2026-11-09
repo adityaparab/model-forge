@@ -34,14 +34,14 @@ def test_concurrent_claims_take_different_runs(db: Database) -> None:
         enqueue(conn, "run_b", "start")
     first_claimed = threading.Event()
     second_done = threading.Event()
-    got: dict[str, str | None] = {}
+    got: dict[str, str | bool | None] = {}
 
     def worker1() -> None:
         with db.transaction() as conn:
             q = claim(conn, "w1")
             got["w1"] = q.run_id if q else None
             first_claimed.set()
-            second_done.wait(5)  # hold the lock open
+            got["w1_saw_w2"] = second_done.wait(5)  # hold the lock open
 
     def worker2() -> None:
         first_claimed.wait(5)
@@ -55,4 +55,6 @@ def test_concurrent_claims_take_different_runs(db: Database) -> None:
     t2.start()
     t1.join(10)
     t2.join(10)
+    assert not t1.is_alive() and not t2.is_alive()
+    assert got["w1_saw_w2"] is True  # worker2 finished while worker1 still held its lock
     assert {got["w1"], got["w2"]} == {"run_a", "run_b"}
