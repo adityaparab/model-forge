@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example
+.PHONY: lint format test test-fast sync example db-up db-down
 
 lint:
 	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports
@@ -17,3 +17,9 @@ sync:
 
 example:
 	uv run python examples/core_pipeline.py
+
+db-up:
+	docker compose up -d --wait postgres
+
+db-down:
+	docker compose down

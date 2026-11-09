@@ -7,8 +7,7 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from modelforge_core.binning import fit_binning, transform_woe
-
-from tests.synthetic import make_synthetic_credit_frame
+from modelforge_core.testing import make_synthetic_credit_frame
 
 
 def test_woe_golden_two_bins() -> None:

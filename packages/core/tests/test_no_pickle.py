@@ -1,16 +1,15 @@
-import pathlib
 import re
+from pathlib import Path
 
 FORBIDDEN = re.compile(
     r"(?m)(?:^\s*(?:import pickle|from pickle|import cloudpickle|from cloudpickle"
     r"|import dill|from dill|from joblib import dump)|joblib\.dump)"
 )
-REPO = pathlib.Path(__file__).resolve().parents[3]
-SCANNED = (REPO / "packages" / "core" / "modelforge_core", REPO / "examples")
 
 
-def test_no_pickle_in_package() -> None:
-    files = [p for root in SCANNED for p in root.rglob("*.py")]
-    assert len(files) > 1
-    offenders = [p for p in files if FORBIDDEN.search(p.read_text())]
+def test_no_pickle_in_any_package() -> None:
+    packages = Path(__file__).resolve().parents[3] / "packages"
+    roots = sorted(p for p in packages.glob("*/modelforge_*") if p.is_dir())
+    assert len(roots) >= 4
+    offenders = [p for root in roots for p in root.rglob("*.py") if FORBIDDEN.search(p.read_text())]
     assert offenders == []

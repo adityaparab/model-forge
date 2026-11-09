@@ -2,13 +2,16 @@
 name = "modelforge-workspace"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-dependencies = ["modelforge-core"]
+dependencies = ["modelforge-core", "modelforge-lineage", "modelforge-mcp", "modelforge-orchestrator"]
 
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
 modelforge-core = { workspace = true }
+modelforge-lineage = { workspace = true }
+modelforge-mcp = { workspace = true }
+modelforge-orchestrator = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff>=0.6", "pyright>=1.1.380", "import-linter>=2.0", "pre-commit>=3.7"]
@@ -27,17 +30,44 @@ pythonVersion = "3.12"
 typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
-testpaths = ["packages/core/tests"]
-addopts = "-ra"
-markers = ["slow: downloads real data or trains on it; run in CI, skip locally with -m 'not slow'"]
+testpaths = ["packages/core/tests", "packages/lineage/tests", "packages/mcp/tests", "packages/orchestrator/tests"]
+addopts = "-ra --import-mode=importlib"
+markers = [
+    "slow: downloads real data or trains on it; run in CI, skip locally with -m 'not slow'",
+    "db: needs Postgres; skips when unreachable unless MODELFORGE_REQUIRE_DB=1",
+]
 
 [tool.importlinter]
-root_package = "modelforge_core"
+root_packages = ["modelforge_core", "modelforge_lineage", "modelforge_mcp", "modelforge_orchestrator"]
 include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "core is LLM-free and network-free"
 type = "forbidden"
 source_modules = ["modelforge_core"]
-forbidden_modules = ["anthropic", "ollama", "openai", "httpx", "requests", "langgraph", "langchain", "langchain_core", "langchain_anthropic", "langchain_ollama", "langchain_openai", "mcp"]
+forbidden_modules = ["anthropic", "ollama", "openai", "httpx", "requests", "langgraph", "langchain", "langchain_core", "langchain_anthropic", "langchain_ollama", "langchain_openai", "mcp", "psycopg", "structlog", "typer"]
+ignore_imports = ["modelforge_core.datasets.download -> httpx"]
+
+[[tool.importlinter.contracts]]
+name = "package layering: orchestrator > mcp > lineage > core"
+type = "layers"
+layers = ["modelforge_orchestrator", "modelforge_mcp", "modelforge_lineage", "modelforge_core"]
+
+[[tool.importlinter.contracts]]
+name = "lineage is MCP-free and LangGraph-free"
+type = "forbidden"
+source_modules = ["modelforge_lineage"]
+forbidden_modules = ["mcp", "langgraph", "langchain", "langchain_core", "modelforge_mcp", "modelforge_orchestrator"]
+
+[[tool.importlinter.contracts]]
+name = "mcp server is LangGraph-free and database-driver-free"
+type = "forbidden"
+source_modules = ["modelforge_mcp"]
+forbidden_modules = ["langgraph", "langchain", "langchain_core", "psycopg", "modelforge_orchestrator"]
+
+[[tool.importlinter.contracts]]
+name = "no direct LLM provider SDKs or HTTP clients"
+type = "forbidden"
+source_modules = ["modelforge_core", "modelforge_lineage", "modelforge_mcp", "modelforge_orchestrator"]
+forbidden_modules = ["anthropic", "openai", "ollama", "langchain_anthropic", "langchain_openai", "langchain_ollama", "httpx", "requests"]
 ignore_imports = ["modelforge_core.datasets.download -> httpx"]

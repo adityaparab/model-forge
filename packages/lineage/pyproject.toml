@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "modelforge-lineage"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "modelforge-core",
+    "psycopg[binary]>=3.3",
+    "psycopg-pool>=3.3",
+    "structlog>=26",
+    "pydantic>=2.7",
+    "pyarrow>=16",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["modelforge_lineage"]

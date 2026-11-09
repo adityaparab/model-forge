@@ -3,10 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-
-from .synthetic import make_synthetic_credit_frame
-
-__all__ = ["make_synthetic_credit_frame"]
+from modelforge_core.testing import make_synthetic_credit_frame
 
 
 @pytest.fixture
