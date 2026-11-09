@@ -1,5 +1,7 @@
 import os
-from collections.abc import Iterator
+import re
+import subprocess
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -36,7 +38,10 @@ from modelforge_orchestrator.worker import run_once
 
 __all__ = [
     "REPO",
+    "Cli",
     "checkpointer",
+    "cli",
+    "completed_cli_run",
     "completed_run_id",
     "database",
     "database_url",
@@ -46,6 +51,7 @@ __all__ = [
     "prepared_state",
     "prepared_state_no_oot",
     "queued_run",
+    "run_id_from",
     "runtime",
     "scoped_state",
     "settings",
@@ -72,6 +78,64 @@ def settings(tmp_path: Path, database: Database) -> Settings:
         tool_timeout_s=600.0,
         log_level="INFO",
     )
+
+
+Cli = Callable[..., "subprocess.CompletedProcess[str]"]
+"""``cli(*args)`` runs ``uv run modelforge *args`` against the test database and directories."""
+
+
+@pytest.fixture
+def cli(settings: Settings, checkpointer: PostgresSaver) -> Cli:
+    """Run the real ``modelforge`` entry point as a subprocess.
+
+    A subprocess rather than Typer's `CliRunner`: the MCP stdio transport needs a real
+    ``stderr`` file descriptor when it spawns the servers.
+    """
+    del checkpointer  # the checkpoint tables must exist before the CLI drives a run
+    env = {
+        **os.environ,
+        "MODELFORGE_DATABASE_URL": settings.database_url,
+        "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
+        "MODELFORGE_DATA_DIR": str(settings.data_dir),
+        "MODELFORGE_TEMPLATES_DIR": str(settings.templates_dir),
+    }
+
+    def run(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["uv", "run", "modelforge", *args],
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+
+    return run
+
+
+def run_id_from(text: str) -> str:
+    """The first run id in ``text``."""
+    found = re.search(r"run_[0-9a-f]{12}", text)
+    if found is None:
+        raise AssertionError(f"no run id in {text!r}")
+    return found.group(0)
+
+
+@pytest.fixture
+def completed_cli_run(cli: Cli) -> str:
+    """A synthetic run driven through the three gates with the CLI; return its id."""
+    result = cli("run", str(SYNTHETIC_BRIEF), "--requester", "alice")
+    assert result.returncode == 0, result.stderr
+    run_id = run_id_from(result.stdout)
+    for args in (
+        ("scope", "--decision", "approve", "--approver", "alice"),
+        ("model", "--decision", "accept", "--approver", "bob"),
+        ("signoff", "--decision", "approve", "--approver", "bob"),
+    ):
+        result = cli("approve", run_id, *args)
+        assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[0] == f"{run_id} completed"
+    return run_id
 
 
 @pytest.fixture(scope="session")

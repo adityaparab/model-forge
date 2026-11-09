@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker
 
 lint:
 	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports
@@ -26,3 +26,9 @@ db-down:
 
 goldens:
 	uv run modelforge-mcp goldens
+
+migrate:
+	uv run modelforge migrate
+
+worker:
+	uv run modelforge worker

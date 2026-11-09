@@ -26,7 +26,7 @@ from mcp.types import REQUEST_TIMEOUT, CallToolResult
 from modelforge_core.schemas import StrictModel
 from modelforge_lineage.canonical import canonical_json, sha256_hex
 from modelforge_lineage.models import ArtifactRef
-from modelforge_lineage.observability import get_logger
+from modelforge_lineage.observability import FilteringBoundLogger, get_logger
 from modelforge_mcp.common import ServerName, ToolErrorPayload
 from modelforge_mcp.registry import TOOLS, build_server
 from pydantic import ValidationError
@@ -51,7 +51,10 @@ RETRYABLE = frozenset({"transport", "timeout"})
 
 ClientFactory = Callable[[], AbstractAsyncContextManager[Client]]
 
-_log = get_logger(component="tool_client")
+
+def _log() -> FilteringBoundLogger:
+    """Bound per call: a module-level bound logger would keep the config in force at import."""
+    return get_logger(component="tool_client")
 
 
 class ToolError(Exception):
@@ -221,7 +224,7 @@ class _Bridge:
             self._loop.call_soon_threadsafe(self._stop.set)
         self._join()
         if self._error is not None:
-            _log.warning("tool.bridge_shutdown_error", error=repr(self._error))
+            _log().warning("tool.bridge_shutdown_error", error=repr(self._error))
 
     def _join(self) -> None:
         if self._thread is not None:
@@ -315,7 +318,7 @@ class BaseToolClient:
                             "internal", f"output does not match the contract: {exc}"
                         ) from exc
                     duration_ms = int((time.perf_counter() - started) * 1000)
-                    _log.info(
+                    _log().info(
                         "tool.call",
                         server=server,
                         tool=tool,
@@ -334,7 +337,7 @@ class BaseToolClient:
                     )
             if failure.code not in RETRYABLE or attempt == attempts:
                 raise failure
-            _log.warning(
+            _log().warning(
                 "tool.retry",
                 server=server,
                 tool=tool,
