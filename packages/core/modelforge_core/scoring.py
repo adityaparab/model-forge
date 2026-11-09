@@ -6,6 +6,7 @@ from typing import cast
 import numpy as np
 import pandas as pd
 
+from modelforge_core.calibration import apply_calibration
 from modelforge_core.schemas import SCORES_COLUMNS, CalibrationMap, Split, SplitManifest
 from modelforge_core.splits import apply_split
 
@@ -26,9 +27,7 @@ def score_frame(
             continue
         sub = apply_split(frame, manifest, split)
         score = np.asarray(predict(sub), dtype=np.float64)
-        if calibration is not None:
-            raise NotImplementedError("calibration arrives in Task 10")
-        pd_col = score
+        pd_col = score if calibration is None else apply_calibration(calibration, score)
         parts.append(
             pd.DataFrame(
                 {

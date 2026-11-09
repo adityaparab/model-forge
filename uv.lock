@@ -327,12 +327,12 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
-    { name = "lightgbm", specifier = ">=4.3" },
+    { name = "lightgbm", specifier = ">=4.7" },
     { name = "numpy", specifier = ">=1.26" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "pyarrow", specifier = ">=16" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "scikit-learn", specifier = ">=1.8" },
     { name = "scipy", specifier = ">=1.13" },
 ]
 
