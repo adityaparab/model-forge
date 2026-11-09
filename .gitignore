@@ -5,7 +5,7 @@ artifacts/
 .env.*
 
 # private notes (job targeting, interview prep drafts)
-notes/
+/notes/
 
 # python
 __pycache__/
