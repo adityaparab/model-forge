@@ -1,0 +1,65 @@
+"""Temporary Postgres databases and pytest fixtures for packages that use the lineage store."""
+
+import os
+import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
+from urllib.parse import urlsplit, urlunsplit
+
+import psycopg
+import pytest
+from psycopg import sql
+
+from modelforge_lineage.db import Database
+from modelforge_lineage.migrate import TABLES, apply
+
+DEFAULT_DATABASE_URL = "postgresql://modelforge:modelforge@localhost:5432/modelforge"
+
+
+@contextmanager
+def temporary_database(url: str) -> Iterator[str]:
+    """Create a throwaway database next to ``url``'s, yield its URL, then drop it."""
+    name = f"modelforge_test_{uuid.uuid4().hex[:8]}"
+    with psycopg.connect(url, autocommit=True) as admin:
+        admin.execute(sql.SQL("create database {}").format(sql.Identifier(name)))
+        try:
+            yield urlunsplit(urlsplit(url)._replace(path=f"/{name}"))
+        finally:
+            admin.execute(
+                "select pg_terminate_backend(pid) from pg_stat_activity where datname = %s", (name,)
+            )
+            admin.execute(sql.SQL("drop database if exists {}").format(sql.Identifier(name)))
+
+
+@pytest.fixture(scope="session")
+def database_url() -> str:
+    url = os.environ.get("MODELFORGE_DATABASE_URL", DEFAULT_DATABASE_URL)
+    try:
+        psycopg.connect(url, connect_timeout=3).close()
+    except psycopg.Error as exc:
+        message = f"Postgres unreachable at {url}: {exc}"
+        if os.environ.get("MODELFORGE_REQUIRE_DB") == "1":
+            pytest.fail(message)
+        pytest.skip(message)
+    return url
+
+
+@pytest.fixture(scope="session")
+def database(database_url: str) -> Iterator[Database]:
+    with temporary_database(database_url) as url:
+        db = Database(url)
+        try:
+            apply(db)
+            yield db
+        finally:
+            db.close()
+
+
+@pytest.fixture
+def db(database: Database) -> Iterator[Database]:
+    truncate = sql.SQL("truncate {} restart identity cascade").format(
+        sql.SQL(", ").join(sql.Identifier(t) for t in TABLES)
+    )
+    with database.transaction() as conn:
+        conn.execute(truncate)
+    yield database
