@@ -60,6 +60,12 @@ def test_sig_figs_and_round_sig() -> None:
         ("5", [{"a": 5}], False),
         ("-2.95", -2.951, True),
         ("2.95", -2.951, False),
+        ("12", ["f_1", "f_12"], False),
+        ("12", "f_12 and f_7", False),
+        ("12", "3fa9c12e7b", False),
+        ("43,405", "43,405 rows", True),
+        ("43405", "43,405 rows", True),
+        ("50k", 50000, False),
     ],
 )
 def test_matches(text: str, value: Any, expected: bool) -> None:
@@ -128,3 +134,32 @@ def test_document_section_grounding_is_optional() -> None:
     section = DocumentSection(section_id="data", body_md="x")
     assert section.grounding is None
     assert DocumentSection(section_id="data", body_md="x", grounding=GroundingReport(ok=True))
+
+
+def test_suffixed_numbers_are_tokens_that_never_ground() -> None:
+    tokens = numbers_in("50k rows, a 3x lift, 9pp gain, 12bp")
+    assert [(t.text, t.suffixed) for t in tokens] == [
+        ("50k", True),
+        ("3x", True),
+        ("9pp", True),
+        ("12bp", True),
+    ]
+    assert numbers_in(strip_non_claims("column f_12 and 7 rows")) == numbers_in("7")
+    ida = "a" * 64
+    report = check_section(
+        f"It has 50k rows [A:{ida}#n_rows].",
+        load_artifact=_loader({"n_rows": 50000}, ida),
+        retrieved=set(),
+    )
+    assert report.ungrounded_numbers == ["50k"] and not report.ok
+
+
+def test_years_inside_decimals_are_not_dates() -> None:
+    stripped = strip_non_claims("in 2011 the KS was 0.2015")
+    assert "0.2015" in stripped and "2011" not in stripped
+    assert "2011" not in strip_non_claims("approved in 2011.")
+    ida = "a" * 64
+    report = check_section(
+        f"KS is 0.2015 [A:{ida}#ks].", load_artifact=_loader({"ks": 0.2015}, ida), retrieved=set()
+    )
+    assert report.ok

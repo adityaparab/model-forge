@@ -20,8 +20,11 @@ REGULATION_NAME = re.compile(
 )
 DATE = re.compile(
     r"\b(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October"
-    r"|November|December)\s+\d{4}\b|\b(?:19|20)\d{2}\b"
+    r"|November|December)\s+\d{4}\b|(?<![\d.,])\b(?:19|20)\d{2}\b(?!\d|\.\d)"
 )
+"""A month-year, or a standalone year; a year-like run inside a decimal (``0.2015``) is not one."""
+UNIT_SUFFIXED = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?[A-Za-z]+(?![\w])")
+"""A number with a letter suffix (``50k``, ``3x``, ``9pp``): a claim that never grounds."""
 SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 
 _ARTIFACT_ID = re.compile(r"^[0-9a-f]{64}$")
@@ -39,6 +42,7 @@ class NumberToken(StrictModel):
     percent: bool
     sig_figs: int
     is_integer: bool
+    suffixed: bool = False
 
 
 def expand_aliases(body: str, aliases: Mapping[str, str]) -> tuple[str, list[str]]:
@@ -70,24 +74,50 @@ def strip_non_claims(sentence: str) -> str:
     return sentence
 
 
+def _sig_figs(digits: str) -> int:
+    return max(len(digits.replace(".", "").lstrip("0")), 1)
+
+
 def numbers_in(text: str) -> list[NumberToken]:
-    """The numbers written in ``text``, in order; a sentence-ending stop does not hide one."""
-    tokens: list[NumberToken] = []
-    for match in NUMBER.finditer(_TERMINATOR.sub(" ", text)):
-        sign, whole, fraction, percent = match.groups()
-        integer_digits = whole.replace(",", "")
-        fraction_digits = fraction[1:] if fraction else ""
-        mantissa = (integer_digits + fraction_digits).lstrip("0")
-        tokens.append(
-            NumberToken(
-                text=match.group(0),
-                value=float(f"{sign}{integer_digits}{fraction or ''}"),
-                percent=percent is not None,
-                sig_figs=max(len(mantissa), 1),
-                is_integer=fraction is None and percent is None,
+    """The numbers written in ``text``, in order; a sentence-ending stop does not hide one.
+
+    A number with a letter suffix is returned as a ``suffixed`` token, which never grounds.
+    """
+    text = _TERMINATOR.sub(" ", text)
+    found: list[tuple[int, NumberToken]] = []
+    for match in UNIT_SUFFIXED.finditer(text):
+        number = re.match(r"-?[\d,]*(?:\.\d+)?", match.group(0))
+        digits = number.group(0).replace(",", "") if number else ""
+        found.append(
+            (
+                match.start(),
+                NumberToken(
+                    text=match.group(0),
+                    value=float(digits) if digits.strip("-") else 0.0,
+                    percent=False,
+                    sig_figs=_sig_figs(digits.lstrip("-")),
+                    is_integer=False,
+                    suffixed=True,
+                ),
             )
         )
-    return tokens
+    plain = UNIT_SUFFIXED.sub(lambda m: " " * len(m.group(0)), text)
+    for match in NUMBER.finditer(plain):
+        sign, whole, fraction, percent = match.groups()
+        integer_digits = whole.replace(",", "")
+        found.append(
+            (
+                match.start(),
+                NumberToken(
+                    text=match.group(0),
+                    value=float(f"{sign}{integer_digits}{fraction or ''}"),
+                    percent=percent is not None,
+                    sig_figs=_sig_figs(integer_digits + (fraction or "")),
+                    is_integer=fraction is None and percent is None,
+                ),
+            )
+        )
+    return [token for _, token in sorted(found, key=lambda item: item[0])]
 
 
 def round_sig(x: float, p: int) -> float:
@@ -97,12 +127,8 @@ def round_sig(x: float, p: int) -> float:
     return float(round(x, p - 1 - math.floor(math.log10(abs(x)))))
 
 
-def _digits(token: NumberToken) -> str:
-    return re.sub(r"[^\d.]", "", token.text)
-
-
 def _matches_scalar(token: NumberToken, value: Any) -> bool:
-    if value is None or isinstance(value, bool):
+    if token.suffixed or value is None or isinstance(value, bool):
         return False
     if isinstance(value, (int, float)):
         number = float(value)
@@ -114,7 +140,11 @@ def _matches_scalar(token: NumberToken, value: Any) -> bool:
         p = min(token.sig_figs, 4)
         return math.isclose(round_sig(token.value, p), round_sig(v, p), rel_tol=1e-9)
     if isinstance(value, str):
-        return re.search(rf"(?<!\d){re.escape(_digits(token))}(?!\d)", value) is not None
+        return any(
+            _matches_scalar(token, number.value)
+            for number in numbers_in(value)
+            if not number.suffixed
+        )
     return False
 
 
@@ -122,8 +152,9 @@ def matches(token: NumberToken, value: Any) -> bool:
     """Whether ``token`` states ``value`` (spec 6.5).
 
     Integer tokens compare exactly, others at ``min(sig_figs, 4)`` significant figures, percent
-    tokens against ``value * 100``. A string matches when the token's digits appear in it as a
-    whole number; a list when any scalar element does. Booleans, None and dicts never match.
+    tokens against ``value * 100``. A string matches when one of its own numbers does, so an
+    identifier (``f_12``) or a digest grounds nothing; a list matches when any scalar element
+    does. Suffixed tokens, booleans, None and dicts never match.
     """
     if isinstance(value, list):
         return any(
