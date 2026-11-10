@@ -85,7 +85,10 @@ def test_pause_flag_round_trip(db: Database) -> None:
     with db.transaction() as conn:
         rec = _run(conn)
         assert rec.pause_requested is False
-        request_pause(conn, "run_a")
+        assert request_pause(conn, "run_a") is False  # queued: refused, flag untouched
+        assert pause_requested(conn, "run_a") is False
+        set_status(conn, "run_a", "running")
+        assert request_pause(conn, "run_a") is True
     with db.connection() as conn:
         assert pause_requested(conn, "run_a") is True
         assert get_run(conn, "run_a").pause_requested is True

@@ -239,12 +239,15 @@ def pause(run_id: Annotated[str, typer.Argument(metavar="RUN_ID")]) -> None:
     """Ask a running run to pause at its next node boundary."""
     _, db, _ = _context()
     try:
+        try:
+            with db.transaction() as conn:
+                requested = runs.request_pause(conn, run_id)
+        except runs.RunNotFound:
+            _fail(f"run not found: {run_id}")
         current = _get_run(db, run_id)
-        if current.status != "running":
+        if not requested:
             _fail(f"run {run_id} is {current.status}; only a running run pauses")
-        with db.transaction() as conn:
-            runs.request_pause(conn, run_id)
-        _print_run(db, _get_run(db, run_id), as_json=False)
+        _print_run(db, current, as_json=False)
     finally:
         db.close()
 

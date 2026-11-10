@@ -244,11 +244,14 @@ def test_resume_claim_for_sealed_run_is_rejected_untouched(
     completed_run_id: str,
 ) -> None:
     with database.transaction() as conn:
+        # a flag planted directly: a rejected claim must leave the run's row untouched
+        conn.execute("update runs set pause_requested = true where id = %s", (completed_run_id,))
         enqueue(conn, completed_run_id, "resume")
     run = run_once(
         settings, database, store, run_id=completed_run_id, tool_client_factory=InProcessToolClient
     )
     assert run is not None and run.status == "completed" and run.error is None
+    assert run.pause_requested is True
     with database.connection() as conn:
         assert get_run(conn, completed_run_id).status == "completed"
         assert claim(conn, "x", run_id=completed_run_id) is None
@@ -290,22 +293,39 @@ def test_run_loop_logs_ready_with_redacted_url_and_idle(
 
 @pytest.mark.db
 def test_worker_parks_paused_and_resume_continues(
-    settings: Settings, database: Database, store: ArtifactStore, checkpointer: PostgresSaver
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A pause requested as `intake` ends parks the run before `scope`; resume runs `scope`."""
+    real_intake = graph.NODES["intake"]
+    requested: list[bool] = []
+
+    def intake_then_pause(state: RunState, runtime: Runtime[Deps]) -> Any:
+        update = real_intake(state, runtime)
+        with runtime.context.lineage.transaction() as conn:
+            requested.append(request_pause(conn, state.run_id))
+        return update
+
+    monkeypatch.setitem(graph.NODES, "intake", intake_then_pause)
     run_id = queued_run(database, store, SYNTHETIC)
     with database.transaction() as conn:
-        request_pause(conn, run_id)
+        assert request_pause(conn, run_id) is False  # queued: refused
     run = run_once(
         settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
     )
+    assert requested == [True]
     assert run is not None and run.status == "paused"
     assert run.pause_requested is False and run.error is None
     with database.connection() as conn:
         events = list_events(conn, run_id)
-        assert list_steps(conn, run_id) == []
+        assert [(s.node, s.status) for s in list_steps(conn, run_id)] == [("intake", "succeeded")]
         assert claim(conn, "x", run_id=run_id) is None  # the queue row was released
     paused = [e for e in events if e.type == "run.paused"]
-    assert [e.payload for e in paused] == [{"node": "intake"}]
+    assert [e.payload for e in paused] == [{"node": "scope"}]
+    monkeypatch.setitem(graph.NODES, "intake", real_intake)
     with database.transaction() as conn:
         enqueue(conn, run_id, "resume")
     run = run_once(
@@ -326,11 +346,12 @@ def test_late_pause_request_is_cleared_on_finish(
 ) -> None:
     """A pause requested during the exempt `seal` node must not outlive the execution."""
     real_seal = graph.NODES["seal"]
+    requested: list[bool] = []
 
     def seal_then_pause(state: RunState, runtime: Runtime[Deps]) -> Any:
         update = real_seal(state, runtime)
         with runtime.context.lineage.transaction() as conn:
-            request_pause(conn, state.run_id)
+            requested.append(request_pause(conn, state.run_id))
         return update
 
     monkeypatch.setitem(graph.NODES, "seal", seal_then_pause)
@@ -347,5 +368,6 @@ def test_late_pause_request_is_cleared_on_finish(
         run = run_once(
             settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
         )
+    assert requested == [True]  # the run was running when seal asked
     assert run is not None and run.status == "completed"
     assert run.pause_requested is False

@@ -178,6 +178,7 @@ def execute(
     log = get_logger(component="worker", run_id=run_id)
     config: RunnableConfig = {"configurable": {"thread_id": run_id}}
     graph = build_graph(make_checkpointer(db))
+    claimed = False
     try:
         with db.connection() as conn:
             run = runs.get_run(conn, run_id)
@@ -195,6 +196,7 @@ def execute(
             log.warning("run.claim_rejected", kind=queued.kind, status=run.status, error=str(exc))
             return run
         claimant = worker_id if worker_id is not None else _this_worker_id()
+        claimed = True
         with db.transaction() as conn:
             runs.set_status(conn, run_id, "running")
             append_event(conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind})
@@ -237,8 +239,10 @@ def execute(
         log.error("run.needs_attention", error=payload)
     finally:
         with db.transaction() as conn:
-            # A pause requested too late (during an exempt node) must not reach a later execution.
-            runs.clear_pause(conn, run_id)
+            if claimed:
+                # A pause requested too late (during an exempt node) must not reach a later
+                # execution. A rejected claim never ran the run, so its flag is left alone.
+                runs.clear_pause(conn, run_id)
             queue.release(conn, run_id)
     with db.connection() as conn:
         return runs.get_run(conn, run_id)

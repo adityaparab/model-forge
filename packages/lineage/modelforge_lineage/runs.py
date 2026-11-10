@@ -133,15 +133,31 @@ def _set_column(conn: Connection[DictRow], run_id: str, column: str, value: obje
         raise RunNotFound(run_id)
 
 
-def request_pause(conn: Connection[DictRow], run_id: str) -> None:
-    _set_column(conn, run_id, "pause_requested", True)
+def request_pause(conn: Connection[DictRow], run_id: str) -> bool:
+    """Set the pause flag if the run is ``running``; whether it was set.
+
+    One conditional update, so a run that parks or finishes concurrently is never flagged after
+    its worker cleared the flag. `RunNotFound` for an unknown run.
+    """
+    cur = conn.execute(
+        "update runs set pause_requested = true, updated_at = now()"
+        " where id = %s and status = 'running'",
+        (run_id,),
+    )
+    if cur.rowcount == 1:
+        return True
+    if conn.execute("select 1 from runs where id = %s", (run_id,)).fetchone() is None:
+        raise RunNotFound(run_id)
+    return False
 
 
 def clear_pause(conn: Connection[DictRow], run_id: str) -> None:
+    """Clear the pause flag whatever the run's status; `RunNotFound` for an unknown run."""
     _set_column(conn, run_id, "pause_requested", False)
 
 
 def pause_requested(conn: Connection[DictRow], run_id: str) -> bool:
+    """Whether a pause is pending for the run; `RunNotFound` for an unknown run."""
     row = conn.execute("select pause_requested from runs where id = %s", (run_id,)).fetchone()
     if row is None:
         raise RunNotFound(run_id)
