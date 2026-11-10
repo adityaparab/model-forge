@@ -23,6 +23,8 @@ services:
     environment:
       MODELFORGE_DATABASE_URL: postgresql://modelforge:modelforge@postgres:5432/modelforge
       MODELFORGE_LOG_LEVEL: INFO
+      MODELFORGE_PROFILE: ${MODELFORGE_PROFILE:-fake}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ./artifacts:/data/artifacts
       - ./data:/data/datasets

@@ -4,7 +4,7 @@ import subprocess
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from langchain_core.language_models import BaseChatModel
@@ -45,6 +45,7 @@ from modelforge_orchestrator.worker import run_once, setup_checkpointer
 __all__ = [
     "REPO",
     "Cli",
+    "assert_llm_outputs",
     "checkpointer",
     "cli",
     "completed_cli_run",
@@ -135,6 +136,16 @@ def run_id_from(text: str) -> str:
     if found is None:
         raise AssertionError(f"no run id in {text!r}")
     return found.group(0)
+
+
+def assert_llm_outputs(status: Mapping[str, Any]) -> None:
+    """The gateway-backed agents ran under the fake profile and left grounded outputs."""
+    assert {c["purpose"] for c in status["llm_calls"]} == {"scope", "document"}
+    refs = status["refs"]
+    assert refs["document_sections"]["summary"]["n_flagged_sections"] == 0
+    assert refs["completeness"]["summary"]["complete"] is True
+    assert "scope_notes" in refs
+    assert "knowledge_index" in refs
 
 
 @pytest.fixture

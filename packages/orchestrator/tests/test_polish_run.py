@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from .conftest import REPO, Cli, run_id_from
+from .conftest import REPO, Cli, assert_llm_outputs, run_id_from
 
 POLISH = REPO / "examples/briefs/polish-pd.yaml"
 
@@ -26,6 +26,11 @@ def test_polish_brief_runs_to_completion_and_replays(cli: Cli) -> None:
     assert status["run"]["status"] == "completed"
     assert status["refs"]["discrimination"]["summary"]["auc"]["oot"] > 0.65
     assert status["refs"]["validation"]["summary"]["overall"] == "fail"
+    assert_llm_outputs(status)
+    plain = cli("status", run_id)
+    assert plain.returncode == 0 and any(
+        line.startswith("cost:") for line in plain.stdout.splitlines()
+    ), plain.stdout
     replay = cli("replay", run_id, "--json")
     assert replay.returncode == 0 and json.loads(replay.stdout)["ok"] is True, replay.stderr
     assert cli("verify", run_id).returncode == 0

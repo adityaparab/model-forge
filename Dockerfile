@@ -23,12 +23,19 @@ RUN uv sync --frozen --no-dev --no-install-workspace
 # Workspace packages and runtime assets.
 COPY packages/ packages/
 COPY templates/ templates/
+COPY prompts/ prompts/
+COPY profiles/ profiles/
+COPY knowledge-base/ knowledge-base/
 COPY examples/ examples/
 RUN uv sync --frozen --no-dev
 
 ENV MODELFORGE_ARTIFACT_DIR=/data/artifacts \
     MODELFORGE_DATA_DIR=/data/datasets \
-    MODELFORGE_TEMPLATES_DIR=/app/templates
+    MODELFORGE_TEMPLATES_DIR=/app/templates \
+    MODELFORGE_PROMPTS_DIR=/app/prompts \
+    MODELFORGE_PROFILES_DIR=/app/profiles \
+    MODELFORGE_KNOWLEDGE_DIR=/app/knowledge-base \
+    MODELFORGE_PROFILE=fake
 
 ENTRYPOINT ["uv", "run", "--no-sync", "modelforge"]
 CMD ["worker"]

@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from .conftest import REPO, Cli, run_id_from
+from .conftest import REPO, Cli, assert_llm_outputs, run_id_from
 
 SYNTHETIC = REPO / "examples/briefs/synthetic.yaml"
 UNREGISTERED = "Deserializing unregistered type"
@@ -54,6 +54,11 @@ def test_full_run_through_three_gates_then_replay_and_verify(cli: Cli) -> None:
     assert status.returncode == 0 and json.loads(status.stdout)["run"]["status"] == "completed"
     for result in (scope, model, signoff, status):
         assert UNREGISTERED not in result.stderr
+    assert_llm_outputs(json.loads(status.stdout))
+    plain = cli("status", run_id)
+    assert plain.returncode == 0 and any(
+        line.startswith("cost:") for line in plain.stdout.splitlines()
+    ), plain.stdout
     replay = cli("replay", run_id, "--json")
     assert replay.returncode == 0 and json.loads(replay.stdout)["ok"] is True, replay.stderr
     assert cli("verify", run_id).returncode == 0
