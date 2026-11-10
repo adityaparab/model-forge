@@ -75,18 +75,22 @@ def _run_identity(db: Database, run_id: str) -> tuple[dict[str, str], dict[str, 
 
 
 def _existing_run(db: Database, run_id: str, profile: str) -> list[str]:
-    """Check that ``run_id`` is a completed, sealed run under ``profile``; its decisions.
+    """Check that ``run_id`` is a completed, sealed run under ``profile``; its approvals.
 
-    `EvalError` unless it is completed with a manifest; `EvalConfigError` when it ran under
-    another profile. The decisions are those recorded on the run, in order.
+    `EvalConfigError` unless it is completed with a manifest and ran under ``profile``.
+    The approvals are ``gate decision approver`` for each decision recorded on the run, in
+    order, the shape `drive_run` reports.
     """
     with db.connection() as conn:
         run = runs.get_run(conn, run_id)
-        recorded = [a.decision for a in list_approvals(conn, run_id)]
-    if run.status != "completed" or run.manifest_hash is None:
-        sealed = "sealed" if run.manifest_hash is not None else "not sealed"
-        raise EvalError(
-            f"run {run_id} is {run.status} ({sealed}); --run-id needs a completed, sealed run"
+        recorded = [f"{a.gate} {a.decision} {a.approver}" for a in list_approvals(conn, run_id)]
+    if run.status != "completed":
+        raise EvalConfigError(
+            f"run {run_id} is {run.status}, not completed; --run-id needs a sealed run"
+        )
+    if run.manifest_hash is None:
+        raise EvalConfigError(
+            f"run {run_id} is completed but has no manifest; --run-id needs a sealed run"
         )
     if run.profile != profile:
         raise EvalConfigError(
@@ -145,8 +149,8 @@ def run_eval(
     new one, and the report's approvals are the decisions recorded on it.
 
     `EvalConfigError` for an unknown profile, brief or layer, ``challenger`` without
-    ``pipeline``, ``run_id`` without ``pipeline`` or a ``run_id`` under another profile;
-    `EvalError` when the pipeline run parks or ``run_id`` is not completed and sealed.
+    ``pipeline``, ``run_id`` without ``pipeline``, or a ``run_id`` that is not completed
+    and sealed or ran under another profile; `EvalError` when a driven pipeline run parks.
     """
     spec = config.profiles.get(profile)
     if spec is None:

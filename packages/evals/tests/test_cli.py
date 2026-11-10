@@ -291,7 +291,7 @@ def test_evals_run_with_run_id_evaluates_an_existing_run(
     assert [p.name for p in _reports(reports)] == [f"fake-{completed_run_id}.json"]
     report = EvalReport.model_validate_json((reports / f"fake-{completed_run_id}.json").read_text())
     assert report.run_id == completed_run_id
-    assert report.approvals == ["approve", "accept", "approve"]
+    assert report.approvals == ["scope approve alice", "model accept bob", "signoff approve bob"]
     assert report.brief == "synthetic" and len(report.probe_run_ids) > 0
     assert _pipeline_run_count(database) == before
     with database.connection() as conn:
@@ -311,7 +311,8 @@ def test_evals_run_with_run_id_rejects_unsealed_or_mismatched_runs(
     queued = queued_run(database, store, SYNTHETIC_BRIEF)
     result = cli("run", "--profile", "fake", "--run-id", queued, "--report-dir", str(reports))
     assert result.returncode == 2, result.stdout + result.stderr
-    assert queued in result.stderr and "queued" in result.stderr
+    assert f"run {queued} is queued, not completed" in result.stderr
+    assert "parked" not in result.stderr
     assert "Traceback" not in result.stderr
     mismatch = cli(
         "run", "--profile", "default", "--run-id", completed_run_id, "--report-dir", str(reports)
