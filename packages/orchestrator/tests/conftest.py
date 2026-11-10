@@ -28,7 +28,7 @@ from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import GateDecision
 from modelforge_lineage.queue import enqueue
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
-from modelforge_lineage.testing import database, database_url, db
+from modelforge_lineage.testing import database, database_url, db, spans
 from modelforge_mcp.schemas import DatasetRef
 from modelforge_orchestrator.agent_schemas import FindingResponseDraft, ReReviewDraft
 from modelforge_orchestrator.briefs import BriefError, brief_hash, parse_brief
@@ -77,6 +77,7 @@ __all__ = [
     "scoped_state",
     "settings",
     "signed_off_state",
+    "spans",
     "state_no_oot",
     "store",
     "synthetic_state",

@@ -1111,6 +1111,7 @@ dependencies = [
     { name = "modelforge-knowledge" },
     { name = "modelforge-lineage" },
     { name = "modelforge-mcp" },
+    { name = "opentelemetry-api" },
     { name = "pyyaml" },
     { name = "typer" },
 ]
@@ -1124,6 +1125,7 @@ requires-dist = [
     { name = "modelforge-knowledge", editable = "packages/knowledge" },
     { name = "modelforge-lineage", editable = "packages/lineage" },
     { name = "modelforge-mcp", editable = "packages/mcp" },
+    { name = "opentelemetry-api", specifier = ">=1.30" },
     { name = "pyyaml", specifier = ">=6" },
     { name = "typer", specifier = ">=0.28" },
 ]

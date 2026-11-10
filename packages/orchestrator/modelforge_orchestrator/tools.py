@@ -14,8 +14,9 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import Callable, Iterable, Mapping, Sequence
-from contextlib import AbstractAsyncContextManager, AsyncExitStack
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager, AsyncExitStack, contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Protocol, Self, get_args
@@ -27,14 +28,17 @@ from modelforge_core.schemas import StrictModel
 from modelforge_lineage.canonical import canonical_json, sha256_hex
 from modelforge_lineage.models import ArtifactRef
 from modelforge_lineage.observability import FilteringBoundLogger, get_logger
+from modelforge_lineage.tracing import SPAN_KIND, TOOL_NAME, attr, set_attributes, tracer
 from modelforge_mcp.common import ServerName, ToolErrorPayload
 from modelforge_mcp.registry import TOOLS, build_server
+from opentelemetry.trace import Span, Status, StatusCode
 from pydantic import ValidationError
 
 from modelforge_orchestrator.config import Settings, server_settings
 
 __all__ = [
     "ALL_SERVERS",
+    "CURRENT_STEP",
     "BaseToolClient",
     "InProcessToolClient",
     "StdioToolClient",
@@ -42,6 +46,7 @@ __all__ = [
     "ToolClient",
     "ToolError",
     "extract_refs",
+    "output_hash",
     "parse_error",
     "server_environment",
 ]
@@ -51,6 +56,11 @@ DEFAULT_BACKOFF_S: tuple[float, ...] = (1.0, 2.0, 4.0)
 RETRYABLE = frozenset({"transport", "timeout"})
 
 ClientFactory = Callable[[], AbstractAsyncContextManager[Client]]
+
+CURRENT_STEP: ContextVar[tuple[str, str] | None] = ContextVar(
+    "modelforge_current_step", default=None
+)
+"""``(run_id, step_id)`` of the `steps.Step` a tool call is made inside; set by the step."""
 
 
 def _log() -> FilteringBoundLogger:
@@ -117,6 +127,57 @@ def extract_refs(output: StrictModel) -> list[ArtifactRef]:
         elif isinstance(value, list):
             refs.extend(item for item in value if isinstance(item, ArtifactRef))
     return refs
+
+
+def output_hash(output: StrictModel, refs: Sequence[ArtifactRef]) -> str:
+    """A tool call's output hash: its first artifact's id, else the hash of the output."""
+    if refs:
+        return refs[0].id
+    return sha256_hex(canonical_json(output.model_dump(mode="json")))
+
+
+@contextmanager
+def _tool_span(
+    server: ServerName, tool: str, version: str, attempt: int, input_hash: str
+) -> Iterator[Span]:
+    """One ``tool.<server>.<tool>`` span per attempt, timed; a raised exception marks it failed.
+
+    The failure event names only the exception type (the code is ``modelforge.error_code``):
+    tool messages can quote inputs.
+    """
+    current = CURRENT_STEP.get()
+    with tracer().start_as_current_span(
+        f"tool.{server}.{tool}", record_exception=False, set_status_on_exception=False
+    ) as span:
+        set_attributes(
+            span,
+            {
+                SPAN_KIND: "TOOL",
+                TOOL_NAME: f"{server}/{tool}",
+                attr("run_id"): current[0] if current else None,
+                attr("step_id"): current[1] if current else None,
+                attr("server"): server,
+                attr("tool"): tool,
+                attr("version"): version,
+                attr("attempt"): attempt,
+                attr("input_hash"): input_hash,
+            },
+        )
+        started = time.perf_counter()
+        try:
+            yield span
+        except Exception as exc:
+            _mark_tool_failed(span, exc)
+            raise
+        finally:
+            span.set_attribute(attr("duration_ms"), int((time.perf_counter() - started) * 1000))
+
+
+def _mark_tool_failed(span: Span, exc: Exception) -> None:
+    if isinstance(exc, ToolError):
+        span.set_attribute(attr("error_code"), exc.code)
+    span.add_event("exception", {"exception.type": type(exc).__name__})
+    span.set_status(Status(StatusCode.ERROR))
 
 
 def parse_error(text: str) -> tuple[str, str]:
@@ -274,20 +335,21 @@ class BaseToolClient:
     def call(
         self, server: ServerName, tool: str, request: StrictModel, *, timeout_s: float | None = None
     ) -> ToolCall[Any]:
+        payload = request.model_dump(mode="json")
+        input_hash = sha256_hex(canonical_json(payload))
         try:
             spec = TOOLS[(server, tool)]
         except KeyError:
-            raise ToolError(
-                server=server,
-                tool=tool,
-                version="",
-                code="internal",
-                message=f"unknown tool {server}/{tool}",
-            ) from None
+            with _tool_span(server, tool, "", 1, input_hash):
+                raise ToolError(
+                    server=server,
+                    tool=tool,
+                    version="",
+                    code="internal",
+                    message=f"unknown tool {server}/{tool}",
+                ) from None
         version = self._bridge.versions.get(server, {}).get(tool, spec.version)
         timeout = self.default_timeout_s if timeout_s is None else timeout_s
-        payload = request.model_dump(mode="json")
-        input_hash = sha256_hex(canonical_json(payload))
         arguments = {"request": payload}
 
         def error(code: str, message: str) -> ToolError:
@@ -295,47 +357,57 @@ class BaseToolClient:
 
         attempts = len(self.backoff_s) + 1
         for attempt in range(1, attempts + 1):
-            started = time.perf_counter()
-            try:
-                result = self._bridge.call_tool(server, tool, arguments, timeout_s=timeout)
-            except concurrent.futures.TimeoutError:
-                failure = error("timeout", f"no response within {timeout}s")
-            except MCPError as exc:
-                code = "timeout" if exc.code == REQUEST_TIMEOUT else "transport"
-                failure = error(code, f"MCPError: {exc.message}")
-            except Exception as exc:
-                failure = error("transport", f"{type(exc).__name__}: {exc}")
-            else:
-                if not isinstance(result, CallToolResult):
-                    failure = error("transport", f"unexpected result {type(result).__name__}")
-                elif result.is_error:
-                    text = getattr(result.content[0], "text", "") if result.content else ""
-                    raise error(*parse_error(text))
+            with _tool_span(server, tool, version, attempt, input_hash) as span:
+                started = time.perf_counter()
+                try:
+                    result = self._bridge.call_tool(server, tool, arguments, timeout_s=timeout)
+                except concurrent.futures.TimeoutError:
+                    failure = error("timeout", f"no response within {timeout}s")
+                except MCPError as exc:
+                    code = "timeout" if exc.code == REQUEST_TIMEOUT else "transport"
+                    failure = error(code, f"MCPError: {exc.message}")
+                except Exception as exc:
+                    failure = error("transport", f"{type(exc).__name__}: {exc}")
                 else:
-                    try:
-                        output = spec.output_model.model_validate(result.structured_content)
-                    except ValidationError as exc:
-                        raise error(
-                            "internal", f"output does not match the contract: {exc}"
-                        ) from exc
-                    duration_ms = int((time.perf_counter() - started) * 1000)
-                    _log().info(
-                        "tool.call",
-                        server=server,
-                        tool=tool,
-                        version=version,
-                        duration_ms=duration_ms,
-                        attempt=attempt,
-                    )
-                    return ToolCall(
-                        server=server,
-                        tool=tool,
-                        version=version,
-                        input_hash=input_hash,
-                        output=output,
-                        refs=extract_refs(output),
-                        duration_ms=duration_ms,
-                    )
+                    if not isinstance(result, CallToolResult):
+                        failure = error("transport", f"unexpected result {type(result).__name__}")
+                    elif result.is_error:
+                        text = getattr(result.content[0], "text", "") if result.content else ""
+                        raise error(*parse_error(text))
+                    else:
+                        try:
+                            output = spec.output_model.model_validate(result.structured_content)
+                        except ValidationError as exc:
+                            raise error(
+                                "internal", f"output does not match the contract: {exc}"
+                            ) from exc
+                        duration_ms = int((time.perf_counter() - started) * 1000)
+                        refs = extract_refs(output)
+                        set_attributes(
+                            span,
+                            {
+                                attr("output_hash"): output_hash(output, refs),
+                                attr("artifact_ids"): [ref.id for ref in refs],
+                            },
+                        )
+                        _log().info(
+                            "tool.call",
+                            server=server,
+                            tool=tool,
+                            version=version,
+                            duration_ms=duration_ms,
+                            attempt=attempt,
+                        )
+                        return ToolCall(
+                            server=server,
+                            tool=tool,
+                            version=version,
+                            input_hash=input_hash,
+                            output=output,
+                            refs=refs,
+                            duration_ms=duration_ms,
+                        )
+                _mark_tool_failed(span, failure)
             if failure.code not in RETRYABLE or attempt == attempts:
                 raise failure
             _log().warning(

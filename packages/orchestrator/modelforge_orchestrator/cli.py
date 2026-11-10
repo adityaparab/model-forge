@@ -4,6 +4,7 @@ Exit codes: 0 success, 1 a check that ran and failed (replay mismatch, verify fa
 2 a request the run cannot take (bad brief, wrong gate, unknown run, ...).
 """
 
+import atexit
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ from modelforge_lineage.observability import configure_logging
 from modelforge_lineage.queue import enqueue, release
 from modelforge_lineage.steps import list_steps
 from modelforge_lineage.store import ArtifactStore
+from modelforge_lineage.tracing import configure_tracing, shutdown_tracing
 from modelforge_lineage.verify import verify_run
 from pydantic import TypeAdapter, ValidationError
 
@@ -56,9 +58,12 @@ DetachOption = Annotated[
 
 
 def _context() -> tuple[Settings, Database, ArtifactStore]:
-    """Settings, logging (quiet unless MODELFORGE_LOG_LEVEL is set), database and store."""
+    """Settings, logging (quiet unless MODELFORGE_LOG_LEVEL is set), tracing (when OTLP
+    endpoints are set; flushed at exit), database and store."""
     settings = load_settings()
     configure_logging("WARNING" if "MODELFORGE_LOG_LEVEL" not in os.environ else settings.log_level)
+    if configure_tracing("modelforge-cli", settings.gateway.otlp_endpoints):
+        atexit.register(shutdown_tracing)
     return settings, Database(settings.database_url), ArtifactStore(settings.artifact_dir)
 
 

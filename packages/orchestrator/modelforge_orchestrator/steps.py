@@ -6,6 +6,8 @@ never rolls back what was already recorded. Tool calls themselves run outside an
 """
 
 from collections.abc import Callable
+from contextlib import AbstractContextManager
+from contextvars import Token
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
@@ -21,7 +23,10 @@ from modelforge_lineage import events, runs, steps
 from modelforge_lineage.canonical import canonical_json, sha256_hex
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import ArtifactRef, StepRecord, ToolCallRecord
+from modelforge_lineage.tracing import SPAN_KIND, attr, set_attributes, tracer
 from modelforge_mcp.common import ServerName
+from opentelemetry import trace
+from opentelemetry.trace import Span, Status, StatusCode
 from psycopg import Connection
 from psycopg.rows import DictRow
 from pydantic import BaseModel, ValidationError
@@ -29,9 +34,10 @@ from pydantic import BaseModel, ValidationError
 from modelforge_orchestrator.briefs import BriefError
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.schemas import ErrorRecord, RunState, apply_update
-from modelforge_orchestrator.tools import ToolCall, ToolError
+from modelforge_orchestrator.tools import CURRENT_STEP, ToolCall, ToolError
+from modelforge_orchestrator.tools import output_hash as tool_output_hash
 
-__all__ = ["PAUSE_EXEMPT", "PauseRequested", "Step", "state_hash"]
+__all__ = ["PAUSE_EXEMPT", "PauseRequested", "Step", "record_failure", "state_hash"]
 
 PAUSE_EXEMPT: frozenset[str] = frozenset({"gate_scope", "gate_model", "gate_signoff", "seal"})
 """Nodes that run even with a pause requested: a gate resumes an interrupt and must not stop
@@ -49,6 +55,29 @@ class PauseRequested(Exception):  # noqa: N818 - a control signal, not an error
 
 def state_hash(state: RunState) -> str:
     return sha256_hex(canonical_json(state.model_dump(mode="json")))
+
+
+def record_failure(span: Span, exc: BaseException, *, trace_content: bool) -> None:
+    """Mark ``span`` failed by ``exc``: ERROR status and an ``exception`` event.
+
+    Exception messages and stack traces can carry prompt, brief or data text, so without
+    ``trace_content`` the event names only the type (and the gateway kind or tool code).
+    """
+    kind: str | None = None
+    if isinstance(exc, GatewayError):
+        kind = exc.kind
+    elif isinstance(exc, ToolError) and exc.code:
+        kind = exc.code
+    if kind is not None:
+        span.set_attribute(attr("error_kind"), kind)
+    if trace_content:
+        span.record_exception(exc)
+    else:
+        event = {"exception.type": type(exc).__name__}
+        if kind is not None:
+            event[attr("error_kind")] = kind
+        span.add_event("exception", event)
+    span.set_status(Status(StatusCode.ERROR))
 
 
 def _error_record(node: str, attempt: int, exc: BaseException) -> ErrorRecord:
@@ -82,6 +111,9 @@ class Step:
         self.output_state_hash: str | None = None
         self.last_error: ErrorRecord | None = None
         self.spent_usd: float = 0.0
+        self._span: Span = trace.INVALID_SPAN
+        self._span_scope: AbstractContextManager[Span] | None = None
+        self._step_token: Token[tuple[str, str] | None] | None = None
 
     @property
     def run_id(self) -> str:
@@ -107,14 +139,70 @@ class Step:
                     # Nothing recorded yet: the checkpoint stays at the previous node's end.
                     raise PauseRequested(self.run_id, self.node)
         input_hash = state_hash(self.state)
-        with self.deps.lineage.transaction() as conn:
-            self.record = steps.start_step(conn, self.run_id, self.node, input_hash)
-            self._event(
-                conn,
-                "step.started",
-                {"node": self.node, "attempt": self.record.attempt, "input_state_hash": input_hash},
-            )
+        self._open_span(input_hash)
+        try:
+            with self.deps.lineage.transaction() as conn:
+                self.record = steps.start_step(conn, self.run_id, self.node, input_hash)
+                self._event(
+                    conn,
+                    "step.started",
+                    {
+                        "node": self.node,
+                        "attempt": self.record.attempt,
+                        "input_state_hash": input_hash,
+                    },
+                )
+        except BaseException as exc:
+            self._close_span(exc, status="failed")
+            raise
+        set_attributes(
+            self._span, {attr("step_id"): self.record.id, attr("attempt"): self.record.attempt}
+        )
+        self._step_token = CURRENT_STEP.set((self.run_id, self.record.id))
         return self
+
+    def _open_span(self, input_hash: str) -> None:
+        """Start the ``node.<name>`` span and make it current.
+
+        Its parent is the current span when there is one (LangGraph runs nodes in the caller's
+        context), else the run span's context carried in `Deps.trace_context`.
+        """
+        current = trace.get_current_span().get_span_context().is_valid
+        context = None if current else self.deps.trace_context
+        self._span = tracer().start_span(
+            f"node.{self.node}",
+            context=context,
+            record_exception=False,
+            set_status_on_exception=False,
+        )
+        set_attributes(
+            self._span,
+            {
+                SPAN_KIND: "CHAIN",
+                attr("run_id"): self.run_id,
+                attr("node"): self.node,
+                attr("input_state_hash"): input_hash,
+            },
+        )
+        self._span_scope = trace.use_span(
+            self._span, end_on_exit=True, record_exception=False, set_status_on_exception=False
+        )
+        self._span_scope.__enter__()
+
+    def _close_span(self, exc: BaseException | None, *, status: str) -> None:
+        """Record the outcome on the node span, end it, and restore the previous context."""
+        set_attributes(
+            self._span,
+            {attr("status"): status, attr("output_state_hash"): self.output_state_hash},
+        )
+        if exc is not None:
+            record_failure(self._span, exc, trace_content=self.deps.settings.gateway.trace_content)
+        if self._step_token is not None:
+            CURRENT_STEP.reset(self._step_token)
+            self._step_token = None
+        if self._span_scope is not None:
+            self._span_scope.__exit__(None, None, None)
+            self._span_scope = None
 
     def tool(
         self,
@@ -134,10 +222,7 @@ class Step:
                     {"server": server, "tool": tool, "code": exc.code, "message": exc.message},
                 )
             raise
-        if call.refs:
-            output_hash = call.refs[0].id
-        else:
-            output_hash = sha256_hex(canonical_json(call.output.model_dump(mode="json")))
+        output_hash = tool_output_hash(call.output, call.refs)
         artifact_ids = [ref.id for ref in call.refs]
         record = ToolCallRecord(
             id=new_id("tc"),
@@ -220,6 +305,12 @@ class Step:
         exc: BaseException | None,
         tb: TracebackType | None,
     ) -> None:
+        try:
+            self._finish(exc)
+        finally:
+            self._close_span(exc, status="succeeded" if exc is None else "failed")
+
+    def _finish(self, exc: BaseException | None) -> None:
         with self.deps.lineage.transaction() as conn:
             if exc is None:
                 steps.finish_step(

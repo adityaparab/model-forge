@@ -29,7 +29,18 @@ from modelforge_lineage.facade import Lineage
 from modelforge_lineage.models import GateName, QueuedRun, RunRecord, RunStatus
 from modelforge_lineage.observability import configure_logging, get_logger
 from modelforge_lineage.store import ArtifactStore
+from modelforge_lineage.tracing import (
+    SPAN_KIND,
+    attr,
+    configure_tracing,
+    run_parent_context,
+    set_attributes,
+    shutdown_tracing,
+    tracer,
+)
 from modelforge_mcp.schemas import DatasetRef
+from opentelemetry import trace
+from opentelemetry.trace import Span
 from pydantic import BaseModel
 
 from modelforge_orchestrator.config import Settings, setting_seeds
@@ -37,7 +48,7 @@ from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.graph import build_graph
 from modelforge_orchestrator.replay import create_replay
 from modelforge_orchestrator.schemas import ErrorRecord, GatePrompt, RunState
-from modelforge_orchestrator.steps import PauseRequested
+from modelforge_orchestrator.steps import PauseRequested, record_failure
 from modelforge_orchestrator.tools import StdioToolClient, ToolClient
 
 __all__ = [
@@ -186,6 +197,27 @@ def _auto_replay(db: Database, run: RunRecord) -> None:
         log.error("run.auto_replay_failed", error=str(exc), error_type=type(exc).__name__)
 
 
+def _run_span(run: RunRecord, kind: str, claimant: str) -> Span:
+    """Start the ``run.execute`` span: in the run's trace when it has one, else a new root."""
+    context = run_parent_context(run.trace_id) if run.trace_id else None
+    span = tracer().start_span(
+        "run.execute", context=context, record_exception=False, set_status_on_exception=False
+    )
+    set_attributes(
+        span,
+        {
+            SPAN_KIND: "AGENT",
+            attr("run_id"): run.id,
+            attr("queue_kind"): kind,
+            attr("worker_id"): claimant,
+            attr("profile"): run.profile,
+            attr("replay_of"): run.replay_of,
+            attr("prior_status"): run.status,
+        },
+    )
+    return span
+
+
 def execute(
     settings: Settings,
     db: Database,
@@ -195,81 +227,106 @@ def execute(
     tool_client_factory: ToolClientFactory = StdioToolClient,
     worker_id: str | None = None,
 ) -> RunRecord:
-    """Run a claimed run until it parks at a gate, finishes, or fails; release its queue row."""
+    """Run a claimed run until it parks at a gate, finishes, or fails; release its queue row.
+
+    The execution is one ``run.execute`` span; the node spans nest under it.
+    """
     run_id = queued.run_id
     log = get_logger(component="worker", run_id=run_id)
     config: RunnableConfig = {"configurable": {"thread_id": run_id}}
     graph = build_graph(make_checkpointer(db))
+    claimant = worker_id if worker_id is not None else _this_worker_id()
     claimed = False
+    span: Span = trace.INVALID_SPAN
     try:
-        with db.connection() as conn:
-            run = runs.get_run(conn, run_id)
         try:
-            graph_input = _graph_input(db, run, queued.kind)
-        except WorkerError as exc:
-            # A claim that does not fit the run leaves its status and checkpoint untouched.
-            with db.transaction() as conn:
-                append_event(
-                    conn,
-                    run_id,
-                    "worker.rejected_claim",
-                    {"kind": queued.kind, "status": run.status, "message": str(exc)},
+            with db.connection() as conn:
+                run = runs.get_run(conn, run_id)
+            span = _run_span(run, queued.kind, claimant)
+            try:
+                graph_input = _graph_input(db, run, queued.kind)
+            except WorkerError as exc:
+                # A claim that does not fit the run leaves its status and checkpoint untouched.
+                with db.transaction() as conn:
+                    append_event(
+                        conn,
+                        run_id,
+                        "worker.rejected_claim",
+                        {"kind": queued.kind, "status": run.status, "message": str(exc)},
+                    )
+                log.warning(
+                    "run.claim_rejected", kind=queued.kind, status=run.status, error=str(exc)
                 )
-            log.warning("run.claim_rejected", kind=queued.kind, status=run.status, error=str(exc))
-            return run
-        claimant = worker_id if worker_id is not None else _this_worker_id()
-        claimed = True
-        with db.transaction() as conn:
-            runs.set_status(conn, run_id, "running")
-            append_event(conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind})
-        log.info("run.claimed", kind=queued.kind, prior_status=run.status)
-        with tool_client_factory(settings) as tools:
-            gateway = Gateway.for_run(settings.gateway, run.profile, Lineage(db), store)
-            deps = Deps(
-                tools=tools, lineage=Lineage(db), store=store, settings=settings, gateway=gateway
-            )
-            result = graph.invoke(graph_input, config, context=deps)
-        if "__interrupt__" in result:
-            prompt = GatePrompt.model_validate(result["__interrupt__"][0].value)
-            status = _AWAITING[prompt.gate]
+                span.set_attribute(attr("final_status"), run.status)
+                return run
+            claimed = True
             with db.transaction() as conn:
+                runs.set_status(conn, run_id, "running")
                 append_event(
-                    conn, run_id, "gate.requested", {"gate": prompt.gate, "summary": prompt.summary}
+                    conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind}
                 )
-                runs.set_status(conn, run_id, status)
-            log.info("run.parked", status=status)
-        else:
+            log.info("run.claimed", kind=queued.kind, prior_status=run.status)
+            with tool_client_factory(settings) as tools:
+                gateway = Gateway.for_run(settings.gateway, run.profile, Lineage(db), store)
+                deps = Deps(
+                    tools=tools,
+                    lineage=Lineage(db),
+                    store=store,
+                    settings=settings,
+                    gateway=gateway,
+                    trace_context=trace.set_span_in_context(span),
+                )
+                with trace.use_span(span, record_exception=False, set_status_on_exception=False):
+                    result = graph.invoke(graph_input, config, context=deps)
+            if "__interrupt__" in result:
+                prompt = GatePrompt.model_validate(result["__interrupt__"][0].value)
+                status = _AWAITING[prompt.gate]
+                with db.transaction() as conn:
+                    append_event(
+                        conn,
+                        run_id,
+                        "gate.requested",
+                        {"gate": prompt.gate, "summary": prompt.summary},
+                    )
+                    runs.set_status(conn, run_id, status)
+                log.info("run.parked", status=status)
+            else:
+                with db.transaction() as conn:
+                    runs.set_status(conn, run_id, result["status"])
+                log.info("run.finished", status=result["status"])
+                if result["status"] == "completed":
+                    _auto_replay(db, run)
+        except PauseRequested as exc:
+            # LangGraph 1.2.20 re-raises a node's exception as itself, not in an `ExceptionGroup`.
             with db.transaction() as conn:
-                runs.set_status(conn, run_id, result["status"])
-            log.info("run.finished", status=result["status"])
-            if result["status"] == "completed":
-                _auto_replay(db, run)
-    except PauseRequested as exc:
-        # LangGraph 1.2.20 re-raises a node's exception as itself, not in an `ExceptionGroup`.
-        with db.transaction() as conn:
-            runs.set_status(conn, run_id, "paused")
-            runs.clear_pause(conn, run_id)
-            append_event(conn, run_id, "run.paused", {"node": exc.node})
-        log.info("run.paused", node=exc.node)
-    except Exception as exc:
-        record = _error_record(db, run_id, exc)
-        payload = record.model_dump(mode="json")
-        with db.transaction() as conn:
-            runs.set_error(conn, run_id, payload)
-            runs.set_status(conn, run_id, "needs_attention")
-        # No `graph.update_state` here: LangGraph attributes it to the last completed node, and
-        # after a gate that routed by `Command` that drops the pending task, so `resume` ran
-        # nothing. The error lives in `runs.error` and the `error.recorded` event.
-        log.error("run.needs_attention", error=payload)
-    finally:
-        with db.transaction() as conn:
-            if claimed:
-                # A pause requested too late (during an exempt node) must not reach a later
-                # execution. A rejected claim never ran the run, so its flag is left alone.
+                runs.set_status(conn, run_id, "paused")
                 runs.clear_pause(conn, run_id)
-            queue.release(conn, run_id)
-    with db.connection() as conn:
-        return runs.get_run(conn, run_id)
+                append_event(conn, run_id, "run.paused", {"node": exc.node})
+            log.info("run.paused", node=exc.node)
+        except Exception as exc:
+            record_failure(span, exc, trace_content=settings.gateway.trace_content)
+            record = _error_record(db, run_id, exc)
+            payload = record.model_dump(mode="json")
+            with db.transaction() as conn:
+                runs.set_error(conn, run_id, payload)
+                runs.set_status(conn, run_id, "needs_attention")
+            # No `graph.update_state` here: LangGraph attributes it to the last completed node,
+            # and after a gate that routed by `Command` that drops the pending task, so `resume`
+            # ran nothing. The error lives in `runs.error` and the `error.recorded` event.
+            log.error("run.needs_attention", error=payload)
+        finally:
+            with db.transaction() as conn:
+                if claimed:
+                    # A pause requested too late (during an exempt node) must not reach a later
+                    # execution. A rejected claim never ran the run, so its flag is left alone.
+                    runs.clear_pause(conn, run_id)
+                queue.release(conn, run_id)
+        with db.connection() as conn:
+            final = runs.get_run(conn, run_id)
+        span.set_attribute(attr("final_status"), final.status)
+        return final
+    finally:
+        span.end()
 
 
 def run_once(
@@ -295,6 +352,7 @@ def run_once(
 def run_loop(settings: Settings, *, once: bool = False, poll_interval_s: float = 2.0) -> None:
     """Migrate, set up the checkpointer, then execute queued runs until stopped."""
     configure_logging(settings.log_level)
+    configure_tracing("modelforge-worker", settings.gateway.otlp_endpoints)
     db = Database(settings.database_url)
     try:
         store = ArtifactStore(settings.artifact_dir)
@@ -325,3 +383,4 @@ def run_loop(settings: Settings, *, once: bool = False, poll_interval_s: float =
                 time.sleep(poll_interval_s)
     finally:
         db.close()
+        shutdown_tracing()

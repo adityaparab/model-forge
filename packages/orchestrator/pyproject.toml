@@ -16,6 +16,7 @@ dependencies = [
     "langgraph-checkpoint-postgres>=3.2",
     "typer>=0.28",
     "pyyaml>=6",
+    "opentelemetry-api>=1.30",
 ]
 
 [project.scripts]
