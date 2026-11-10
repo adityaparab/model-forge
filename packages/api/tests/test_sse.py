@@ -3,7 +3,7 @@ import json
 import queue
 import threading
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import contextmanager
 
 import pytest
@@ -12,6 +12,7 @@ from modelforge_api import sse
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import append_event
 from modelforge_lineage.models import EventRecord
+from structlog.testing import capture_logs
 
 from .conftest import Submit
 
@@ -105,32 +106,86 @@ def test_format_event_and_start_after() -> None:
     assert sse.start_after(None, 0, default=7) == 0
 
 
+def _event(i: int, run_id: str = "r") -> EventRecord:
+    return EventRecord(
+        id=i, run_id=run_id, step_id=None, ts="t", type="e", payload={}, prev_hash="", hash=""
+    )
+
+
+class _FakeRequest:
+    """Reports a disconnect once ``reads`` has ``polls`` entries."""
+
+    def __init__(self, reads: list[int], polls: int) -> None:
+        self._reads = reads
+        self._polls = polls
+
+    async def is_disconnected(self) -> bool:
+        return len(self._reads) >= self._polls
+
+
+def _collect(stream: AsyncIterator[bytes]) -> list[bytes]:
+    async def collect() -> list[bytes]:
+        return [chunk async for chunk in stream]
+
+    return asyncio.run(collect())
+
+
+def _ids(chunks: list[bytes]) -> list[int]:
+    return [
+        int(c.split(b"\n", 1)[0].removeprefix(b"id: ")) for c in chunks if c.startswith(b"id: ")
+    ]
+
+
 def test_event_stream_pages_without_waiting_then_keeps_alive() -> None:
     """A full page is read again at once; once caught up, silence yields a keepalive."""
-
-    def event(i: int) -> EventRecord:
-        return EventRecord(
-            id=i, run_id="r", step_id=None, ts="t", type="e", payload={}, prev_hash="", hash=""
-        )
-
     reads: list[int] = []
 
     def read(after: int) -> list[EventRecord]:
         reads.append(after)
-        return [event(i) for i in range(after + 1, min(after + sse.PAGE_SIZE, 600) + 1)]
+        return [_event(i) for i in range(after + 1, min(after + 50, 120) + 1)]
 
-    class Client:
-        async def is_disconnected(self) -> bool:
-            return len(reads) >= 4
+    request = _FakeRequest(reads, polls=5)
+    stream = sse.event_stream(request, read, 0, poll_s=0.01, keepalive_s=0.0, page_size=50)  # type: ignore[arg-type]
+    chunks = _collect(stream)
+    assert reads == [0, 50, 100, 120, 120]
+    assert _ids(chunks) == list(range(1, 121))
+    assert chunks[120:] == [sse.KEEPALIVE] * 3  # one per caught-up poll at keepalive_s=0
 
-    async def collect() -> list[bytes]:
-        stream = sse.event_stream(Client(), read, 0, poll_s=0.01, keepalive_s=0.0)  # type: ignore[arg-type]
-        return [chunk async for chunk in stream]
 
-    chunks = asyncio.run(collect())
-    assert reads == [0, 500, 600, 600]
-    assert len([c for c in chunks if c.startswith(b"id: ")]) == 600
-    assert chunks[600:] == [sse.KEEPALIVE] * 3  # one per caught-up poll at keepalive_s=0
+def test_event_stream_window_delivers_out_of_order_commits_once() -> None:
+    """With a window, an id committing behind the cursor is still delivered, each id once."""
+    committed = {5, 11}
+    reads: list[int] = []
+
+    def read(after: int) -> list[EventRecord]:
+        reads.append(after)
+        if len(reads) == 2:
+            committed.add(10)  # committed after 11 was read
+        if len(reads) == 3:
+            committed.add(12)
+        return [_event(i) for i in sorted(committed) if i > after][:50]
+
+    request = _FakeRequest(reads, polls=4)
+    stream = sse.event_stream(request, read, 3, poll_s=0.01, page_size=50, window=8)  # type: ignore[arg-type]
+    assert _ids(_collect(stream)) == [5, 11, 10, 12]
+    assert reads == [3, 3, 3, 4]  # max(last - window, start)
+
+
+def test_event_stream_ends_on_read_failure() -> None:
+    def read(after: int) -> list[EventRecord]:
+        raise RuntimeError("database gone")
+
+    with capture_logs() as logs:
+        chunks = _collect(sse.event_stream(_FakeRequest([], polls=99), read, 0))  # type: ignore[arg-type]
+    assert chunks == []
+    assert [log["event"] for log in logs] == ["sse.read_failed"]
+    assert logs[0]["type"] == "RuntimeError"
+
+
+def test_start_after_header_digits_only() -> None:
+    for header in ("+5", " 5", "5 ", "\u0665", "1_0", "-0"):
+        assert sse.start_after(header, None, default=7) == 7, header
+    assert sse.start_after("0", None, default=7) == 0
 
 
 @pytest.mark.db
@@ -189,6 +244,13 @@ def test_global_stream_starts_at_head(client: TestClient, submit: Submit) -> Non
     assert received and received[0]["type"] == "run.created"
     assert received[0]["run_id"] == run_id
     assert all(d["run_id"] == run_id for d in received)
+
+    created = received[0]["id"]
+    with _stream(client, "/events/stream", {"Last-Event-ID": str(created)}) as lines:
+        seen = lines.until(lambda seen: any(d["id"] == created for d in _data(seen)), timeout=3)
+    resumed = [d["id"] for d in _data(seen)]
+    assert created in resumed  # a resume re-reads the window behind the client's id
+    assert len(resumed) == len(set(resumed))
 
 
 @pytest.mark.db

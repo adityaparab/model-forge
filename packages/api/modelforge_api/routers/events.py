@@ -19,12 +19,16 @@ Db = Annotated[Database, Depends(get_db)]
 LastEventId = Annotated[str | None, Header(alias="Last-Event-ID")]
 After = Annotated[int | None, Query(ge=0, description="An event id; stream the events above it.")]
 
+_PAGE = sse.PAGE_SIZE
+"""One value for the reads' ``limit`` and the stream's ``page_size``."""
 _HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
 
 
-def _response(request: Request, read: sse.Reader, start: int) -> StreamingResponse:
+def _response(
+    request: Request, read: sse.Reader, start: int, *, window: int = 0
+) -> StreamingResponse:
     return StreamingResponse(
-        sse.event_stream(request, read, start),
+        sse.event_stream(request, read, start, page_size=_PAGE, window=window),
         media_type="text/event-stream",
         headers=_HEADERS,
     )
@@ -43,7 +47,7 @@ def run_stream(
 
     def read(after_id: int) -> list[EventRecord]:
         with db.connection() as conn:
-            return queries.list_events_after(conn, run_id, after_id, sse.PAGE_SIZE)
+            return queries.list_events_after(conn, run_id, after_id, _PAGE)
 
     return _response(request, read, sse.start_after(last_event_id, after, default=0))
 
@@ -55,12 +59,20 @@ def global_stream(
     after: After = None,
     last_event_id: LastEventId = None,
 ) -> StreamingResponse:
-    """Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says."""
+    """Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says.
+
+    A resume (``after`` or ``Last-Event-ID``) starts `sse.WINDOW` ids behind the client's id,
+    and every poll re-reads that window, for commits that land out of id order (see `sse`).
+    """
 
     def read(after_id: int) -> list[EventRecord]:
         with db.connection() as conn:
-            return queries.list_events_after_global(conn, after_id, sse.PAGE_SIZE)
+            return queries.list_events_after_global(conn, after_id, _PAGE)
 
-    with db.connection() as conn:
-        head = queries.events_head(conn)
-    return _response(request, read, sse.start_after(last_event_id, after, default=head))
+    resume = sse.start_after(last_event_id, after, default=-1)
+    if resume >= 0:  # a reconnect re-reads the window behind the client's id
+        start = max(resume - sse.WINDOW, 0)
+    else:
+        with db.connection() as conn:
+            start = queries.events_head(conn)
+    return _response(request, read, start, window=sse.WINDOW)
