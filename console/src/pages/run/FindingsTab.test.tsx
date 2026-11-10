@@ -68,3 +68,21 @@ test("findings tab groups by round and filters by status", async () => {
     findings.findings.filter((f) => f.severity === "low").length,
   );
 });
+
+test("findings filters narrow the round's responses but not its regenerated sections", async () => {
+  const user = userEvent.setup();
+  installFetchStub([
+    { path: `/api/v1/runs/${RUN_ID}`, body: fixtures("run") },
+    { path: `/api/v1/runs/${RUN_ID}/findings`, body: fixtures("findings") },
+  ]);
+  renderApp(<App />, { route: `/runs/${RUN_ID}/findings` });
+
+  await user.selectOptions(await screen.findByLabelText("Status"), "disputed");
+  const round1 = screen.getByRole("region", { name: "Round 1" });
+  const responses = within(round1).getByRole("list", { name: "Responses in round 1" });
+  const items = within(responses).getAllByRole("listitem");
+  expect(items).toHaveLength(1);
+  expect(within(items[0]).getByText("F-5")).toBeInTheDocument();
+  const regenerated = within(round1).getByRole("list", { name: "Sections regenerated in round 1" });
+  expect(within(regenerated).getAllByRole("listitem")).toHaveLength(2);
+});

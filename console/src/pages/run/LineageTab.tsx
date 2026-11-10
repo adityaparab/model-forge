@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
-import { useArtifacts, useEvents, useManifest, useVerify } from "../../api/queries";
+import { fetchEvents, useArtifacts, useEvents, useManifest, useVerify } from "../../api/queries";
 import type { Schema } from "../../api/client";
 import { EventChain } from "../../components/run/EventChain";
 import { Mono } from "../../components/Mono";
@@ -8,6 +8,10 @@ import { useRunDetail } from "./useRunDetail";
 
 type ArtifactItem = Schema<"ArtifactItem">;
 type VerifyReport = Schema<"VerifyReport">;
+type EventsResponse = Schema<"EventsResponse">;
+
+/** Events per request; a page this full means the log may go on past it. */
+const EVENTS_PAGE = 500;
 
 const head = "h-8 border-b border-border px-2 text-left text-xs font-medium text-muted";
 const cell = "h-8 border-b border-border px-2 whitespace-nowrap";
@@ -175,11 +179,62 @@ function ManifestBlock({ runId }: { runId: string }) {
   );
 }
 
+/**
+ * The event log page by page: the first page from the query, later pages appended on demand,
+ * so a long chain never reads as complete when it is not. Keyed by run id by its parent.
+ */
+function EventChainSection({ runId }: { runId: string }) {
+  const first = useEvents(runId, undefined, EVENTS_PAGE);
+  const [more, setMore] = useState<EventsResponse[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [moreError, setMoreError] = useState<string | null>(null);
+
+  if (first.isError) return <LoadError what="the events" message={first.error.message} />;
+  if (first.data === undefined) return <p className="text-muted">Loading the events...</p>;
+
+  const pages = [first.data, ...more];
+  const last = pages[pages.length - 1];
+  const events = pages.flatMap((page) => page.events);
+  const full = last.events.length === EVENTS_PAGE;
+
+  async function loadMore() {
+    setLoading(true);
+    setMoreError(null);
+    try {
+      const page = await fetchEvents(runId, last.next_after, EVENTS_PAGE);
+      setMore((loaded) => [...loaded, page]);
+    } catch (error) {
+      setMoreError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <p className="text-xs text-muted">
+        {`Showing ${events.length} events${full ? ", more exist" : ""}`}
+      </p>
+      <EventChain events={events} />
+      {moreError !== null && <LoadError what="more events" message={moreError} />}
+      {full && (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => void loadMore()}
+          className="h-7 self-start rounded-sm border border-border bg-panel-2 px-3 text-[0.8125rem] hover:border-accent disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          Load more
+        </button>
+      )}
+    </>
+  );
+}
+
 /** Lineage: every stored artifact, the hash-chained event log, verification and the manifest. */
 export function LineageTab() {
   const { run } = useRunDetail();
   const artifacts = useArtifacts(run.id);
-  const events = useEvents(run.id);
   const sealed = run.manifest_hash !== null;
 
   return (
@@ -195,9 +250,7 @@ export function LineageTab() {
         </section>
         <section className="flex flex-col gap-2">
           <h2 className="text-sm font-semibold">Event chain</h2>
-          {events.isError && <LoadError what="the events" message={events.error.message} />}
-          {events.data === undefined && !events.isError && <p className="text-muted">Loading the events...</p>}
-          {events.data !== undefined && <EventChain events={events.data.events} />}
+          <EventChainSection key={run.id} runId={run.id} />
         </section>
       </div>
       <aside className="flex flex-col gap-4">

@@ -132,6 +132,9 @@ function RoundGroup({
   responses: FindingResponse[];
 }) {
   const regenerated = regeneratedIn(responses);
+  const shownResponses = responses.filter((response) =>
+    findings.some((finding) => finding.id === response.finding_id),
+  );
   return (
     <section aria-label={`Round ${round}`} className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold">Round {round}</h3>
@@ -140,7 +143,7 @@ function RoundGroup({
           <FindingCard key={finding.row_id} finding={finding} />
         ))}
       </div>
-      <ResponsesList round={round} responses={responses} />
+      <ResponsesList round={round} responses={shownResponses} />
       {regenerated.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
           Sections regenerated

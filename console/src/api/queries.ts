@@ -104,10 +104,15 @@ export function usePlan(id: string, planRef: string | null) {
   });
 }
 
-export function useEvents(id: string, after?: number) {
+/** One page of the run's event log: events with ids above `after`, at most `limit` of them. */
+export function fetchEvents(id: string, after?: number, limit?: number) {
+  return api<Schema<"EventsResponse">>(runPath(id, `/events${query({ after, limit })}`));
+}
+
+export function useEvents(id: string, after?: number, limit?: number) {
   return useQuery({
-    queryKey: runKeys.part(id, "events", after),
-    queryFn: () => api<Schema<"EventsResponse">>(runPath(id, `/events${query({ after })}`)),
+    queryKey: runKeys.part(id, "events", after, limit),
+    queryFn: () => fetchEvents(id, after, limit),
     enabled: id !== "",
   });
 }
