@@ -13,6 +13,7 @@ from typing import Annotated, Any, NoReturn, get_args
 
 import typer
 from modelforge_lineage import runs, steps
+from modelforge_lineage.approvals import list_approvals
 from modelforge_lineage.db import Database
 from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.observability import configure_logging
@@ -73,6 +74,28 @@ def _run_identity(db: Database, run_id: str) -> tuple[dict[str, str], dict[str, 
     return dict(sorted(models.items())), dict(sorted(prompts.items()))
 
 
+def _existing_run(db: Database, run_id: str, profile: str) -> list[str]:
+    """Check that ``run_id`` is a completed, sealed run under ``profile``; its decisions.
+
+    `EvalError` unless it is completed with a manifest; `EvalConfigError` when it ran under
+    another profile. The decisions are those recorded on the run, in order.
+    """
+    with db.connection() as conn:
+        run = runs.get_run(conn, run_id)
+        recorded = [a.decision for a in list_approvals(conn, run_id)]
+    if run.status != "completed" or run.manifest_hash is None:
+        sealed = "sealed" if run.manifest_hash is not None else "not sealed"
+        raise EvalError(
+            f"run {run_id} is {run.status} ({sealed}); --run-id needs a completed, sealed run"
+        )
+    if run.profile != profile:
+        raise EvalConfigError(
+            f"run {run_id} ran under profile {run.profile!r}, not {profile!r}; "
+            "--run-id needs a run under --profile"
+        )
+    return recorded
+
+
 def _challenger_metrics(
     settings: Settings, db: Database, store: ArtifactStore, run_id: str, defects: Path
 ) -> tuple[dict[str, MetricValue], dict[str, float | None], list[str]]:
@@ -114,11 +137,16 @@ def run_eval(
     *,
     brief: str | None = None,
     layers: str | None = None,
+    run_id: str | None = None,
 ) -> EvalReport:
     """Run ``profile``'s layers and build its report; nothing is stored or written.
 
-    `EvalConfigError` for an unknown profile, brief or layer, or ``challenger`` without
-    ``pipeline``; `EvalError` when the pipeline run parks.
+    With ``run_id`` the ``pipeline`` layer evaluates that existing run instead of driving a
+    new one, and the report's approvals are the decisions recorded on it.
+
+    `EvalConfigError` for an unknown profile, brief or layer, ``challenger`` without
+    ``pipeline``, ``run_id`` without ``pipeline`` or a ``run_id`` under another profile;
+    `EvalError` when the pipeline run parks or ``run_id`` is not completed and sealed.
     """
     spec = config.profiles.get(profile)
     if spec is None:
@@ -127,12 +155,15 @@ def run_eval(
     if brief_key not in config.briefs:
         raise EvalConfigError(f"unknown brief {brief_key!r}; known: {sorted(config.briefs)}")
     chosen = _layers(spec.layers, layers)
+    if run_id is not None and "pipeline" not in chosen:
+        raise EvalConfigError("--run-id evaluates a pipeline run; add the 'pipeline' layer")
     goldens = config_path.parent / "goldens"
 
     metrics: dict[str, MetricValue] = {}
     misses: list[str] = []
-    run_id: str | None = None
     recorded: list[str] = []
+    if run_id is not None:  # checked before any layer runs
+        recorded = _existing_run(Database(settings.database_url), run_id, profile)
     models: dict[str, str] = {}
     prompts: dict[str, str] = {}
     by_class: dict[str, float | None] = {}
@@ -142,15 +173,16 @@ def run_eval(
         metrics["retrieval_recall_at_5"] = recall
     if "pipeline" in chosen:
         db, store = Database(settings.database_url), ArtifactStore(settings.artifact_dir)
-        driven = drive_run(
-            settings,
-            db,
-            store,
-            config.briefs[brief_key],
-            profile=profile,
-            approvals=config.approvals,
-        )
-        run_id, recorded = driven.run_id, driven.approvals
+        if run_id is None:
+            driven = drive_run(
+                settings,
+                db,
+                store,
+                config.briefs[brief_key],
+                profile=profile,
+                approvals=config.approvals,
+            )
+            run_id, recorded = driven.run_id, driven.approvals
         metrics |= flatten(run_metrics(db, store, run_id))
         models, prompts = _run_identity(db, run_id)
         if "challenger" in chosen:
@@ -264,6 +296,14 @@ def run(
     as_json: Annotated[
         bool, typer.Option("--json", help="Print the report JSON instead of the summary.")
     ] = False,
+    run_id: Annotated[
+        str | None,
+        typer.Option(
+            "--run-id",
+            help="Evaluate this existing completed run instead of driving a new one "
+            "(its profile must match --profile).",
+        ),
+    ] = None,
 ) -> None:
     """Run a profile's eval layers, record the report, and compare it with a baseline."""
     # Inputs and outputs are checked before any layer runs (and spends).
@@ -277,7 +317,9 @@ def run(
     configure_logging("WARNING" if "MODELFORGE_LOG_LEVEL" not in os.environ else settings.log_level)
     evals = _load_config(config)
     try:
-        report = run_eval(settings, evals, config, profile, brief=brief, layers=layers)
+        report = run_eval(
+            settings, evals, config, profile, brief=brief, layers=layers, run_id=run_id
+        )
     except EvalConfigError as exc:
         _fail(str(exc))
     except EvalError as exc:

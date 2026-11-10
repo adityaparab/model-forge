@@ -17,10 +17,11 @@ from modelforge_gateway.schemas import GatewayError
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.steps import list_artifacts
+from modelforge_lineage.store import ArtifactStore
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
 
-from .conftest import REPO
+from .conftest import REPO, SYNTHETIC_BRIEF, queued_run
 
 BASELINE = REPO / "evals/baselines/fake.json"
 
@@ -263,3 +264,71 @@ def test_evals_run_exits_2_when_a_probe_fails(
     assert probe.status == "needs_attention" and probe.requester == "evals"
     assert probe.brief_hash == pipeline.brief_hash
     assert not (tmp_path / "reports").exists()
+
+
+def _pipeline_run_count(database: Database) -> int:
+    """Runs other than the probe runs (requester ``evals``)."""
+    with database.connection() as conn:
+        return sum(r.requester != "evals" for r in runs.list_runs(conn, limit=1000))
+
+
+@pytest.mark.db
+def test_evals_run_with_run_id_evaluates_an_existing_run(
+    cli: Cli, database: Database, completed_run_id: str, tmp_path: Path
+) -> None:
+    reports = tmp_path / "reports"
+    before = _pipeline_run_count(database)
+    result = cli(
+        "run",
+        "--profile",
+        "fake",
+        "--run-id",
+        completed_run_id,
+        "--report-dir",
+        str(reports),
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [p.name for p in _reports(reports)] == [f"fake-{completed_run_id}.json"]
+    report = EvalReport.model_validate_json((reports / f"fake-{completed_run_id}.json").read_text())
+    assert report.run_id == completed_run_id
+    assert report.approvals == ["approve", "accept", "approve"]
+    assert report.brief == "synthetic" and len(report.probe_run_ids) > 0
+    assert _pipeline_run_count(database) == before
+    with database.connection() as conn:
+        kinds = [a.kind for a in list_artifacts(conn, completed_run_id)]
+    assert kinds.count("eval_report") == 1
+
+
+@pytest.mark.db
+def test_evals_run_with_run_id_rejects_unsealed_or_mismatched_runs(
+    cli: Cli,
+    database: Database,
+    store: ArtifactStore,
+    completed_run_id: str,
+    tmp_path: Path,
+) -> None:
+    reports = tmp_path / "reports"
+    queued = queued_run(database, store, SYNTHETIC_BRIEF)
+    result = cli("run", "--profile", "fake", "--run-id", queued, "--report-dir", str(reports))
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert queued in result.stderr and "queued" in result.stderr
+    assert "Traceback" not in result.stderr
+    mismatch = cli(
+        "run", "--profile", "default", "--run-id", completed_run_id, "--report-dir", str(reports)
+    )
+    assert mismatch.returncode == 2, mismatch.stdout + mismatch.stderr
+    assert completed_run_id in mismatch.stderr and "fake" in mismatch.stderr
+    assert "Traceback" not in mismatch.stderr
+    retrieval = cli(
+        "run",
+        "--profile",
+        "fake",
+        "--layers",
+        "retrieval",
+        "--run-id",
+        completed_run_id,
+        "--report-dir",
+        str(reports),
+    )
+    assert retrieval.returncode == 2 and "pipeline" in retrieval.stderr
+    assert not reports.exists()
