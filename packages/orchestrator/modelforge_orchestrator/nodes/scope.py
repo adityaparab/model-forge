@@ -130,13 +130,14 @@ def brief_block(brief_yaml: str) -> str:
     """The brief as the scope prompt shows it: ``brief_yaml`` without its ``restricted_terms``.
 
     The terms are the redaction scan's own list, so a prompt that carried them would always
-    trip the scan. The mapping is re-dumped in its original key order; comments are dropped.
+    trip the scan. The mapping is re-dumped in its original key order with no line folding (a
+    fold could split a multi-word term across lines); comments are dropped.
     """
     loaded = yaml.safe_load(brief_yaml)
     if not isinstance(loaded, dict):
         raise ValueError("the brief is not a YAML mapping")
     shown = {key: value for key, value in loaded.items() if key != "restricted_terms"}
-    return yaml.safe_dump(shown, sort_keys=False, allow_unicode=True)
+    return yaml.safe_dump(shown, width=10**9, sort_keys=False, allow_unicode=True)
 
 
 def scope_request(

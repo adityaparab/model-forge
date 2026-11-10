@@ -158,8 +158,13 @@ def test_scope_replay_copies_plan_and_notes_but_records_index(
         assert list_llm_calls(conn, state.run_id) == []
 
 
-def _restricted_brief(term: str) -> bytes:
+def _restricted_brief(term: str, portfolio: str | None = None) -> bytes:
     text = SYNTHETIC_BRIEF.read_text()
+    if portfolio is not None:
+        text = "\n".join(
+            f"portfolio: {portfolio}" if line.startswith("portfolio:") else line
+            for line in text.splitlines()
+        )
     return (text.rstrip("\n") + f"\nrestricted_terms: [{term}]\n").encode()
 
 
@@ -185,3 +190,25 @@ def test_scope_runs_when_the_term_appears_only_in_restricted_terms(
     assert update["plan"].model_name == "synthetic_pd"
     # The `brief` artifact keeps the raw bytes, `restricted_terms` included.
     assert b"restricted_terms: [platt]" in store.get(state.brief_ref)
+
+
+@pytest.mark.db
+def test_scope_refuses_a_term_straddling_the_yaml_fold_column(
+    db: Database, store: ArtifactStore, runtime: Runtime[Deps]
+) -> None:
+    # "Acme" ends just before column 80 of the dumped `portfolio:` line, where a default
+    # `yaml.safe_dump` folds the scalar and would split the term across two lines.
+    portfolio = (
+        "A long portfolio description that goes on and on for the purpose of Acme Holdings Ltd book"
+    )
+    assert (
+        (len("portfolio: ") + portfolio.index("Acme Holdings"))
+        < 80
+        < (len("portfolio: ") + portfolio.index("Holdings") + len("Holdings"))
+    )
+    brief = _restricted_brief("Acme Holdings", portfolio)
+    state = make_run(db, store, brief_bytes=brief)
+    state = apply_update(state, intake(state, runtime))
+    with pytest.raises(GatewayError) as exc:
+        scope(state, runtime)
+    assert exc.value.kind == "redaction" and "restricted_term" in str(exc.value)

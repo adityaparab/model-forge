@@ -39,3 +39,10 @@ def test_digit_run_skips_decimals_and_citation_ids() -> None:
     assert scan("see [K:k_123456789012]") is None
     assert scan("obligor 123456789012") == "digit_run"
     assert scan("ids 123456789012 and 0.5") == "digit_run"
+
+
+def test_restricted_term_matches_across_any_whitespace() -> None:
+    assert scan("Acme\n  Holdings Ltd", ["Acme Holdings"]) == "restricted_term"
+    assert scan("acme\tholdings", ["Acme  Holdings"]) == "restricted_term"
+    assert scan("AcmeHoldings", ["Acme Holdings"]) is None
+    assert scan("Acme Holdingsx", ["Acme Holdings"]) is None

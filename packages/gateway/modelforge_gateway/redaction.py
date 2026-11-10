@@ -27,7 +27,11 @@ class RedactionHit(StrictModel):
 
 
 def _restricted_pattern(terms: Sequence[str]) -> re.Pattern[str] | None:
-    alternatives = [re.escape(term) for term in terms if term.strip()]
+    """One whole-word, case-insensitive pattern for ``terms``; whitespace inside a term matches
+    any whitespace run, so a term split across lines (``Acme\\n  Holdings``) still matches."""
+    alternatives = [
+        r"\s+".join(re.escape(word) for word in term.split()) for term in terms if term.strip()
+    ]
     if not alternatives:
         return None
     return re.compile(r"(?<!\w)(?:" + "|".join(alternatives) + r")(?!\w)", re.IGNORECASE)
