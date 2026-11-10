@@ -1,4 +1,5 @@
 import json
+import re
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
@@ -168,6 +169,7 @@ def test_cli_replay_detach_json_prints_one_document(cli: Cli, settings: Settings
     document = json.loads(result.stdout)
     assert document["report"] is None
     assert document["run"]["replay_of"] == run_id and document["run"]["status"] == "queued"
+    assert re.fullmatch(r"[0-9a-f]{32}", document["run"]["trace_id"])
 
 
 @pytest.mark.db

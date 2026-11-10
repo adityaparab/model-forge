@@ -1,4 +1,4 @@
-"""Run creation from a brief, shared by the ``modelforge run`` command and the eval harness."""
+"""Run creation from a brief, shared by the ``modelforge run`` command, the API and the evals."""
 
 from pathlib import Path
 
@@ -13,10 +13,11 @@ from modelforge_lineage.models import RunRecord
 from modelforge_lineage.queue import enqueue
 from modelforge_lineage.steps import insert_artifact
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
+from modelforge_lineage.tracing import new_trace_id
 
-from modelforge_orchestrator.briefs import BriefError, brief_hash, load_brief, plan_from_brief
+from modelforge_orchestrator.briefs import BriefError, brief_hash, parse_brief, plan_from_brief
 
-__all__ = ["UnknownAdapterError", "create_run_from_brief"]
+__all__ = ["UnknownAdapterError", "create_run", "create_run_from_brief"]
 
 
 class UnknownAdapterError(KeyError):
@@ -40,14 +41,36 @@ def create_run_from_brief(
     cost_cap_usd: float,
     gateway: GatewaySettings,
 ) -> RunRecord:
+    """`create_run` from the brief at ``brief_path``; `OSError` when it cannot be read."""
+    return create_run(
+        db,
+        store,
+        brief_path.read_bytes(),
+        requester=requester,
+        profile=profile,
+        cost_cap_usd=cost_cap_usd,
+        gateway=gateway,
+    )
+
+
+def create_run(
+    db: Database,
+    store: ArtifactStore,
+    data: bytes,
+    *,
+    requester: str,
+    profile: str,
+    cost_cap_usd: float,
+    gateway: GatewaySettings,
+) -> RunRecord:
     """Validate the brief and the profile, store the brief, create the run and enqueue a start.
 
-    Raises `BriefError` for a brief that does not parse or yields no valid plan, `OSError` when
-    it cannot be read, `UnknownAdapterError` (a `KeyError`) for an unknown dataset adapter and
-    `GatewayError` for a profile that ``gateway`` cannot load or lacks credentials for; nothing
-    is written before every check passes.
+    Raises `BriefError` for a brief that does not parse or yields no valid plan,
+    `UnknownAdapterError` (a `KeyError`) for an unknown dataset adapter and `GatewayError` for
+    a profile that ``gateway`` cannot load or lacks credentials for; nothing is written before
+    every check passes. The run gets a fresh trace id.
     """
-    brief, data = load_brief(brief_path)
+    brief = parse_brief(data)
     if brief.dataset.adapter not in ADAPTERS:
         raise UnknownAdapterError(brief.dataset.adapter)
     try:
@@ -68,6 +91,7 @@ def create_run_from_brief(
             dataset_ref=brief.dataset.as_string(),
             seed=brief.dataset.seed,
             cost_cap_usd=cost_cap_usd,
+            trace_id=new_trace_id(),
         )
         insert_artifact(conn, run_id=run_id, ref=ref, uri=store.uri(ref.id), producer_step_id=None)
         enqueue(conn, run_id, "start")

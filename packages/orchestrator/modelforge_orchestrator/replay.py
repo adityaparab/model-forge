@@ -3,6 +3,7 @@
 from modelforge_lineage import queue, runs
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import RunRecord
+from modelforge_lineage.tracing import new_trace_id
 from psycopg import Connection
 from psycopg.rows import DictRow
 
@@ -73,7 +74,8 @@ def create_replay(
     """Create and enqueue a replay of a `completed` or `rejected` run; call inside a transaction.
 
     The replay inherits the original's cost cap; ``rerun_llm`` makes its LLM nodes call the
-    gateway again instead of copying the original's outputs.
+    gateway again instead of copying the original's outputs. The replay gets its own fresh trace
+    id.
     """
     original = runs.get_run(conn, original_run_id)
     if original.status not in ("completed", "rejected"):
@@ -93,6 +95,7 @@ def create_replay(
         replay_of=original.id,
         cost_cap_usd=original.cost_cap_usd,
         rerun_llm=rerun_llm,
+        trace_id=new_trace_id(),
     )
     queue.enqueue(conn, run_id, "replay")
     return record

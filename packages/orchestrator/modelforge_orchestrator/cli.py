@@ -17,25 +17,22 @@ from modelforge_lineage import migrate as lineage_migrate
 from modelforge_lineage import runs
 from modelforge_lineage.approvals import ApprovalError, record_approval
 from modelforge_lineage.db import Database
-from modelforge_lineage.events import list_events
 from modelforge_lineage.findings import list_findings
-from modelforge_lineage.llm_calls import list_llm_calls
-from modelforge_lineage.models import ArtifactRef, GateDecision, GateName, RunRecord
+from modelforge_lineage.models import GateDecision, GateName, RunRecord
 from modelforge_lineage.observability import configure_logging
 from modelforge_lineage.queue import enqueue, release
 from modelforge_lineage.steps import list_steps
 from modelforge_lineage.store import ArtifactStore
 from modelforge_lineage.verify import verify_run
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from modelforge_orchestrator.briefs import BriefError
 from modelforge_orchestrator.config import Settings, load_settings
-from modelforge_orchestrator.graph import build_graph
+from modelforge_orchestrator.inspect import gate_prompt, run_refs, run_snapshot
 from modelforge_orchestrator.replay import ReplayError, create_replay
 from modelforge_orchestrator.schemas import ReplayReport
 from modelforge_orchestrator.submit import UnknownAdapterError, create_run_from_brief
 from modelforge_orchestrator.worker import (
-    make_checkpointer,
     run_loop,
     run_once,
     setup_checkpointer,
@@ -77,20 +74,7 @@ def _get_run(db: Database, run_id: str) -> RunRecord:
         _fail(f"run not found: {run_id}")
 
 
-def _refs(db: Database, run_id: str) -> dict[str, ArtifactRef]:
-    """The run's refs from its latest checkpoint; empty when none exists."""
-    graph = build_graph(make_checkpointer(db))
-    values: dict[str, Any] = graph.get_state({"configurable": {"thread_id": run_id}}).values
-    return {name: ArtifactRef.model_validate(ref) for name, ref in values.get("refs", {}).items()}
-
-
-def _gate_prompt(db: Database, run_id: str) -> dict[str, Any] | None:
-    """The payload of the run's latest ``gate.requested`` event; `None` when none exists."""
-    with db.connection() as conn:
-        events = list_events(conn, run_id)
-    requested = [e for e in events if e.type == "gate.requested"]
-    return requested[-1].payload if requested else None
-
+_SNAPSHOT = TypeAdapter(dict[str, Any])
 
 _SEVERITIES = ("critical", "high", "medium", "low")
 _FINDING_STATUSES = ("open", "accepted", "disputed", "closed")
@@ -110,7 +94,7 @@ def _run_lines(db: Database, run: RunRecord) -> list[str]:
     ]
     if run.status in _GATE_OF_STATUS:
         lines.append(f"gate: {_GATE_OF_STATUS[run.status]}")
-        prompt = _gate_prompt(db, run.id) or {}
+        prompt = gate_prompt(db, run.id) or {}
         lines.append(f"summary: {json.dumps(prompt.get('summary', {}), separators=(',', ':'))}")
     if run.status == "needs_attention" and run.error is not None:
         detail = run.error.get("error", {})
@@ -281,27 +265,18 @@ def status(
     _, db, _ = _context()
     try:
         record = _get_run(db, run_id)
+        if as_json:
+            snapshot = run_snapshot(db, run_id)
+            typer.echo(json.dumps(_SNAPSHOT.dump_python(snapshot, mode="json")))
+            return
         with db.connection() as conn:
             steps = list_steps(conn, run_id)
             findings = list_findings(conn, run_id)
-        refs = _refs(db, run_id)
-        if as_json:
-            with db.connection() as conn:
-                llm_calls = list_llm_calls(conn, run_id)
-            document = {
-                "run": record.model_dump(mode="json"),
-                "steps": [s.model_dump(mode="json") for s in steps],
-                "refs": {name: ref.model_dump(mode="json") for name, ref in refs.items()},
-                "gate_prompt": _gate_prompt(db, run_id),
-                "llm_calls": [c.model_dump(mode="json") for c in llm_calls],
-                "findings": findings,
-            }
-            typer.echo(json.dumps(document))
-            return
+        refs = run_refs(db, run_id)
         lines = _run_lines(db, record)
         if findings:
             lines.insert(2, _findings_line(findings))  # after the `cost:` line
-        lines.append(f"gate prompt: {json.dumps(_gate_prompt(db, run_id))}")
+        lines.append(f"gate prompt: {json.dumps(gate_prompt(db, run_id))}")
         lines += [f"step {s.node} {s.attempt} {s.status}" for s in steps]
         lines += [
             f"ref {name} {ref.id} {json.dumps(ref.summary, sort_keys=True)}"
@@ -382,7 +357,7 @@ def replay(
                 typer.echo(f"{record.id} queued")
             return
         record = _execute(settings, db, store, record.id)
-        ref = _refs(db, record.id).get("replay_report")
+        ref = run_refs(db, record.id).get("replay_report")
         if ref is None:
             if as_json:
                 typer.echo(json.dumps({"run": record.model_dump(mode="json"), "report": None}))
