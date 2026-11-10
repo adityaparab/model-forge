@@ -324,3 +324,20 @@ The Dockerfile copies `packages/gateway/pyproject.toml` and `packages/knowledge/
 - 9: the knowledge index is a content-addressed artifact pinned in every manifest; BM25 only; pgvector unused until a later sub-project.
 - 10.1: `llm_calls.seq`, `llm_calls.ts`, `runs.rerun_llm`.
 - 17 row 3: as built, plus `scope_notes` and `knowledge_index` refs.
+
+## 13. As-built amendments (2026-11-10)
+
+Decisions made during execution that change or sharpen the text above; each is recorded with its reasoning in `docs/superpowers/notes/2026-11-09-sp3-handoff.md`.
+
+- 2: import-linter contract 7 ("only the gateway providers import LangChain integrations") lists the gateway's non-provider modules by name and checks direct imports only (`allow_indirect_imports = true`), because `gateway.gateway -> providers -> langchain_*` is the indirection the design requires; a new non-provider gateway module must be added to its source list.
+- 3.2: a `validate` hook (`Gateway.complete(request, validate=...)`) lets a caller treat a parsed object as invalid, with the same retry path as a schema failure; an exception raised by the hook is recorded as a failed attempt and then raised as `config`. The cost cap is checked once, before the first attempt, so up to two recorded retries can run past it.
+- 3.3: the Anthropic builder always passes an explicit `base_url` (`MODELFORGE_ANTHROPIC_BASE_URL` or `https://api.anthropic.com`) because the SDK would otherwise read `ANTHROPIC_BASE_URL` from the environment; `effort` is passed first-class (the integration's `reasoning_effort` alias); `check_credentials(profile, settings)` runs at `modelforge run`; an empty environment value counts as unset.
+- 3.6: excerpt floats are rounded to four significant figures in the JSON sent to the model (integers untouched) because full-precision floats carry digit runs that trip the redaction scan; grounding still checks against the raw artifact. The scan's restricted-term match is `(?<!\w)term(?!\w)`, case-insensitive.
+- 3.8: the fake's faults are a constructor mapping `faults={section_id: "ungrounded" | "refuse"}` rather than section-id suffixes; it reports usage as prompt and output characters divided by four; its section scripts use only the aliases their section may cite and name a regulation only in `regulatory_context`.
+- 4.3: BM25 scores each chunk over its heading path plus its text (`Chunk.text` unchanged); the golden retrieval questions name a `doc_id` and a `must_contain` substring instead of citation ids.
+- 4.4: `get_index` takes an empty input model; a corpus that fails to load makes the server refuse to start (`RuntimeError`).
+- 5: the scope node also calls `list_template_sections` so the defaults block carries the section titles; it stores `scope_notes` and records `knowledge_index` on every run, replays included.
+- 6.1: `templates/sr11-7-dev-doc/sections.yaml` gained citeable `artifact_kinds` for the sections that had none (executive summary, purpose, regulatory context, limitations, monitoring, governance); the governance section's prompt block lists the run's artifact ids as non-citable `run_artifacts`.
+- 6.4 and 6.5: the citation marker regex accepts one nested bracket level so `tests[disc.auc.oot].status` works inside a marker (no doc-renderer version bump); numeric tokens carry a sign and may use exponent notation (`4.262e-84`, compared at the mantissa's precision); a number with an attached unit suffix, ordinal or other letters (`50k`, `3x`, `9pp`, `2nd`) is a token that never grounds; a cited string grounds a number only through the string's own numeric tokens (so `f_12` grounds nothing); dates, including bare years, regulation names, markers and inline code are not claims; a number before a sentence-ending period is still checked.
+- 7: `Settings.gateway` nests `GatewaySettings`; plain `status` prints `error: llm <kind>: <message>` for gateway failures and a `cost:` line; a replay inherits its original's cost cap; `ErrorRecord.kind` gained `llm`.
+- 12: prompt files are immutable once they have shipped on `main` or been recorded in a durable `prompts` row; on an unmerged branch a `v1` file may still be edited.

@@ -537,3 +537,17 @@ Default thresholds (configurable per plan): AUC on out-of-time >= 0.70 pass, 0.6
 - **Effective challenge**: SR 11-7's requirement that validation be performed by people with incentives, competence and influence independent of model development.
 - **MRM**: model risk management, the second-line function that validates and approves models.
 - **Model inventory**: the register of every model in use, its status, owner, and review schedule.
+
+## 20. As-built amendments from SP3 (2026-11-10)
+
+Recorded against `docs/superpowers/specs/2026-11-09-sp3-gateway-knowledge-agents-design.md` (its section 13 lists the SP3-internal amendments) and `docs/superpowers/notes/2026-11-09-sp3-handoff.md`.
+
+- 4.1: six packages; layering `orchestrator > (mcp | gateway) > knowledge > lineage > core`; seven import-linter contracts, the seventh allowing only `modelforge_gateway.providers` to import `langchain_anthropic`, `langchain_ollama`, `langchain_openai` (direct imports; the indirection through `providers` is the design).
+- 4.5 and 8.2: drafts cite with ref aliases (`[A:discrimination#by_split.oot.auc]`) that the document node expands to artifact ids before the checks and the renderer; list elements are selected by `split`, `test_id`, `feature`, `grade` or `name`, a discriminator containing dots is written in brackets (`tests[disc.auc.oot].status`), and `count` on a list is its length; number grounding compares a token at its own precision (at most four significant figures), accepts percent forms against value × 100, signed and exponent-notation tokens, grounds through cited strings only via their own numeric tokens, treats unit-suffixed tokens as never grounded, and ignores dates, regulation names, markers and inline code.
+- 7.1: the gateway is a class with `complete()` rather than a Runnable with a callback handler; structured output uses `with_structured_output(include_raw=True)`; every attempt (including schema retries) is an `llm_calls` row with a raw-response artifact; no streaming.
+- 7.2: `langchain-anthropic` 1.7 exposes `effort` first-class; the gateway passes an explicit API base URL and never reads `ANTHROPIC_BASE_URL`.
+- 7.5: redaction has a structural layer (per-kind excerpts that drop rows, model text, isotonic arrays, bins and original column names; floats rounded to four significant figures) and a scan (e-mail, IBAN-like tokens, nine-plus digit runs not adjacent to hex, original column names, the brief's `restricted_terms`); it refuses, never masks.
+- 9: the knowledge index is a content-addressed artifact (`knowledge_index`) pinned in every manifest, built from `knowledge-base/` at server start; retrieval is BM25 over heading path plus text; no embeddings and no pgvector use in SP3 (the image stays `pgvector/pgvector:pg16`; SP4's retrieval eval decides whether a dense channel is worth adding).
+- 10.1: `llm_calls` gained `seq` and `ts`; `runs` gained `rerun_llm`; the `prompts` table is written by the gateway's registry, which refuses a same-name-and-version file with a different hash.
+- 10.4: `--rerun-llm` regenerates `scope` and `document` in SP3 (`challenge` and `remediate` still copy until SP4) and the replay report lists the regenerated refs (`document_md`, `document_html`, `completeness`) apart from the comparison.
+- 17 row 3 as built: `RunState.refs` gained `scope_notes` and `knowledge_index`; the knowledge server's tools are `search_regulation`, `get_passage`, `get_index`; the `fake` profile is a scripted stand-in used by CI and the end-to-end tests, not a recording.
