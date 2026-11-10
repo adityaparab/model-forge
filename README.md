@@ -4,13 +4,30 @@ ModelForge is a governed, multi-agent copilot for the credit risk model developm
 
 The core toolkit (`packages/core`, `modelforge_core`) is the deterministic, LLM-free layer underneath. It loads a dataset into a canonical schema, profiles it and screens for leakage, builds train / validation / out-of-time splits, fits monotone WoE binning and IV / correlation feature selection, trains a WoE logistic scorecard champion and a LightGBM challenger, calibrates the champion, and validates it: discrimination (AUC, KS, Gini with bootstrap intervals), calibration (per-grade binomial, Hosmer-Lemeshow, expected / observed), stability (PSI, CSI), sensitivity (coefficient signs, WoE monotonicity, bin shifts), and a champion-challenger benchmark. The champion is refit iteratively, dropping any feature whose coefficient has the wrong sign, and these drops are recorded in the feature selection artifact. Every result is checked against documented thresholds into a single validation report. Models are stored as JSON (scorecard) and LightGBM native text (challenger); nothing is pickled.
 
-The orchestrator (`packages/orchestrator`, `modelforge_orchestrator`) turns that toolkit into a governed run. A YAML brief starts a LangGraph run whose nodes call the toolkit only through MCP servers (`packages/mcp`). Every input and output is a content-addressed artifact, and every step, tool call and decision is an event in a hash-chained lineage store in Postgres (`packages/lineage`). The run stops at three human gates (scope, model, sign-off), with four-eyes checks on the last two, and a sealed run can be replayed to reproduce every deterministic artifact hash. This is a reference implementation, not a production system: sub-project 3 added the LangChain model gateway, through which the scope and documentation agents run, and sub-project 4 added an independent challenger agent, a bounded remediation loop between the challenger and the documentation agent, and an eval harness.
+The orchestrator (`packages/orchestrator`, `modelforge_orchestrator`) turns that toolkit into a governed run. A YAML brief starts a LangGraph run whose nodes call the toolkit only through MCP servers (`packages/mcp`). Every input and output is a content-addressed artifact, and every step, tool call and decision is an event in a hash-chained lineage store in Postgres (`packages/lineage`). The run stops at three human gates (scope, model, sign-off), with four-eyes checks on the last two, and a sealed run can be replayed to reproduce every deterministic artifact hash. This is a reference implementation, not a production system: sub-project 3 added the LangChain model gateway, through which the scope and documentation agents run, and sub-project 4 added an independent challenger agent, a bounded remediation loop between the challenger and the documentation agent, and an eval harness. Sub-project 5 put a control plane over the run: an HTTP API (`packages/api`, `modelforge_api`), a web console (`console/`) served by that API, and OpenTelemetry traces exported to Jaeger and Arize Phoenix.
 
 ## Quick start
 
 ```bash
-uv sync --all-groups
-make lint test   # ruff, pyright, import-linter, then the full suite (slow tests use real data)
+make demo        # Docker Compose: Postgres, Jaeger, Phoenix, the API and the worker, plus one demo run
+```
+
+`make demo` builds the image (the console is built inside it), starts the five services, waits until `GET /api/v1/health` answers `ok`, submits `examples/briefs/polish-pd.yaml` under the `fake` profile as `alice` through the API, and prints the run id and its console URL, opening it in the browser when it can. It needs Docker, `curl` and `python3` on the host and nothing else, and it calls no model. The worker downloads the dataset into `./data` on first use, so the first run takes a little longer.
+
+| What | Where |
+| --- | --- |
+| Console | `http://localhost:8000` |
+| API documentation (OpenAPI) | `http://localhost:8000/docs` |
+| Jaeger | `http://localhost:16686` |
+| Phoenix | `http://localhost:6006` |
+
+In the console, type an identity in the top bar (`alice`), approve the scope gate, then switch the identity to `bob` to accept the model and approve the sign-off: the `model` and `signoff` decisions must come from someone other than the requester. Once the run is sealed the worker replays it on its own and the run's Overview shows the reproducibility badge. `make down` (or `make demo-down`) stops the stack; `docker compose down -v` also deletes the database volume. If port 5432 is taken by another Postgres, `MODELFORGE_POSTGRES_PORT=5433 make demo` publishes the Compose one elsewhere (the API and the worker reach it inside the Compose network either way).
+
+To work on the code:
+
+```bash
+make sync        # uv sync --all-groups and npm ci --prefix console
+make lint test   # ruff, pyright, import-linter, the console's typecheck and lint, then the Python suite and the console tests
 make example     # end-to-end run on the Polish data, out-of-time vintage 5
 ```
 
@@ -52,9 +69,113 @@ uv run modelforge verify <run_id>          # walk the event hash chain, artifact
 | `model` | `accept`, `adjust`, `reject` |
 | `signoff` | `approve`, `approve_with_conditions`, `reject` |
 
-`edit` and `adjust` take a modeling plan with `--plan`; `approve_with_conditions` takes one or more `--condition`. The `model` and `signoff` decisions must come from someone other than the requester, and `approve` at `signoff` is refused while a critical or high finding of the challenger is open or disputed (see "Remediation loop"). Run statuses are `queued`, `running`, `awaiting_scope`, `awaiting_model`, `awaiting_signoff`, `needs_attention`, `completed`, `rejected` and `aborted`. A run that fails a tool call parks in `needs_attention`; `uv run modelforge resume <run_id>` retries it from its last checkpoint and `uv run modelforge abort <run_id>` ends it. A run parked by its cost cap resumes with a higher cap: `uv run modelforge resume <run_id> --cost-cap 20` sets the cap in USD before re-enqueueing (allowed only from `needs_attention`). `run`, `approve`, `resume` and `replay` accept `--detach` to only enqueue and leave execution to a worker (`uv run modelforge worker`).
+`edit` and `adjust` take a modeling plan with `--plan`; `approve_with_conditions` takes one or more `--condition`. The `model` and `signoff` decisions must come from someone other than the requester, and `approve` at `signoff` is refused while a critical or high finding of the challenger is open or disputed (see "Remediation loop"). Run statuses are `queued`, `running`, `paused`, `awaiting_scope`, `awaiting_model`, `awaiting_signoff`, `needs_attention`, `completed`, `rejected` and `aborted`. A run that fails a tool call parks in `needs_attention`; `uv run modelforge resume <run_id>` retries it from its last checkpoint and `uv run modelforge abort <run_id>` ends it. A run parked by its cost cap resumes with a higher cap: `uv run modelforge resume <run_id> --cost-cap 20` sets the cap in USD before re-enqueueing (allowed from `needs_attention` and `paused`). `run`, `approve`, `resume` and `replay` accept `--detach` to only enqueue and leave execution to a worker (`uv run modelforge worker`).
+
+**Pause.** `uv run modelforge pause <run_id>` (or the console's Pause button) asks a `running` run to stop at its next node boundary; it is refused in any other status. The worker parks the run in `paused` before it starts the next node, writes a `run.paused` event naming that node and releases its queue row; `resume` continues from the last checkpoint and `abort` ends it. The three gate nodes and `seal` ignore the request (a gate resumes an interrupt that must not be split from its step; `seal` takes seconds). There is no cancellation of a running run: `abort` is refused while `running`, so pause first, then abort. A pause request that arrives too late (the run parks at a gate, fails or finishes first) is cleared, never carried into a later execution.
 
 The run manifest records every artifact hash, and `replay` reproduces each deterministic artifact byte for byte. A plain replay does not call a model: it copies the original's modeling plan, scope notes and final document sections and re-renders the document, so the document refs match too, and it copies the original's findings and responses instead of running the challenger and the remediation loop. `--rerun-llm` runs the scope, documentation, challenger and remediation agents again; the rendered document, completeness, findings and responses refs are then listed under `regenerated` instead of being compared, and `ok` ignores them. `verify` exits non-zero if an event or artifact has been altered.
+
+**Replay from the console and on seal.** A sealed run's header offers Replay and Replay with `--rerun-llm`; both create the replay run and leave it to the worker, and the Overview's replays panel shows each replay with its report. When the `auto_replay` setting is on, the worker creates a plain replay of every non-replay run that completes (the replay's `run.created` event carries `{"auto": true}`; a replay is never replayed again), and the panel shows "Reproduced: N artifacts matched" once it seals, or the mismatched refs. A failure to create the automatic replay is logged and leaves the original run as it is. The setting is off by default and on in Compose.
+
+**Through the API and the console.** The same sequence runs over HTTP with the worker executing: `POST /api/v1/runs` creates and enqueues the run, `POST /api/v1/runs/{id}/approvals` records a decision and enqueues the resume, and the console's gate panel posts the same request. Every write names its actor in the `X-ModelForge-User` header (1 to 64 characters of `[A-Za-z0-9._@-]`); the console sends whatever identity is typed in its top bar. The approver of a gate is that identity, and the four-eyes rule and the sign-off rule are enforced by lineage exactly as for the CLI, so a refusal comes back as `409` with the same message (and, for the sign-off rule, the blocking findings), which the console shows inline. With the stack from `make demo` running:
+
+```bash
+curl -s -X POST 'http://localhost:8000/api/v1/runs?profile=fake' \
+  -H 'X-ModelForge-User: alice' -H 'Content-Type: application/yaml' \
+  --data-binary @examples/briefs/synthetic.yaml
+curl -s -X POST http://localhost:8000/api/v1/runs/<run_id>/approvals \
+  -H 'X-ModelForge-User: alice' -H 'Content-Type: application/json' \
+  -d '{"gate": "scope", "decision": "approve"}'
+```
+
+The header is an identity, not authentication: anyone who reaches the API can send any name. `MODELFORGE_USERS` adds an optional role map, a space-separated list of `name:role[,role]` entries such as `alice:requester bob:approver carol:admin,approver`. `requester` may submit a run; `approver` may decide a gate, pause, resume, abort and replay; `admin` may change the server-side settings. Unset (or empty), every identity has every role, which is what the demo and the tests use. A write by an identity without the role is `403`; a missing or malformed header is `401`. A malformed entry, an unknown role or a name listed twice is a configuration error at startup. The CLI keeps `--requester` and `--approver`.
+
+**Server-side settings.** Three defaults live in the database rather than the environment, so they can be changed while the stack runs: `default_profile` (the profile a run submitted without one gets), `default_cost_cap_usd` (its cost cap) and `auto_replay`. They are seeded from `MODELFORGE_PROFILE`, `MODELFORGE_COST_CAP_USD` and `MODELFORGE_AUTO_REPLAY` the first time `modelforge migrate`, the worker or the API starts against a database, and only when the key is absent; after that the database value wins for the API and the worker. The CLI's `run` keeps its environment defaults. The console's Settings page (or `PATCH /api/v1/settings`, which needs the `admin` role under a role map) edits them; every change writes an audit row with the old and new value and who made it, and the page lists the last 20. A profile must name a file in the profiles directory and the cap must be positive. Identity and tracing stay environment-only.
+
+**Costs across runs.** The console's Costs page (and `GET /api/v1/costs?since&until`, default the last 30 days) totals the `llm_calls` rows of a window: spend, runs, calls and tokens, by day, by run (cost against cap), by profile, by model and by purpose. Every run created in the window is listed, with zero cost when it made no call, so `fake` runs count at 0 USD.
+
+## Console
+
+The console (`console/`, React 19, Vite, TypeScript, TanStack Query, Tailwind CSS) is a dark operations view over the API, served by the API itself from `/`. Pages:
+
+| Page | Path | What it shows |
+| --- | --- | --- |
+| Runs | `/runs` | every run with model name, status, profile, requester, cost against cap, findings and the highest open severity, replays marked; filters by status, profile and requester and a toggle to hide replays; updated live |
+| New run | `/runs/new` | an example brief picker (from `examples/briefs`) that fills a YAML editor, the profile and the cost cap (both defaulting to the server-side settings); the server's `400` message shown inline |
+| Run detail | `/runs/:id` | a header with status, cost, trace links and the actions the status allows (pause, resume with an optional new cap, abort, replay), and six tabs: Overview (the fourteen-node timeline with attempts, durations and call counts, the live event feed, the gate panel with its decision form, the `needs_attention` panel, approvals, replays and the reproducibility badge), Document (sections with a grounding badge each and hovers that resolve every `[A:]` marker to its artifact value and every `[K:]` marker to its passage; HTML and Markdown downloads), Validation (the thirteen tests and the thresholds), Findings (grouped by the round that raised them, with responses and verdicts), Lineage (the artifacts, the event hash chain with a verify button, the manifest), LLM calls (every attempt and the cost by purpose and model) |
+| Inventory | `/inventory` | the model inventory entries with links to their runs |
+| Costs | `/costs` | spend across runs over 7, 30 or 90 days |
+| Settings | `/settings` | the identity and the role map, the editable defaults with their audit list, and the read-only configuration: profiles with routes and prices, directories, tracing endpoints and the content flag, versions |
+
+The identity typed in the top bar is kept in the browser's local storage and sent as `X-ModelForge-User` on every write; reads need none. Run pages follow the run's event stream and refetch what changed, and the Runs page follows the global stream; the top bar shows whether the stream is `live`, `reconnecting` or `offline`.
+
+**Building.** The Docker image builds the console in a Node stage and the API serves it from `MODELFORGE_CONSOLE_DIR`. Outside Docker, `make console` builds it into `console/dist` (git-ignored), which `make api` then serves at `http://localhost:8000`; the API needs Postgres (`make db-up`) and runs execute only while a worker runs beside it (`make worker`). Without a build the API answers `/` with a short page naming `make console` and `make ui-dev`.
+
+**Development mode** is opt-in. `make ui-dev` runs the Vite dev server (on Vite's default `http://localhost:5173`) with hot reload and proxies `/api` to the API on `http://localhost:8000`, so run `make api` (or the Compose stack) beside it and open the Vite URL. Setting `MODELFORGE_CONSOLE_DEV_URL=http://localhost:5173` for the API makes it redirect `/` and every other console path there (307), so links into `:8000` land on the dev server too.
+
+**Types and fixtures.** `console/src/api/types.gen.ts` is generated from the API's OpenAPI document: `make console-types` writes `console/openapi.json` with `modelforge-api openapi` (no database needed) and regenerates the types from it. Both files are committed and CI fails when `make console-types` changes them. `console/src/fixtures/*.json` are the read endpoints' responses for one completed synthetic `fake` run, the console tests' data; `make console-fixtures` drives that run on a temporary database (it needs Postgres) and rewrites them, with directories written as `<dir>` and artifact URIs as `artifact://<id>` so the files carry nothing machine-specific. Refresh them by hand when an endpoint's shape changes. `make console-test` runs the console tests (Vitest and React Testing Library over the fixtures); `make test` includes them.
+
+## API
+
+The API (`packages/api`, `modelforge_api`, the `modelforge-api` command) is a FastAPI service over the lineage store. It never executes the graph and never calls a model: a write records lineage rows and enqueues, and the worker executes, exactly as the CLI's `--detach`. It applies the migrations and seeds the settings at startup. `modelforge-api` serves it (`serve` is the default command, with `--host`, `--port` and `--reload`); `modelforge-api openapi` prints the OpenAPI document; the interactive documentation is at `/docs`. Every path below is under `/api/v1`.
+
+| Read | Returns |
+| --- | --- |
+| `GET /health` | `{status, database, version}`; `503` when the database query fails |
+| `GET /config` | the redacted effective configuration: default profile, console mode, identity mode and roles, trace UI links, tracing endpoints and the content flag, directories, versions, the graph's nodes and the gates with their decisions |
+| `GET /briefs` | the example briefs of `MODELFORGE_BRIEFS_DIR` with their text |
+| `GET /runs` | runs newest first, with `limit` (1 to 200, default 50), `offset`, `status`, `profile`, `requester` and `replays=include|exclude` |
+| `GET /runs/{id}` | the run, its refs, counters, the open gate and its summary, approvals, findings and responses summaries, the cost summary, the inventory entry, the trace links and the replays |
+| `GET /runs/{id}/steps` | the steps in order, each with its duration, tool calls and LLM calls |
+| `GET /runs/{id}/llm-calls` | the `llm_calls` rows and the cost summary by purpose and model |
+| `GET /runs/{id}/artifacts`, `GET /runs/{id}/artifacts/{artifact_id}` | the run's artifacts with the ref names that point at each; one artifact's content (JSON, text, or a download) |
+| `GET /runs/{id}/document?format=sections|html|md` | the sections with titles, grounding and resolved citations (default), or the stored HTML or Markdown |
+| `GET /runs/{id}/validation` | the validation report |
+| `GET /runs/{id}/findings` | the findings, the remediation responses and a summary |
+| `GET /runs/{id}/approvals`, `GET /runs/{id}/manifest`, `GET /runs/{id}/verify` | the approvals; the sealed manifest; the result of verifying the event chain, artifacts and manifest |
+| `GET /runs/{id}/events?after&limit` | a page of the run's events after an event id |
+| `GET /runs/{id}/replays` | the run's replays, oldest first, each as `{run, report}` (the report `null` until the replay seals) |
+| `GET /inventory`, `GET /inventory/{model_id}` | the model inventory; one entry |
+| `GET /costs?since&until` | costs across runs (see "Costs across runs") |
+| `GET /settings` | the editable settings, the last 20 audit rows, the configuration and the profiles |
+
+| Write | Role | Effect |
+| --- | --- | --- |
+| `POST /runs` | `requester` | JSON `{brief, profile?, cost_cap_usd?}`, or the brief YAML as the body (`Content-Type: application/yaml`) with `profile` and `cost_cap_usd` as query parameters; `201` with the run; `400` for a brief that does not parse or a profile that is unknown or lacks its credential |
+| `POST /runs/{id}/approvals` | `approver` | `{gate, decision, comment?, plan?, adjust_target?, conditions?}`; `202`; `409` for a decision lineage refuses, or while a decision at this gate is already queued |
+| `POST /runs/{id}/resume` | `approver` | `{cost_cap_usd?}`, from `needs_attention` or `paused`; `202` |
+| `POST /runs/{id}/pause` | `approver` | from `running` only; `202` (the status changes at the next node boundary) |
+| `POST /runs/{id}/abort` | `approver` | refused while `running` (pause first) and once final; `200` |
+| `POST /runs/{id}/replay` | `approver` | `{rerun_llm?}`, for a sealed run; `202` with the replay run |
+| `PATCH /settings` | `admin` | any of `default_profile`, `default_cost_cap_usd`, `auto_replay`; returns the new settings document |
+
+A state change the run's status does not allow is `409`. Pause is one conditional update that succeeds only while the run is `running`; abort and the worker's claim change the status with one guarded update that names the statuses it may move from; the approvals and resume enqueue the resume only when none is queued. So a second gate decision while one is waiting is refused with `409`, and an abort racing a claim is never lost.
+
+**Errors.** Every error the API writes has one shape, `{"error": {"kind": ..., "message": ...}}`, sometimes with extra fields (the blocking findings of a sign-off refusal, the key of a refused setting, the validation details of a `422`). The kinds are `identity` (401), `role` (403), `not_found` (404), `not_ready` (409, a run without a document, validation report or manifest yet), `brief`, `profile` and `settings` (400), `approval` and `state` (409), `validation` (422, or 400 for a `since` after `until`) and `internal` (500, the exception type only, never a traceback).
+
+**Event streams.** `GET /runs/{id}/events/stream` and `GET /events/stream` are server-sent event streams of lineage events. Each message carries `id:` (the event id) and `data:` (the event record as JSON) and no `event:` line, so a browser `EventSource` delivers every message to `onmessage`; read the event type from `data.type`. A stream resumes after the `Last-Event-ID` header or an `?after=<id>` parameter; without either, the run stream starts at the run's first event and the global stream at the current head. The API polls the events table every 0.5 s and sends a keepalive comment after 15 s of silence; there is no `LISTEN`/`NOTIFY`. The run stream is exact, because a run's events are written one at a time. Across runs a lower event id can commit after a higher one was already sent, so the global stream re-reads a trailing window of 200 ids behind its cursor and skips ids it has sent; an event that commits more than 200 ids out of order is missed, and a reconnect may repeat events. The console uses the global stream only to refresh the run list, so neither matters there.
+
+```bash
+curl -N http://localhost:8000/api/v1/runs/<run_id>/events/stream
+```
+
+## Tracing
+
+Every process exports OpenTelemetry spans over OTLP/HTTP to the endpoints in `MODELFORGE_OTLP_ENDPOINTS`, a comma-separated list (Compose sets `http://jaeger:4318/v1/traces,http://phoenix:6006/v1/traces`). Unset, nothing is installed and nothing is exported, which is how the tests, CI and the CLI run by default. The services are `modelforge-worker`, `modelforge-api` and `modelforge-cli`.
+
+**One trace per run.** A run gets a random trace id when it is created (`runs.trace_id`, replays included) and keeps it, so the worker's executions between gates, the resumes and the pauses of one run land in one trace. The run's console header links to it in Jaeger (`<jaeger_url>/trace/<trace_id>`) and to the `modelforge` project in Phoenix, which has no stable link to a single trace.
+
+| Span | Where | Main attributes (prefix `modelforge.`) |
+| --- | --- | --- |
+| `run.execute` | one per worker execution | `run_id`, `queue_kind`, `worker_id`, `profile`, `replay_of`, `prior_status`, `final_status` |
+| `node.<name>` | one per node attempt | `run_id`, `step_id`, `node`, `attempt`, `status`, `input_state_hash`, `output_state_hash` |
+| `tool.<server>.<tool>` | one per MCP tool call attempt | `run_id`, `step_id`, `server`, `tool`, `version`, `attempt`, `duration_ms`, `input_hash`, `output_hash`, `artifact_ids`, `error_code` |
+| `llm.<purpose>` | one per gateway attempt, schema retries included | `run_id`, `step_id`, `section_id`, `purpose`, `provider`, `model`, `effort`, the prompt's name, version and hash, `request_hash`, `attempt`, the four token counts, `cost_usd`, `latency_ms`, `stop_reason`, `schema_valid`, `error_kind` |
+| HTTP request | the API | the FastAPI instrumentation's attributes, plus `modelforge.run_id` on the run routes; `/health` and the event streams are not traced |
+
+The spans also carry the OpenInference attributes Phoenix reads (`openinference.span.kind` of `AGENT`, `CHAIN`, `TOOL` or `LLM`, `llm.model_name`, `llm.provider`, the `llm.token_count.*` counts and `llm.invocation_parameters`), and every span's resource names the Phoenix project `modelforge`. Jaeger shows the run as a tree of nodes, tool calls and LLM calls; Phoenix shows the same LLM spans with model, tokens, latency and cost.
+
+**No content by default.** A span never carries a prompt, a message, an excerpt, a brief, a passage, an artifact value or a dataset value. A failure is recorded as an `exception` event with the exception type only, plus the gateway's error kind or the tool's error code as an attribute, never the message or the stack trace, because those can quote inputs. `MODELFORGE_TRACE_CONTENT=1` adds the system and user messages as sent (after the redaction scan passed) and the raw completion to each `llm.*` span, as OpenInference `llm.input_messages`, `llm.output_messages`, `input.value` and `output.value`, and lets the node and LLM spans record a failure with its message (tool spans never do). This is an exception to the project's data-handling rules: with it on, prompts and completions, which carry artifact excerpts, passages and the brief, leave the process for the configured collectors. It is for local collectors only. The gateway logs a warning at startup when it is on, and `/config` and the Settings page show the flag.
 
 ## MCP servers
 
@@ -295,11 +416,22 @@ What the numbers mean for the earlier rows. The Anthropic run's one banner is th
 ## Compose
 
 ```bash
-make up     # build the image and start Postgres and the worker
+make up     # build the image and start the five services
+make demo   # make up, then submit the demo run through the API
 make down   # stop the stack
 ```
 
-The image runs the `modelforge` CLI with `worker` as its default command and carries the templates, prompts, profiles and knowledge corpus. It defaults to the `fake` profile, so the stack runs offline; set `MODELFORGE_PROFILE` (and `ANTHROPIC_API_KEY` for `default` or `ci-cheap`) in the shell or `.env` before `make up` to use a real model. The worker service connects to the Compose Postgres, mounts `./artifacts` and `./data`, and executes runs submitted with `--detach`; `docker compose logs worker` shows its JSON logs, starting with a `worker.ready` line.
+| Service | Image | Published port | Role |
+| --- | --- | --- | --- |
+| `postgres` | `pgvector/pgvector:pg16` | `${MODELFORGE_POSTGRES_PORT:-5432}` | lineage, checkpoints, queue and settings |
+| `jaeger` | `jaegertracing/jaeger:2.23.0` | `16686` (UI) | trace collector and UI; OTLP/HTTP on 4318 inside the network |
+| `phoenix` | `arizephoenix/phoenix:version-21.0.0` | `6006` | LLM trace UI; OTLP/HTTP on 6006 |
+| `api` | built from the `Dockerfile` | `8000` | the API and the console; health check on `GET /api/v1/health` |
+| `worker` | built from the `Dockerfile` | none | executes queued runs |
+
+The image is built in two stages: a `node:22.23.4-alpine` stage runs `npm ci` and `npm run build` for the console, and the Python stage copies the result to `/app/console/dist` (`MODELFORGE_CONSOLE_DIR`) next to the templates, prompts, profiles, knowledge corpus and example briefs (`MODELFORGE_BRIEFS_DIR=/app/examples/briefs`). It runs `modelforge worker` by default; the `api` service runs `modelforge-api`. It defaults to the `fake` profile, so the stack runs offline; set `MODELFORGE_PROFILE` (and `ANTHROPIC_API_KEY` for `default` or `ci-cheap`) in the shell or `.env` before `make up` to use a real model. The API and the worker connect to the Compose Postgres, share the `./artifacts` and `./data` mounts, export traces to both collectors (`MODELFORGE_OTLP_ENDPOINTS`) and run with `MODELFORGE_AUTO_REPLAY=1`; the API links the console to `MODELFORGE_JAEGER_URL=http://localhost:16686` and `MODELFORGE_PHOENIX_URL=http://localhost:6006`. Phoenix 21 turns authentication on by default, so Compose sets `PHOENIX_ENABLE_AUTH=false` for this local collector. The worker executes runs submitted through the API or with `--detach`; `docker compose logs worker` shows its JSON logs, starting with a `worker.ready` line, and `docker compose logs api` the API's.
+
+`MODELFORGE_POSTGRES_PORT` changes only the port Postgres is published on; a CLI or test on the host then needs `MODELFORGE_DATABASE_URL` pointing at that port. A second stack can run beside another with its own project name, for example `MODELFORGE_POSTGRES_PORT=5433 docker compose -p modelforge-demo up -d --build --wait`, as long as ports 8000, 16686 and 6006 are free.
 
 ## Configuration
 
@@ -327,15 +459,36 @@ The orchestrator reads these environment variables (a `.env` file fills any that
 | `MODELFORGE_LMSTUDIO_MODEL` | the profile's model |
 | `MODELFORGE_COST_CAP_USD` | `10` |
 | `MODELFORGE_LLM_TIMEOUT_S` | `300` |
+| `MODELFORGE_OTLP_ENDPOINTS` | unset (no tracing); a comma-separated list of OTLP/HTTP trace URLs |
+| `MODELFORGE_TRACE_CONTENT` | `0` (`1` adds prompts and completions to the LLM spans; local collectors only, see "Tracing") |
+| `MODELFORGE_AUTO_REPLAY` | `0` (the seed of the `auto_replay` setting; `1` in Compose) |
+
+`MODELFORGE_PROFILE`, `MODELFORGE_COST_CAP_USD` and `MODELFORGE_AUTO_REPLAY` only seed the server-side settings for the API and the worker; once seeded, the database value wins (see "Server-side settings").
+
+The API reads the same variables and these:
+
+| Variable | Default |
+| --- | --- |
+| `MODELFORGE_API_HOST` | `0.0.0.0` |
+| `MODELFORGE_API_PORT` | `8000` |
+| `MODELFORGE_CONSOLE_DIR` | `console/dist` (`/app/console/dist` in the image) |
+| `MODELFORGE_CONSOLE_DEV_URL` | unset; when set, `/` and every console path redirect there (development mode) |
+| `MODELFORGE_BRIEFS_DIR` | `examples/briefs` (`/app/examples/briefs` in the image) |
+| `MODELFORGE_USERS` | unset (every identity has every role); `name:role[,role]` entries separated by spaces, a duplicate name is an error |
+| `MODELFORGE_JAEGER_URL` | `http://localhost:16686` (empty: no Jaeger link) |
+| `MODELFORGE_PHOENIX_URL` | `http://localhost:6006` (empty: no Phoenix link) |
+
+Compose also reads `MODELFORGE_POSTGRES_PORT` (default `5432`), the host port Postgres is published on.
 
 The brief carries the run's own settings. Besides the model fields it takes an optional `restricted_terms` list (see "Redaction") and `remediation_rounds`, the bound on the remediation loop (default 2, from 0 to 3; 0 means the challenger reviews once and the run goes straight to sign-off). The evals read `evals/evals.yml` (see "Evals").
 
 ## Commands
 
 ```bash
-make lint       # ruff, ruff format, pyright, import-linter
-make test       # full test suite
-make test-fast  # skip tests marked slow
+make sync      # uv sync --all-groups and npm ci --prefix console
+make lint       # ruff, ruff format, pyright, import-linter, the console's typecheck and lint
+make test       # full Python suite, then the console tests
+make test-fast  # Python only, skip tests marked slow
 make example    # end-to-end example pipeline
 make db-up      # start Postgres
 make db-down    # stop the Compose stack
@@ -345,11 +498,19 @@ make goldens    # regenerate the golden artifacts
 make evals      # eval harness under fake, compared with evals/baselines/fake.json
 make evals-live PROFILE=default  # eval harness under a live profile against its baseline
 make evals-baseline              # rewrite evals/baselines/fake.json
-make up         # start Postgres and the worker in Compose
+make up         # build the image and start the five Compose services
 make down       # stop the Compose stack
+make demo       # make up, then submit the demo run and print its console URL
+make demo-down  # same as make down
+make api        # uv run modelforge-api (serve the API and the built console on port 8000)
+make console    # build the console into console/dist
+make console-test      # the console tests
+make console-types     # regenerate console/openapi.json and console/src/api/types.gen.ts
+make console-fixtures  # regenerate console/src/fixtures (needs Postgres)
+make ui-dev     # Vite dev server with /api proxied to localhost:8000
 ```
 
-The `modelforge` CLI's commands are `migrate`, `run`, `approve`, `status`, `resume`, `abort`, `replay`, `verify` and `worker` (see "Run a governed model build"); `status` adds a `findings:` line (count by status and the highest severity) once the challenger has run. The `modelforge-evals` CLI has `run` (a profile's layers, the report and the baseline comparison) and `compare` (a report file against a baseline file); see "Evals".
+The `modelforge` CLI's commands are `migrate`, `run`, `approve`, `status`, `resume`, `pause`, `abort`, `replay`, `verify` and `worker` (see "Run a governed model build"); `status` adds a `findings:` line (count by status and the highest severity) once the challenger has run. The `modelforge-evals` CLI has `run` (a profile's layers, the report and the baseline comparison) and `compare` (a report file against a baseline file); see "Evals". The `modelforge-api` CLI has `serve` (the default), `openapi` (print the OpenAPI document) and `fixtures --out DIR` (write the console fixtures); see "API" and "Console".
 
 Tests marked `db` need Postgres and skip when it is unreachable; set `MODELFORGE_REQUIRE_DB=1` to make them fail instead (CI does).
 
@@ -365,4 +526,4 @@ Both are corporate bankruptcy datasets, not retail credit data, so two proxies a
 
 ## Status
 
-Sub-projects 1 to 4 complete: the core toolkit; the governed orchestrator with its lineage store and MCP servers; the LLM gateway, knowledge layer, and scope and documentation agents; and the independent challenger, the bounded remediation loop, the sign-off rule on blocking findings, and the eval harness. See the architecture spec at `docs/superpowers/specs/2026-11-09-modelforge-architecture-design.md`, the orchestrator spec at `docs/superpowers/specs/2026-11-09-sp2-orchestrator-design.md`, the gateway and agents spec at `docs/superpowers/specs/2026-11-09-sp3-gateway-knowledge-agents-design.md`, the challenger, remediation and evals spec at `docs/superpowers/specs/2026-11-10-sp4-challenger-remediation-evals-design.md`, and the implementation plans at `docs/superpowers/plans/2026-11-09-sp1-core-toolkit.md`, `docs/superpowers/plans/2026-11-09-sp2-orchestrator.md`, `docs/superpowers/plans/2026-11-09-sp3-gateway-knowledge-agents.md` and `docs/superpowers/plans/2026-11-10-sp4-challenger-remediation-evals.md`.
+Sub-projects 1 to 5 complete: the core toolkit; the governed orchestrator with its lineage store and MCP servers; the LLM gateway, knowledge layer, and scope and documentation agents; the independent challenger, the bounded remediation loop, the sign-off rule on blocking findings, and the eval harness; and the API, the console, tracing to Jaeger and Phoenix, pause and resume, manual and automatic replay, server-side settings, costs across runs and `make demo`. Sub-project 6 (the README overhaul, an architecture diagram, a design memo, a threat-model document, a domain primer and a demo video) has not started. See the architecture spec at `docs/superpowers/specs/2026-11-09-modelforge-architecture-design.md`, the orchestrator spec at `docs/superpowers/specs/2026-11-09-sp2-orchestrator-design.md`, the gateway and agents spec at `docs/superpowers/specs/2026-11-09-sp3-gateway-knowledge-agents-design.md`, the challenger, remediation and evals spec at `docs/superpowers/specs/2026-11-10-sp4-challenger-remediation-evals-design.md`, the API and console spec at `docs/superpowers/specs/2026-11-10-sp5-api-console-design.md`, and the implementation plans at `docs/superpowers/plans/2026-11-09-sp1-core-toolkit.md`, `docs/superpowers/plans/2026-11-09-sp2-orchestrator.md`, `docs/superpowers/plans/2026-11-09-sp3-gateway-knowledge-agents.md`, `docs/superpowers/plans/2026-11-10-sp4-challenger-remediation-evals.md` and `docs/superpowers/plans/2026-11-10-sp5-api-console.md`.
