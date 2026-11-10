@@ -94,6 +94,16 @@ export const useApprovals = (id: string) =>
 export const useReplays = (id: string) => useRunPart<Schema<"ReplayItem">[]>(id, "replays");
 export const useManifest = (id: string) => useRunPart<Schema<"Manifest">>(id, "manifest");
 
+/** The modelling plan stored at `planRef` (a JSON artifact), for editing at the model gate. */
+export function usePlan(id: string, planRef: string | null) {
+  return useQuery({
+    queryKey: runKeys.part(id, "artifacts", planRef),
+    queryFn: () =>
+      api<Schema<"ModelingPlan">>(runPath(id, `/artifacts/${encodeURIComponent(planRef ?? "")}`)),
+    enabled: id !== "" && planRef !== null,
+  });
+}
+
 export function useEvents(id: string, after?: number) {
   return useQuery({
     queryKey: runKeys.part(id, "events", after),
