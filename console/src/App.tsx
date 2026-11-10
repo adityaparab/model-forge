@@ -1,10 +1,10 @@
+import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router";
 
 import { Shell } from "./components/Shell";
 import { NewRunPage } from "./pages/NewRunPage";
 import { RunPage } from "./pages/RunPage";
 import { RunsPage } from "./pages/RunsPage";
-import { DocumentTab } from "./pages/run/DocumentTab";
 import { OverviewTab } from "./pages/run/OverviewTab";
 import { ValidationTab } from "./pages/run/ValidationTab";
 
@@ -12,6 +12,11 @@ import { ValidationTab } from "./pages/run/ValidationTab";
 function Placeholder({ title }: { title: string }) {
   return <h1 className="text-base font-semibold">{title}</h1>;
 }
+
+/** The document viewer carries react-markdown, so it loads in its own chunk on first visit. */
+const DocumentTab = lazy(() =>
+  import("./pages/run/DocumentTab").then((module) => ({ default: module.DocumentTab })),
+);
 
 export function App() {
   return (
@@ -22,7 +27,14 @@ export function App() {
         <Route path="runs/new" element={<NewRunPage />} />
         <Route path="runs/:runId" element={<RunPage />}>
           <Route index element={<OverviewTab />} />
-          <Route path="document" element={<DocumentTab />} />
+          <Route
+            path="document"
+            element={
+              <Suspense fallback={<p className="text-muted">Loading the document...</p>}>
+                <DocumentTab />
+              </Suspense>
+            }
+          />
           <Route path="validation" element={<ValidationTab />} />
           <Route path="findings" element={<Placeholder title="Findings" />} />
           <Route path="lineage" element={<Placeholder title="Lineage" />} />

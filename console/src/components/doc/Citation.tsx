@@ -1,4 +1,4 @@
-import { useId, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import type { Schema } from "../../api/client";
 
@@ -104,6 +104,9 @@ function UnresolvedBody({ marker, citation }: { marker: string; citation?: Resol
   );
 }
 
+/** How long the popover outlives the pointer, so it can travel from the chip to the popover. */
+const CLOSE_DELAY_MS = 150;
+
 /**
  * One citation marker as a chip; hovering or focusing it opens a popover with what it points
  * at: the artifact value for `A`, the knowledge passage for `K`, or why it did not resolve.
@@ -114,6 +117,27 @@ export function Citation({ marker, citation }: { marker: string; citation?: Reso
   const kind = citation?.kind ?? chipKind(marker);
   const resolved = citation?.resolved === true;
   const passage = citation?.passage ?? null;
+
+  const wrapper = useRef<HTMLSpanElement>(null);
+  const closeTimer = useRef<number | undefined>(undefined);
+
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+
+  function onMouseEnter() {
+    window.clearTimeout(closeTimer.current);
+    setOpen(true);
+  }
+
+  /**
+   * Leaving with the pointer closes the popover after a short grace period, cancelled when the
+   * pointer comes back (on the chip or the popover), and not at all while focus is inside it.
+   */
+  function onMouseLeave() {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      if (!wrapper.current?.contains(document.activeElement)) setOpen(false);
+    }, CLOSE_DELAY_MS);
+  }
 
   function onBlur(event: FocusEvent<HTMLSpanElement>) {
     if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false);
@@ -129,17 +153,26 @@ export function Citation({ marker, citation }: { marker: string; citation?: Reso
   let body: ReactNode;
   if (!resolved || citation === undefined) {
     body = <UnresolvedBody marker={marker} citation={citation} />;
-  } else if (kind === "K" && passage !== null) {
-    body = <PassageBody passage={passage} />;
+  } else if (kind === "K") {
+    body =
+      passage === null ? (
+        <>
+          <span className={mono}>{citation.target}</span>
+          <NoteLine note="passage not available" />
+        </>
+      ) : (
+        <PassageBody passage={passage} />
+      );
   } else {
     body = <ArtifactBody citation={citation} />;
   }
 
   return (
     <span
+      ref={wrapper}
       className="relative inline-block align-baseline"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       onFocus={() => setOpen(true)}
       onBlur={onBlur}
       onKeyDown={onKeyDown}
@@ -163,10 +196,13 @@ export function Citation({ marker, citation }: { marker: string; citation?: Reso
           id={popoverId}
           role="dialog"
           aria-label={`Citation ${marker}`}
-          className="absolute top-full left-0 z-20 mt-1 flex w-[min(26rem,80vw)] flex-col gap-2 rounded-sm border border-border bg-panel-2 p-3 text-left font-sans shadow-lg shadow-black/40"
+          className="absolute top-full left-0 z-20 block w-[min(26rem,80vw)] pt-1"
         >
-          {body}
-          {resolved && citation?.note != null && <NoteLine note={citation.note} />}
+          {/* The transparent `pt-1` band bridges chip and box, so the pointer never leaves. */}
+          <span className="flex flex-col gap-2 rounded-sm border border-border bg-panel-2 p-3 text-left font-sans shadow-lg shadow-black/40">
+            {body}
+            {resolved && citation?.note != null && <NoteLine note={citation.note} />}
+          </span>
         </span>
       )}
     </span>

@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { App } from "../../App";
@@ -28,7 +28,7 @@ test("document tab renders eleven sections with grounding badges and citation po
   expect(headings.map((h) => h.textContent)).toEqual(document.sections.map((s) => s.title));
   expect(within(body).getAllByText("grounded")).toHaveLength(11);
 
-  const nav = screen.getByRole("navigation", { name: "Sections" });
+  const nav = await screen.findByRole("navigation", { name: "Sections" });
   const links = within(nav).getAllByRole("link");
   expect(links).toHaveLength(11);
   expect(links[0]).toHaveAttribute("href", "#executive_summary");
@@ -36,6 +36,14 @@ test("document tab renders eleven sections with grounding badges and citation po
   expect(screen.getByRole("link", { name: "Download HTML" })).toHaveAttribute(
     "href",
     `/api/v1/runs/${RUN_ID}/document?format=html`,
+  );
+  expect(screen.getByRole("link", { name: "Download HTML" })).toHaveAttribute(
+    "download",
+    `${document.document_id}.html`,
+  );
+  expect(screen.getByRole("link", { name: "Download Markdown" })).toHaveAttribute(
+    "download",
+    `${document.document_id}.md`,
   );
   expect(screen.getByRole("link", { name: "Download Markdown" })).toHaveAttribute(
     "href",
@@ -55,7 +63,7 @@ test("document tab renders eleven sections with grounding badges and citation po
   expect(within(aPopover).getByText("by_split.val.auc")).toBeInTheDocument();
   expect(within(aPopover).getByText("0.7391014492753624")).toBeInTheDocument();
   await user.unhover(aChip);
-  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
   // A K chip: keyboard focus shows the passage title, section and text.
   const regulatory = within(body).getByRole("region", { name: "Regulatory and policy context" });
@@ -134,6 +142,7 @@ test("flagged sections, failing grounding and unresolved or truncated citations 
   await user.hover(unresolved);
   expect(await screen.findByRole("dialog")).toHaveTextContent("artifact not in this run");
   await user.unhover(unresolved);
+  await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
 
   const truncated = within(section).getByRole("button", { name: "Citation [A:beef#rows]" });
   await user.hover(truncated);
@@ -157,4 +166,38 @@ test("markdown turns nested-bracket markers into chips and never renders raw HTM
   expect(screen.getByText("[K:k_1]").tagName).toBe("CODE");
   expect(container.querySelector("script")).toBeNull();
   expect(container.querySelector("b")).toBeNull();
+});
+
+test("the popover stays open while the pointer or focus is on it, and its source link is reachable", async () => {
+  const user = userEvent.setup();
+  const document = fixtures<DocumentResponse>("document");
+  const regulatory = document.sections.find((s) => s.section_id === "regulatory_context");
+  const cited = regulatory?.citations.find((c) => c.marker === "[K:k_b1860ab50e4c]");
+  if (cited?.passage == null) throw new Error("fixture lost its K passage");
+  cited.passage.url = "https://example.org/sr26-2";
+  const orphan = regulatory?.citations.find((c) => c.marker === "[K:k_853dddea8b5f]");
+  if (orphan === undefined) throw new Error("fixture lost its K citation");
+  orphan.passage = null;
+  stubDocument(document);
+  renderApp(<App />, { route: `/runs/${RUN_ID}/document` });
+
+  const section = await screen.findByRole("region", { name: "Regulatory and policy context" });
+  const chip = within(section).getAllByRole("button", { name: "Citation [K:k_b1860ab50e4c]" })[0];
+  await user.hover(chip);
+  const popover = await screen.findByRole("dialog");
+  await user.hover(popover);
+  await new Promise((resolve) => window.setTimeout(resolve, 300));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  const source = within(popover).getByRole("link", { name: "https://example.org/sr26-2" });
+  await user.click(source);
+  expect(source).toHaveFocus();
+  await user.unhover(popover);
+  await new Promise((resolve) => window.setTimeout(resolve, 300));
+  expect(screen.getByRole("dialog")).toBeInTheDocument();
+  await user.keyboard("{Escape}");
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+  const missing = within(section).getAllByRole("button", { name: "Citation [K:k_853dddea8b5f]" })[0];
+  await user.hover(missing);
+  expect(await screen.findByRole("dialog")).toHaveTextContent("passage not available");
 });

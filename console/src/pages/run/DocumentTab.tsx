@@ -110,10 +110,10 @@ export function DocumentTab() {
           </div>
         </dl>
         <div className="flex items-center gap-2">
-          <a href={href("html")} download className={downloadLink}>
+          <a href={href("html")} download={`${document_id}.html`} className={downloadLink}>
             Download HTML
           </a>
-          <a href={href("md")} download className={downloadLink}>
+          <a href={href("md")} download={`${document_id}.md`} className={downloadLink}>
             Download Markdown
           </a>
         </div>
