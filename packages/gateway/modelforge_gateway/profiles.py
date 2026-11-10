@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import get_args
+from typing import Literal, get_args
 
 import yaml
 from modelforge_core.schemas import StrictModel
@@ -13,11 +13,16 @@ from modelforge_gateway.schemas import Effort, GatewayError, Provider, Purpose
 PROFILE_NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 PURPOSES: frozenset[str] = frozenset(get_args(Purpose))
 
+StructuredMethod = Literal["json_schema", "function_calling"]
+
 
 class Route(StrictModel):
+    """``structured`` overrides the provider's structured-output method for this route."""
+
     provider: Provider
     model: str
     effort: Effort = "medium"
+    structured: StructuredMethod | None = None
 
 
 class Price(StrictModel):

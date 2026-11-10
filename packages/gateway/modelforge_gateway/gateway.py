@@ -159,7 +159,9 @@ class Gateway:
             )
         )
         chat_model = self._chat_model_factory(route, self.settings, request.max_output_tokens)
-        runnable = structured(chat_model, route.provider, request.output_schema)
+        runnable = structured(
+            chat_model, route.provider, request.output_schema, method=route.structured
+        )
         price = self.profile.prices.get(route.model)
 
         total_usage = Usage()

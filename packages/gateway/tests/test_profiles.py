@@ -39,6 +39,17 @@ def test_shipped_profile_details(repo_profiles_dir: Path) -> None:
         assert {(r.provider, r.model) for r in profile.routes.values()} == {(provider, model)}
 
 
+def test_anthropic_profiles_route_scope_through_forced_tool_calls(
+    repo_profiles_dir: Path,
+) -> None:
+    for name in ("default", "ci-cheap"):
+        routes = load_profile(repo_profiles_dir, name).routes
+        assert routes["scope"].structured == "function_calling"
+        assert {p: r.structured for p, r in routes.items() if p != "scope"} == dict.fromkeys(
+            ("document", "challenge", "remediate", "judge")
+        )
+
+
 def test_load_profile_errors_are_config(tmp_path: Path) -> None:
     with pytest.raises(GatewayError) as exc:
         load_profile(tmp_path, "nope")

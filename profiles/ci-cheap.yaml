@@ -1,6 +1,6 @@
 name: ci-cheap
 routes:
-  scope:     {provider: anthropic, model: claude-sonnet-5-5, effort: low}
+  scope:     {provider: anthropic, model: claude-sonnet-5-5, effort: low, structured: function_calling}
   document:  {provider: anthropic, model: claude-sonnet-5-5, effort: medium}
   challenge: {provider: anthropic, model: claude-sonnet-5-5, effort: medium}
   remediate: {provider: anthropic, model: claude-sonnet-5-5, effort: low}

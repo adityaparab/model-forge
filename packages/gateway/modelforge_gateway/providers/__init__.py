@@ -7,7 +7,7 @@ from langchain_core.language_models import BaseChatModel, LanguageModelInput
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel
 
-from modelforge_gateway.profiles import Route
+from modelforge_gateway.profiles import Route, StructuredMethod
 from modelforge_gateway.providers import anthropic, lmstudio, ollama
 from modelforge_gateway.providers.fake import ScriptedChatModel
 from modelforge_gateway.schemas import GatewayError, Provider
@@ -32,13 +32,21 @@ def build_chat_model(
 
 
 def structured(
-    chat_model: BaseChatModel, provider: Provider, schema: type[BaseModel]
+    chat_model: BaseChatModel,
+    provider: Provider,
+    schema: type[BaseModel],
+    *,
+    method: StructuredMethod | None = None,
 ) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
-    """The raw-including structured runnable; every real provider uses JSON-schema mode.
+    """The raw-including structured runnable; ``method`` (a route's ``structured``) or else the
+    provider default, which is JSON-schema mode for every real provider.
 
-    Anthropic's forced tool calling is unsupported with thinking enabled, so it too uses the
-    integration's ``json_schema`` method. The scripted fake takes no method.
+    Anthropic's forced tool calling is unsupported with thinking enabled, so its default is the
+    integration's ``json_schema`` method; a route whose schema exceeds that grammar's complexity
+    limit sets ``function_calling``. The scripted fake takes no method.
     """
     if provider in ("anthropic", "ollama", "lmstudio"):
-        return chat_model.with_structured_output(schema, method="json_schema", include_raw=True)
+        return chat_model.with_structured_output(
+            schema, method=method or "json_schema", include_raw=True
+        )
     return chat_model.with_structured_output(schema, include_raw=True)

@@ -155,7 +155,7 @@ MODELFORGE_PROFILE=local-lmstudio uv run modelforge run examples/briefs/polish-p
 
 Then approve the three gates as in "Run a governed model build". `MODELFORGE_OLLAMA_MODEL` and `MODELFORGE_LMSTUDIO_MODEL` run a different local model under the same profile, and the base URL variables point at another host. Ollama runs with a 32768-token context window unless `MODELFORGE_OLLAMA_NUM_CTX` sets another; pick one the model and the machine's memory support.
 
-Every provider returns structured output through its integration's `json_schema` method, Anthropic included (forced tool calling is unsupported when thinking is enabled). A section-writing call may use up to 8192 output tokens and a query-planning call up to 1024; on a thinking model the thinking tokens count against that limit.
+Every provider returns structured output through its integration's `json_schema` method by default, Anthropic included (forced tool calling is unsupported when thinking is enabled). A route's `structured` key overrides that: the Anthropic profiles set `structured: function_calling` on the `scope` route, because the modeling-plan schema exceeds the structured-output grammar's complexity limit, while the document routes keep `json_schema`. A section-writing call may use up to 8192 output tokens and a query-planning call up to 1024; on a thinking model the thinking tokens count against that limit.
 
 Results on the Polish brief through the three gates:
 

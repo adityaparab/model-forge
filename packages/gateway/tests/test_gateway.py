@@ -67,6 +67,7 @@ class StubModel(BaseChatModel):
 
     outcomes: list[Any] = []
     calls: list[list[BaseMessage]] = []
+    structured_kwargs: list[dict[str, Any]] = []
 
     @property
     def _llm_type(self) -> str:
@@ -84,6 +85,8 @@ class StubModel(BaseChatModel):
     def with_structured_output(
         self, schema: dict[str, Any] | type, *, include_raw: bool = False, **kwargs: Any
     ) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
+        self.structured_kwargs.append({"include_raw": include_raw, **kwargs})
+
         def respond(model_input: LanguageModelInput) -> Any:
             self.calls.append(list(self._convert_input(model_input).to_messages()))
             outcome: Outcome = self.outcomes.pop(0) if len(self.outcomes) > 1 else self.outcomes[0]
@@ -101,7 +104,7 @@ class StubModel(BaseChatModel):
 
 
 def stub(*outcomes: Outcome) -> StubModel:
-    return StubModel(outcomes=list(outcomes) or [Outcome()], calls=[])
+    return StubModel(outcomes=list(outcomes) or [Outcome()], calls=[], structured_kwargs=[])
 
 
 GatewayFor = Callable[..., Gateway]
@@ -361,6 +364,24 @@ def test_retry_message_is_scanned_before_it_is_sent(
     assert [r.schema_valid for r in rows] == [False]
     payload = failed_payload(db, metadata.run_id)
     assert payload["kind"] == "redaction" and "123456789012" not in str(payload)
+
+
+def test_route_structured_method_reaches_the_provider(
+    gateway_for: GatewayFor, metadata: CallMetadata
+) -> None:
+    def profile(route: Route) -> Profile:
+        purposes = ("scope", "document", "challenge", "remediate", "judge")
+        return Profile(name="t", routes=dict.fromkeys(purposes, route))
+
+    forced = Route(provider="anthropic", model="m", structured="function_calling")
+    model = stub()
+    gateway_for(model, profile(forced)).complete(request(metadata))
+    default = stub()
+    gateway_for(default, profile(Route(provider="anthropic", model="m"))).complete(
+        request(metadata)
+    )
+    assert model.structured_kwargs == [{"include_raw": True, "method": "function_calling"}]
+    assert default.structured_kwargs == [{"include_raw": True, "method": "json_schema"}]
 
 
 def test_missing_usage_metadata_records_zero_usage(

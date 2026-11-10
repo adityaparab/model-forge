@@ -13,7 +13,7 @@ from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from modelforge_gateway.gateway import check_credentials
-from modelforge_gateway.profiles import Route, load_profile
+from modelforge_gateway.profiles import Route, StructuredMethod, load_profile
 from modelforge_gateway.providers import build_chat_model, structured
 from modelforge_gateway.providers.fake import ScriptedChatModel
 from modelforge_gateway.schemas import GatewayError, Provider
@@ -140,17 +140,19 @@ class RecordingModel(BaseChatModel):
 
 
 @pytest.mark.parametrize(
-    ("provider", "expected"),
+    ("provider", "method", "expected"),
     [
-        ("anthropic", {"method": "json_schema", "include_raw": True}),
-        ("ollama", {"method": "json_schema", "include_raw": True}),
-        ("lmstudio", {"method": "json_schema", "include_raw": True}),
-        ("fake", {"include_raw": True}),
+        ("anthropic", None, {"method": "json_schema", "include_raw": True}),
+        ("ollama", None, {"method": "json_schema", "include_raw": True}),
+        ("lmstudio", None, {"method": "json_schema", "include_raw": True}),
+        ("fake", None, {"include_raw": True}),
+        ("anthropic", "function_calling", {"method": "function_calling", "include_raw": True}),
+        ("fake", "function_calling", {"include_raw": True}),
     ],
 )
 def test_structured_output_method_per_provider(
-    provider: Provider, expected: dict[str, Any]
+    provider: Provider, method: StructuredMethod | None, expected: dict[str, Any]
 ) -> None:
     model = RecordingModel(seen=[])
-    structured(model, provider, Answer)
+    structured(model, provider, Answer, method=method)
     assert model.seen == [expected]
