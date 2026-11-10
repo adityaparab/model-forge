@@ -1,0 +1,89 @@
+# Section scripts for the fake provider's SectionDraft answers: one Markdown body per section
+# of the sr11-7-dev-doc template. `{{alias.path}}` renders the excerpt value at that citation
+# path followed by its `[A:alias#path]` marker; `{{K:n}}` renders the marker of the n-th
+# supplied passage. A sentence with a placeholder that cannot render is dropped whole.
+executive_summary: >-
+  {{plan.model_name}} is a logistic scorecard estimating the probability of default for the
+  portfolio described as: {{plan.portfolio}}. It was developed on {{profile.n_rows}}
+  observations with an observed event rate of {{profile.target_rate}}. It uses
+  {{selection.selected.count}} features. Its out-of-time AUC is
+  {{discrimination.by_split.oot.auc}}. The overall validation outcome is
+  {{validation.overall}}. The material limitations are the proxies used for the default
+  event and for origination vintages, described in the limitations section.
+purpose_and_use: >-
+  The model ranks and quantifies default risk for the portfolio described as:
+  {{plan.portfolio}}. Its intended use is: {{plan.intended_use}}. It predicts the default
+  event over the horizon: {{plan.target.horizon}}. It is not intended for uses outside that
+  statement, for portfolios other than the one it was developed on, or for decisions the
+  approved conditions exclude.
+regulatory_context: >-
+  This section identifies the supervisory guidance that applies to the model and ties each
+  regulatory statement to a knowledge passage. The model is developed and documented under
+  the following supervisory guidance: {{plan.regulatory_scope}} {{K:0}} {{K:1}}. SR 11-7
+  established the expectations for model development, implementation, use and validation,
+  including effective challenge and documentation detailed enough for an independent party
+  to understand the model, and this document follows its structure {{K:0}}. SR 26-2
+  superseded SR 11-7 and SR 21-8 as the supervisory guidance on model risk management and
+  places generative and agentic AI outside its scope, so the agents that assist in producing
+  this document are governed separately from the model it describes {{K:1}}.
+data: >-
+  Data quality, leakage and population stability were checked before modelling. After
+  profiling the development data holds {{profile.n_rows}} rows and {{profile.n_features}}
+  candidate features with an event rate of {{profile.target_rate}}. The leakage screen found
+  {{leakage.duplicate_rows}} duplicate rows and raised {{leakage.flags.count}} leakage flags.
+  The data was split into {{split.row_ids.train.count}} development rows and
+  {{split.row_ids.val.count}} validation rows. The out-of-time sample holds
+  {{split.row_ids.oot.count}} rows. An out-of-time sample by vintage was available:
+  {{split.oot_available}}.
+methodology: >-
+  The champion for {{plan.model_name}} is a weight-of-evidence logistic regression
+  scorecard, chosen for its transparency and its monotone, explainable relationship between
+  each feature and the predicted risk. A gradient-boosted model was built on the same
+  features as a challenger to benchmark the discrimination the scorecard gives up for that
+  transparency. Each feature is binned and replaced by the weight of evidence of its bin
+  before estimation. The model estimates the default event over the horizon:
+  {{plan.target.horizon}}.
+development: >-
+  Features were binned and screened on information value and correlation. The screen
+  selected {{selection.selected.count}} features and dropped {{selection.dropped.count}}.
+  The final scorecard was estimated with the {{champion.fit_method}} procedure on
+  {{champion.features.count}} features. The challenger is a gradient-boosted model of {{challenger_model.num_trees}} trees on the same
+  features. Predicted probabilities were calibrated on the validation split with the
+  {{calibration.method}} method.
+performance: >-
+  Discrimination, calibration, stability, sensitivity and the benchmark against the
+  challenger were evaluated against the agreed thresholds. The champion's AUC on the
+  validation sample is {{discrimination.by_split.val.auc}}. On the out-of-time sample its
+  AUC is {{discrimination.by_split.oot.auc}} and its KS statistic is
+  {{discrimination.by_split.oot.ks}}. The out-of-time AUC test outcome is
+  {{validation.tests[disc.auc.oot].status}}. The Hosmer-Lemeshow p-value is
+  {{calibration_tests.hl_p_value}}. The per-grade binomial calibration test outcome is
+  {{validation.tests[cal.binomial].status}}. The score PSI between the development and
+  out-of-time samples is {{stability.score_psi}}. The champion is within the agreed
+  discrimination gap of the challenger: {{benchmark.champion_within_gap}}. The overall
+  validation outcome is {{validation.overall}}.
+limitations: >-
+  The default event is a proxy: where the public company-bankruptcy data is used, bankruptcy
+  within the forecast horizon stands in for default, so the model estimates bankruptcy risk
+  rather than credit default as a lender would define it. The modelled horizon is:
+  {{plan.target.horizon}}. Origination vintages are also a proxy: the dataset's horizon files
+  are treated as vintages, so the out-of-time sample tests stability across forecast
+  horizons rather than across calendar time. These limitations should be read alongside the
+  overall validation outcome of {{validation.overall}}.
+monitoring: >-
+  Once in use, {{plan.model_name}} is monitored quarterly on discrimination, calibration
+  and population stability of the score and of each feature. It is monitored against
+  the thresholds used at validation, where the overall outcome was
+  {{validation.overall}}. A breach of any threshold is escalated to the model owner and
+  triggers a review of whether the model remains fit for its intended use.
+governance: >-
+  Every step of the run is recorded in a hash-chained event log, and every input,
+  intermediate result and output is a content-addressed artifact identified by the hash of
+  its bytes, so the lineage from the source data to each reported figure can be verified.
+  The approvals for {{plan.model_name}} are recorded at each human gate. The run can be
+  reproduced and checked against its manifest with modelforge replay.
+appendices: >-
+  Supporting artifacts include the binning tables, the scorecard, the full validation report
+  and the citations listed with each section. The scorecard holds
+  {{champion.features.count}} features. The full validation report records an overall
+  outcome of {{validation.overall}}.
