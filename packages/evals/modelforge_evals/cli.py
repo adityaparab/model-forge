@@ -19,6 +19,7 @@ from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.observability import configure_logging
 from modelforge_lineage.store import ArtifactStore
 from modelforge_orchestrator import __version__ as orchestrator_version
+from modelforge_orchestrator.briefs import brief_hash
 from modelforge_orchestrator.config import Settings, load_settings
 from modelforge_orchestrator.schemas import Finding, FindingsList, Manifest
 
@@ -74,15 +75,21 @@ def _run_identity(db: Database, run_id: str) -> tuple[dict[str, str], dict[str, 
     return dict(sorted(models.items())), dict(sorted(prompts.items()))
 
 
-def _existing_run(db: Database, run_id: str, profile: str) -> list[str]:
-    """Check that ``run_id`` is a completed, sealed run under ``profile``; its approvals.
+def _existing_run(
+    db: Database, run_id: str, profile: str, brief_key: str, brief_path: Path
+) -> list[str]:
+    """Check that ``run_id`` is a completed, sealed run of ``profile`` and the brief; its approvals.
 
-    `EvalConfigError` unless it is completed with a manifest and ran under ``profile``.
-    The approvals are ``gate decision approver`` for each decision recorded on the run, in
-    order, the shape `drive_run` reports.
+    `EvalConfigError` for an unknown run, or unless it is completed with a manifest, ran
+    under ``profile`` and was built from the bytes of ``brief_path``. The approvals are
+    ``gate decision approver`` for each decision recorded on the run, in order, the shape
+    `drive_run` reports.
     """
     with db.connection() as conn:
-        run = runs.get_run(conn, run_id)
+        try:
+            run = runs.get_run(conn, run_id)
+        except runs.RunNotFound:
+            raise EvalConfigError(f"unknown run {run_id!r}") from None
         recorded = [f"{a.gate} {a.decision} {a.approver}" for a in list_approvals(conn, run_id)]
     if run.status != "completed":
         raise EvalConfigError(
@@ -96,6 +103,14 @@ def _existing_run(db: Database, run_id: str, profile: str) -> list[str]:
         raise EvalConfigError(
             f"run {run_id} ran under profile {run.profile!r}, not {profile!r}; "
             "--run-id needs a run under --profile"
+        )
+    try:
+        expected = brief_hash(brief_path.read_bytes())
+    except OSError as exc:
+        raise EvalConfigError(f"cannot read brief {brief_key!r} ({brief_path}): {exc}") from exc
+    if run.brief_hash != expected:
+        raise EvalConfigError(
+            f"run {run_id} was built from a different brief than {brief_key!r} ({brief_path})"
         )
     return recorded
 
@@ -167,7 +182,9 @@ def run_eval(
     misses: list[str] = []
     recorded: list[str] = []
     if run_id is not None:  # checked before any layer runs
-        recorded = _existing_run(Database(settings.database_url), run_id, profile)
+        recorded = _existing_run(
+            Database(settings.database_url), run_id, profile, brief_key, config.briefs[brief_key]
+        )
     models: dict[str, str] = {}
     prompts: dict[str, str] = {}
     by_class: dict[str, float | None] = {}

@@ -320,6 +320,21 @@ def test_evals_run_with_run_id_rejects_unsealed_or_mismatched_runs(
     assert mismatch.returncode == 2, mismatch.stdout + mismatch.stderr
     assert completed_run_id in mismatch.stderr and "fake" in mismatch.stderr
     assert "Traceback" not in mismatch.stderr
+    unknown = cli("run", "--profile", "fake", "--run-id", "run_nope", "--report-dir", str(reports))
+    assert unknown.returncode == 2 and "unknown run 'run_nope'" in unknown.stderr
+    other_brief = cli(
+        "run",
+        "--profile",
+        "fake",
+        "--brief",
+        "polish",
+        "--run-id",
+        completed_run_id,
+        "--report-dir",
+        str(reports),
+    )
+    assert other_brief.returncode == 2, other_brief.stdout + other_brief.stderr
+    assert "different brief" in other_brief.stderr and "'polish'" in other_brief.stderr
     retrieval = cli(
         "run",
         "--profile",
