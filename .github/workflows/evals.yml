@@ -42,6 +42,7 @@ jobs:
         with:
           path: data/
           key: uci-datasets-v1
+      - run: uv run modelforge migrate
       - run: uv run modelforge-evals run --profile ci-cheap --baseline evals/baselines/ci-cheap.json
       - uses: actions/upload-artifact@v4
         if: always()
