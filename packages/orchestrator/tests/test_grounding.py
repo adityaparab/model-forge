@@ -207,3 +207,56 @@ def test_check_section_grounds_a_number_in_exponent_notation() -> None:
         retrieved=set(),
     )
     assert report.ok
+
+
+def test_regulation_names_match_whole_words() -> None:
+    report = check_section(
+        "The Baseline model is stable. Basel requires capital.",
+        load_artifact=lambda _: {},
+        retrieved=set(),
+    )
+    assert report.uncited_regulatory_sentences == ["Basel requires capital."]
+
+
+def test_bare_year_like_counts_are_claims() -> None:
+    ida = "a" * 64
+    report = check_section(
+        f"There were 2045 defaults and 1987 cures [A:{ida}#n_rows].",
+        load_artifact=_loader({"n_rows": 50000}, ida),
+        retrieved=set(),
+    )
+    assert report.ungrounded_numbers == ["2045", "1987"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "The guidance was issued in 2011.",
+        "The standard (2026) applies.",
+        "Results for FY 2024 are shown.",
+        "Approved on April 17, 2026 by the committee.",
+        "Approved on 17 April 2026.",
+        "Since 2019, the portfolio grew.",
+        "The vintage of 2015 is excluded.",
+        "Data until 2020 were used.",
+        "In March, 2021 the model changed.",
+    ],
+)
+def test_years_in_date_context_are_not_claims(text: str) -> None:
+    assert numbers_in(strip_non_claims(text)) == []
+
+
+def test_unicode_minus_and_spaced_thousands_are_one_number() -> None:
+    tokens = numbers_in("coefficient −2.95 over 43 405 and 43 405 rows")
+    assert [(t.text, t.value, t.is_integer) for t in tokens] == [
+        ("-2.95", -2.95, False),
+        ("43405", 43405.0, True),
+        ("43405", 43405.0, True),
+    ]
+    ida = "a" * 64
+    report = check_section(
+        f"The coefficient is −2.95 [A:{ida}#c] over 43 405 rows [A:{ida}#n].",
+        load_artifact=_loader({"c": -2.95, "n": 43405}, ida),
+        retrieved=set(),
+    )
+    assert report.ok

@@ -12,7 +12,7 @@ from typing import Any, cast
 from modelforge_core.schemas import StrictModel
 from modelforge_lineage.citations import PathError, resolve_path
 from modelforge_mcp.schemas import GroundingReport
-from modelforge_mcp.servers.doc_renderer import MARKER, REGULATIONS
+from modelforge_mcp.servers.doc_renderer import MARKER, REGULATION_WORDS
 
 NUMBER = re.compile(
     r"(?<![\w.])(-?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?([eE][-+]?\d+)?(\s*(?:%|percent))?(?![\w.])"
@@ -21,11 +21,25 @@ NUMBER = re.compile(
 REGULATION_NAME = re.compile(
     r"\b(?:SR\s+\d+-\d+|OCC\s+(?:Bulletin\s+)?\d{4}-\d+|ASC\s+\d+|IFRS\s+\d+|Basel\s+(?:I{1,3}|\d))\b"
 )
-DATE = re.compile(
-    r"\b(?:\d{1,2}\s+)?(?:January|February|March|April|May|June|July|August|September|October"
-    r"|November|December)\s+\d{4}\b|(?<![\d.,])\b(?:19|20)\d{2}\b(?!\d|\.\d)"
+_MONTH = (
+    r"(?:January|February|March|April|May|June|July|August|September|October|November|December)"
 )
-"""A month-year, or a standalone year; a year-like run inside a decimal (``0.2015``) is not one."""
+DATE = re.compile(
+    rf"\b(?:\d{{1,2}}\s+{_MONTH}(?:,?\s+\d{{4}})?"
+    rf"|{_MONTH}\s+\d{{1,2}}(?:st|nd|rd|th)?(?:,?\s+\d{{4}})?"
+    rf"|{_MONTH},?\s+\d{{4}})\b"
+)
+"""A date with a month name and a day, a year or both (``April 17, 2026``, ``17 April 2026``,
+``April 2011``)."""
+YEAR_IN_CONTEXT = re.compile(
+    rf"(?P<cue>(?:\b(?:(?i:in|since|of|by|from|until|before|after|during|year)|FY|{_MONTH})\b"
+    r"|\()[^\w.!?]*)(?P<year>(?:19|20)\d{2})\b(?!\d|\.\d)"
+)
+"""A standalone year after a month name, a cue word or an opening parenthesis (``in 2011``,
+``(2026)``, ``FY 2024``), with only spaces and punctuation between; elsewhere (``2045
+defaults``) a year-like integer is a claim. A run inside a decimal (``0.2015``) is not a year."""
+_UNICODE_MINUS = re.compile(r"\u2212(?=\d)")
+_SPACED_THOUSANDS = re.compile(r"(?<=\d)[\u00a0\u2009\u202f](?=\d{3}(?!\d))")
 UNIT_SUFFIXED = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?(?![eE][-+]?\d)[A-Za-z]+(?![\w])")
 """A number with a letter suffix (``50k``, ``3x``, ``9pp``): a claim that never grounds.
 
@@ -74,10 +88,15 @@ def expand_aliases(body: str, aliases: Mapping[str, str]) -> tuple[str, list[str
 
 
 def strip_non_claims(sentence: str) -> str:
-    """``sentence`` without markers, inline code, regulation names and dates."""
+    """``sentence`` without markers, inline code, regulation names, dates and dated years."""
     for pattern in (MARKER, _CODE_SPAN, REGULATION_NAME, DATE):
         sentence = pattern.sub(" ", sentence)
-    return sentence
+    return YEAR_IN_CONTEXT.sub(lambda m: m.group("cue") + " ", sentence)
+
+
+def _normalise(text: str) -> str:
+    """``text`` with a Unicode minus as ``-`` and thin or no-break space thousands removed."""
+    return _SPACED_THOUSANDS.sub("", _UNICODE_MINUS.sub("-", text))
 
 
 def _sig_figs(digits: str) -> int:
@@ -89,7 +108,7 @@ def numbers_in(text: str) -> list[NumberToken]:
 
     A number with a letter suffix is returned as a ``suffixed`` token, which never grounds.
     """
-    text = _TERMINATOR.sub(" ", text)
+    text = _TERMINATOR.sub(" ", _normalise(text))
     found: list[tuple[int, NumberToken]] = []
     for match in UNIT_SUFFIXED.finditer(text):
         number = re.match(r"-?[\d,]*(?:\.\d+)?", match.group(0))
@@ -235,7 +254,7 @@ def check_section(
         for token in numbers_in(strip_non_claims(sentence)):
             if not any(matches(token, value) for value in values):
                 ungrounded.append(token.text)
-        if any(name in sentence for name in REGULATIONS) and "[K:" not in sentence:
+        if REGULATION_WORDS.search(sentence) is not None and "[K:" not in sentence:
             uncited.append(sentence)
     return GroundingReport(
         ungrounded_numbers=ungrounded,
