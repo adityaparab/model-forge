@@ -9,11 +9,15 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from modelforge_api.app import create_app
 from modelforge_api.settings import ApiSettings
 from modelforge_gateway.settings import GatewaySettings
+from modelforge_lineage import settings as server_settings
+from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
-from modelforge_lineage.models import RunRecord
+from modelforge_lineage.models import GateDecision, RunRecord
+from modelforge_lineage.queue import enqueue
 from modelforge_lineage.store import ArtifactStore
 from modelforge_lineage.testing import database, database_url, db, spans
 from modelforge_orchestrator.config import Settings
+from modelforge_orchestrator.submit import create_run
 from modelforge_orchestrator.tools import InProcessToolClient
 from modelforge_orchestrator.worker import run_once, setup_checkpointer
 
@@ -22,16 +26,20 @@ __all__ = [
     "REPO",
     "SYNTHETIC_BRIEF",
     "Drive",
+    "Submit",
     "api_settings",
     "app",
+    "auto_replay",
     "checkpointer",
     "client",
+    "completed_run",
     "database",
     "database_url",
     "db",
     "drive",
     "settings",
     "spans",
+    "submit",
 ]
 
 REPO = Path(__file__).resolve().parents[3]
@@ -95,3 +103,52 @@ def drive(settings: Settings, database: Database, checkpointer: PostgresSaver) -
         )
 
     return run
+
+
+Submit = Callable[..., str]
+"""``submit(brief=SYNTHETIC_BRIEF, requester="alice")`` creates a queued run; returns its id."""
+
+
+@pytest.fixture
+def submit(settings: Settings, db: Database) -> Submit:
+    store = ArtifactStore(settings.artifact_dir)
+
+    def create(brief: Path = SYNTHETIC_BRIEF, requester: str = "alice") -> str:
+        record = create_run(
+            db,
+            store,
+            brief.read_bytes(),
+            requester=requester,
+            profile="fake",
+            cost_cap_usd=settings.gateway.cost_cap_usd,
+            gateway=settings.gateway,
+        )
+        return record.id
+
+    return create
+
+
+@pytest.fixture
+def auto_replay(db: Database) -> None:
+    """Turn the ``auto_replay`` setting on; request it before `completed_run`."""
+    with db.transaction() as conn:
+        server_settings.set_value(conn, "auto_replay", True, updated_by="test")
+
+
+@pytest.fixture
+def completed_run(submit: Submit, db: Database, drive: Drive) -> str:
+    """A fresh synthetic run driven through the three gates by the worker; return its id."""
+    run_id = submit()
+    drive(run_id)
+    run: RunRecord | None = None
+    for decision in (
+        GateDecision(gate="scope", decision="approve", approver="alice"),
+        GateDecision(gate="model", decision="accept", approver="bob"),
+        GateDecision(gate="signoff", decision="approve", approver="bob"),
+    ):
+        with db.transaction() as conn:
+            record_approval(conn, run_id, decision, current_plan=None)
+            enqueue(conn, run_id, "resume")
+        run = drive(run_id)
+    assert run is not None and run.status == "completed"
+    return run_id
