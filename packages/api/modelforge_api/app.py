@@ -18,7 +18,7 @@ from modelforge_orchestrator.worker import setup_checkpointer
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 import modelforge_api
-from modelforge_api import errors
+from modelforge_api import console, errors
 from modelforge_api.routers import (
     briefs,
     costs,
@@ -88,4 +88,5 @@ def create_app(settings: ApiSettings) -> FastAPI:
     app.include_router(settings_router.router, prefix=API_PREFIX)
     app.include_router(costs.router, prefix=API_PREFIX)
     app.include_router(briefs.router, prefix=API_PREFIX)
+    console.install(app, settings)  # last: its catch-all takes every path the API does not
     return app

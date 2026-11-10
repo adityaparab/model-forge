@@ -1,7 +1,9 @@
 """The one error shape: ``{"error": {"kind": <str>, "message": <str>, ...extra}}``.
 
 Kinds: ``identity``, ``role``, ``not_found``, ``not_ready``, ``brief``, ``profile``,
-``approval``, ``state``, ``validation``, ``settings``, ``internal``.
+``approval``, ``state``, ``validation``, ``settings``, ``internal``; Starlette's own
+responses (an unknown path, a wrong method) are ``not_found``, ``method_not_allowed`` or
+``http``.
 """
 
 from typing import Any
@@ -11,6 +13,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from modelforge_lineage.observability import get_logger
+from starlette.exceptions import HTTPException
 
 __all__ = ["ApiError", "error_response", "install"]
 
@@ -38,6 +41,17 @@ async def _api_error(request: Request, exc: Exception) -> JSONResponse:
     return error_response(exc.status_code, exc.kind, exc.message, **exc.extra)
 
 
+_HTTP_KINDS = {404: "not_found", 405: "method_not_allowed"}
+
+
+async def _http_error(request: Request, exc: Exception) -> JSONResponse:
+    assert isinstance(exc, HTTPException)
+    response = error_response(exc.status_code, _HTTP_KINDS.get(exc.status_code, "http"), exc.detail)
+    if exc.headers:
+        response.headers.update(exc.headers)  # the Allow header of a 405
+    return response
+
+
 async def _validation_error(request: Request, exc: Exception) -> JSONResponse:
     assert isinstance(exc, RequestValidationError)
     return error_response(422, "validation", "request validation failed", detail=exc.errors())
@@ -57,5 +71,6 @@ async def _internal_error(request: Request, exc: Exception) -> JSONResponse:
 def install(app: FastAPI) -> None:
     """Register the handlers that map every error the API writes to the one shape."""
     app.add_exception_handler(ApiError, _api_error)
+    app.add_exception_handler(HTTPException, _http_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(Exception, _internal_error)

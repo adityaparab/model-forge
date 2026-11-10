@@ -14,6 +14,7 @@ from modelforge_lineage.models import GateName, RunStatus
 from modelforge_orchestrator.graph import NODES
 
 import modelforge_api
+from modelforge_api.console import console_mode
 from modelforge_api.deps import get_db, get_settings
 from modelforge_api.schemas import (
     ConfigResponse,
@@ -79,12 +80,6 @@ def config(
     core = settings.core
     with db.connection() as conn:
         profile_default = server_settings.get(conn, "default_profile", core.profile)
-    if settings.console_dev_url is not None:
-        console = "dev"
-    elif (settings.console_dir / "index.html").is_file():
-        console = "built"
-    else:
-        console = "missing"
     if settings.users is None:
         identity = IdentityConfig(mode="open", roles={})
     else:
@@ -92,7 +87,7 @@ def config(
         identity = IdentityConfig(mode="roles", roles=roles)
     return ConfigResponse(
         profile_default=profile_default,
-        console=console,
+        console=console_mode(settings),
         identity=identity,
         trace_urls=TraceUrls(
             jaeger=_optional_url(settings.jaeger_url),

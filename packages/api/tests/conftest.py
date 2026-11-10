@@ -38,6 +38,7 @@ __all__ = [
     "database_url",
     "db",
     "drive",
+    "make_settings",
     "settings",
     "spans",
     "submit",
@@ -49,11 +50,11 @@ SYNTHETIC_BRIEF = REPO / "examples/briefs/synthetic.yaml"
 POLISH_BRIEF = REPO / "examples/briefs/polish-pd.yaml"
 
 
-@pytest.fixture
-def settings(tmp_path: Path, database: Database) -> Settings:
+def make_settings(tmp: Path, database_url: str) -> Settings:
+    """Orchestrator settings over ``database_url`` with artifacts under ``tmp``, profile fake."""
     return Settings(
-        database_url=database.url,
-        artifact_dir=tmp_path / "artifacts",
+        database_url=database_url,
+        artifact_dir=tmp / "artifacts",
         data_dir=Path(os.environ.get("MODELFORGE_DATA_DIR", REPO / "data")),
         templates_dir=REPO / "templates",
         profile="fake",
@@ -63,6 +64,11 @@ def settings(tmp_path: Path, database: Database) -> Settings:
         knowledge_dir=REPO / "knowledge-base",
         gateway=GatewaySettings(prompts_dir=REPO / "prompts", profiles_dir=REPO / "profiles"),
     )
+
+
+@pytest.fixture
+def settings(tmp_path: Path, database: Database) -> Settings:
+    return make_settings(tmp_path, database.url)
 
 
 @pytest.fixture

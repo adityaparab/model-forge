@@ -30,6 +30,7 @@ from modelforge_lineage.store import (
 from modelforge_lineage.verify import verify_run
 from modelforge_orchestrator.inspect import gate_prompt, run_refs, run_state
 from modelforge_orchestrator.schemas import Manifest
+from opentelemetry import trace
 
 from modelforge_api import queries
 from modelforge_api.deps import get_db, get_settings, get_store
@@ -62,7 +63,8 @@ RunId = Annotated[str, Path(description="The run id.")]
 
 
 def get_run_record(run_id: RunId, db: Db) -> RunRecord:
-    """The run, or ``404`` kind ``not_found``."""
+    """The run, or ``404`` kind ``not_found``; tags the request's span with the run id."""
+    trace.get_current_span().set_attribute("modelforge.run_id", run_id)
     try:
         with db.connection() as conn:
             return runs.get_run(conn, run_id)
