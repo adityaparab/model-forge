@@ -13,11 +13,20 @@ put one in a marker, and write no numbers taken from them.
 {{ section_json }}
 ```
 
-The excerpts, keyed by alias. Cite a value as `[A:<alias>#<path>]`, where `<path>` is the dotted
-path to the value: a key selects that field of an object, and in a list of objects a step selects
-the element whose discriminator equals it (`split` in `by_split`, `test_id` in `tests`, `feature`
-in feature lists, `grade` in `grades`). So `by_split.oot.auc` is the `auc` of the `by_split`
-element whose `split` is `oot`.
+The excerpts, keyed by alias. Cite a value as `[A:<alias>#<path>]`, where `<path>` leads from
+the top of that alias's excerpt to the value. The path rules:
+
+1. A key selects that field of an object, and steps are joined with dots:
+   `[A:plan#target.horizon]` is the `horizon` field of the plan's `target`.
+2. In a list of objects, a step selects the element whose discriminator equals it. The
+   discriminators are `split` for `by_split`, `test_id` for `tests`, `feature` for feature lists,
+   `grade` for `grades` and `name` for `columns`. So `[A:discrimination#by_split.oot.auc]` is the
+   `auc` of the `by_split` element whose `split` is `oot`.
+3. A discriminator value that itself contains a dot is written in brackets:
+   `[A:validation#tests[disc.auc.oot].status]` is the `status` of the test whose `test_id` is
+   `disc.auc.oot`. Never write such a value as plain dotted steps.
+4. A list the excerpt shows as `{"count": N}` is cited by its length with a final `.count`
+   step: `[A:selection#selected.count]` is the number of selected features.
 
 ```json excerpts
 {{ excerpts_json }}
@@ -32,8 +41,9 @@ The knowledge passages retrieved for this section, each with the citation id to 
 {% if failures_json %}
 
 Your previous draft of this section failed the grounding checks. Fix each listed failure: give
-every ungrounded number a marker whose value it states or remove it, correct or remove each
-unresolved marker, cite a supplied passage in each uncited regulatory sentence, and replace each
+every ungrounded number a marker whose value it states or remove it, rewrite each unresolved
+marker by the path rules above (brackets for a discriminator value containing a dot, `.count`
+for a counted list) or remove it, cite a supplied passage in each uncited regulatory sentence, and replace each
 foreign passage with one from the passages block.
 
 ```json failures

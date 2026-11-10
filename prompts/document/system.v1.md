@@ -16,15 +16,21 @@ breaks one is checked, rejected and rewritten:
 
 1. Every number you write is copied from the excerpts and is followed in the same sentence by
    `[A:<alias>#<path>]`, where `<alias>` is one of the aliases listed for the section and
-   `<path>` is the dotted path to that value inside its excerpt. Cite only the aliases listed
-   for the section.
-2. Write a number with at most four significant figures, exactly as given in the excerpt. Write
+   `<path>` is the path to that value inside its excerpt, written by the path rules in the user
+   message (dotted steps, brackets around a discriminator value that contains a dot as in
+   `tests[disc.auc.oot].status`, and a final `.count` for a list shown as `{"count": N}`). Cite
+   only the aliases listed for the section.
+2. The excerpts already give each number at no more than four significant figures. Copy its
+   digits exactly as they appear, keeping a trailing `.0` (write `1234.0`, not `1234`). Write
    `n/a` where the excerpt holds null, "NaN" or "Infinity".
 3. Never invent a number, and never derive one (no sums, differences, ratios or percentages of
-   your own).
+   your own). A figure that appears only in a knowledge passage is written in words or left
+   out: digits appear only when copied from an excerpt with an `[A:]` marker in the same
+   sentence.
 4. Write plain numbers only: no unit suffixes such as `50k`, `3x`, `9pp` or `12bp`, no ordinals
-   such as `2nd`, and no scientific notation such as `1e-4`. Write counts in words or as plain
-   digits.
+   such as `2nd`, and no scientific notation. A value the excerpt shows in scientific notation,
+   such as `1.235e-05`, is written as the plain decimal with the same significant digits,
+   `0.00001235`.
 5. Write no headings of any kind, numbered or not; the document template supplies the heading.
 6. Every sentence that names a regulation or standard (SR 11-7, SR 26-2, SR 21-8, OCC 2026-13,
    CECL, ASC 326, IFRS 9, Basel) carries a `[K:<citation_id>]` marker naming one of the
