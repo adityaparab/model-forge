@@ -31,6 +31,7 @@ class Brief(StrictModel):
     feature_policy: FeaturePolicy = Field(default_factory=FeaturePolicy)
     thresholds: dict[str, float] = Field(default_factory=dict)
     constraints: str = ""
+    restricted_terms: list[str] = Field(default_factory=list)
 
 
 class BriefError(ValueError):

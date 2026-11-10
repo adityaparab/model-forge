@@ -1,14 +1,20 @@
 import os
 import re
 import subprocess
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
 import pytest
+from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.runtime import Runtime
+from modelforge_gateway.gateway import Gateway
+from modelforge_gateway.profiles import Price, Profile, load_profile
+from modelforge_gateway.prompts import PromptRegistry
+from modelforge_gateway.providers.fake import Fault, ScriptedChatModel
+from modelforge_gateway.settings import GatewaySettings
 from modelforge_lineage import runs
 from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
@@ -47,12 +53,15 @@ __all__ = [
     "database_url",
     "db",
     "deps",
+    "deps_priced",
     "make_run",
     "prepared_state",
     "prepared_state_no_oot",
     "queued_run",
     "run_id_from",
     "runtime",
+    "runtime_with_faults",
+    "runtime_with_model",
     "scoped_state",
     "settings",
     "signed_off_state",
@@ -73,16 +82,18 @@ def settings(tmp_path: Path, database: Database) -> Settings:
         artifact_dir=tmp_path / "artifacts",
         data_dir=Path(os.environ.get("MODELFORGE_DATA_DIR", REPO / "data")),
         templates_dir=REPO / "templates",
-        profile="default",
+        profile="fake",
         mcp_command=None,
         tool_timeout_s=600.0,
         log_level="INFO",
         knowledge_dir=REPO / "knowledge-base",
+        gateway=GatewaySettings(prompts_dir=REPO / "prompts", profiles_dir=REPO / "profiles"),
     )
 
 
 Cli = Callable[..., "subprocess.CompletedProcess[str]"]
-"""``cli(*args)`` runs ``uv run modelforge *args`` against the test database and directories."""
+"""``cli(*args, env=None)`` runs ``uv run modelforge *args`` against the test database and
+directories under the ``fake`` profile; ``env`` overrides the fixture environment."""
 
 
 @pytest.fixture
@@ -93,21 +104,25 @@ def cli(settings: Settings, checkpointer: PostgresSaver) -> Cli:
     ``stderr`` file descriptor when it spawns the servers.
     """
     del checkpointer  # the checkpoint tables must exist before the CLI drives a run
-    env = {
+    base_env = {
         **os.environ,
         "MODELFORGE_DATABASE_URL": settings.database_url,
         "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
         "MODELFORGE_DATA_DIR": str(settings.data_dir),
         "MODELFORGE_TEMPLATES_DIR": str(settings.templates_dir),
+        "MODELFORGE_PROFILE": settings.profile,
+        "MODELFORGE_KNOWLEDGE_DIR": str(settings.knowledge_dir),
+        "MODELFORGE_PROMPTS_DIR": str(settings.gateway.prompts_dir),
+        "MODELFORGE_PROFILES_DIR": str(settings.gateway.profiles_dir),
     }
 
-    def run(*args: str) -> subprocess.CompletedProcess[str]:
+    def run(*args: str, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             ["uv", "run", "modelforge", *args],
             cwd=REPO,
             capture_output=True,
             text=True,
-            env=env,
+            env={**base_env, **(env or {})},
             check=False,
         )
 
@@ -174,7 +189,7 @@ def make_run(
             conn,
             run_id=run_id,
             requester=requester,
-            profile="default",
+            profile="fake",
             brief_hash=brief_hash(brief_bytes),
             brief_ref=ref.id,
             dataset_ref=dataset_ref.as_string(),
@@ -184,7 +199,7 @@ def make_run(
     return RunState(
         run_id=run_id,
         requester=requester,
-        profile="default",
+        profile="fake",
         seed=seed,
         brief_hash=brief_hash(brief_bytes),
         brief_ref=ref.id,
@@ -235,12 +250,14 @@ def store(settings: Settings) -> ArtifactStore:
 
 @pytest.fixture
 def deps(settings: Settings, database: Database) -> Iterator[Deps]:
+    store = ArtifactStore(settings.artifact_dir)
     with InProcessToolClient(settings) as client:
         yield Deps(
             tools=client,
             lineage=Lineage(database),
-            store=ArtifactStore(settings.artifact_dir),
+            store=store,
             settings=settings,
+            gateway=Gateway.for_run(settings.gateway, "fake", Lineage(database), store),
         )
 
 
@@ -248,6 +265,74 @@ def deps(settings: Settings, database: Database) -> Iterator[Deps]:
 def runtime(deps: Deps) -> Runtime[Deps]:
     """Enough of a LangGraph `Runtime` for calling nodes directly."""
     return cast("Runtime[Deps]", SimpleNamespace(context=deps))
+
+
+def _deps_with_gateway(
+    deps: Deps, profile: Profile, chat_model: BaseChatModel | None = None
+) -> Deps:
+    """``deps`` (sharing its tool client) with a gateway over ``profile``.
+
+    ``chat_model``, when given, answers every route; otherwise the profile's providers do.
+    """
+    settings = deps.settings.gateway
+    registry = PromptRegistry(settings.prompts_dir, deps.lineage)
+    if chat_model is None:
+        gateway = Gateway(settings, profile, deps.lineage, deps.store, registry)
+    else:
+        gateway = Gateway(
+            settings,
+            profile,
+            deps.lineage,
+            deps.store,
+            registry,
+            chat_model_factory=lambda route, s, n: chat_model,
+        )
+    return Deps(
+        tools=deps.tools,
+        lineage=deps.lineage,
+        store=deps.store,
+        settings=deps.settings,
+        gateway=gateway,
+    )
+
+
+RuntimeWithModel = Callable[[BaseChatModel], "Runtime[Deps]"]
+RuntimeWithFaults = Callable[[dict[str, Fault]], "Runtime[Deps]"]
+
+
+@pytest.fixture
+def runtime_with_model(deps: Deps) -> RuntimeWithModel:
+    """``runtime_with_model(model)``: a `Runtime` whose gateway answers every call with ``model``
+    over the ``fake`` profile."""
+    profile = load_profile(deps.settings.gateway.profiles_dir, "fake")
+
+    def make(model: BaseChatModel) -> Runtime[Deps]:
+        context = _deps_with_gateway(deps, profile, model)
+        return cast("Runtime[Deps]", SimpleNamespace(context=context))
+
+    return make
+
+
+@pytest.fixture
+def runtime_with_faults(runtime_with_model: RuntimeWithModel) -> RuntimeWithFaults:
+    """``runtime_with_faults(faults)``: the scripted model with ``faults`` keyed by section id."""
+
+    def make(faults: dict[str, Fault]) -> Runtime[Deps]:
+        return runtime_with_model(ScriptedChatModel(faults=faults))
+
+    return make
+
+
+@pytest.fixture
+def deps_priced(deps: Deps) -> Deps:
+    """``deps`` with a gateway over the ``fake`` routes priced at 4 and 20 USD per Mtok."""
+    fake = load_profile(deps.settings.gateway.profiles_dir, "fake")
+    priced = Profile(
+        name="fake-priced",
+        routes=fake.routes,
+        prices={"scripted-v1": Price(input=4.0, output=20.0)},
+    )
+    return _deps_with_gateway(deps, priced)
 
 
 @pytest.fixture

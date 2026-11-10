@@ -187,3 +187,20 @@ def test_cli_approve_missing_plan_file_exits_2(cli: Cli, tmp_path: Path) -> None
     assert result.returncode == 2
     assert f"invalid plan {missing}" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+@pytest.mark.db
+def test_cli_run_rejects_profile_without_credentials(cli: Cli, settings: Settings) -> None:
+    def count() -> int:
+        with psycopg.connect(settings.database_url, autocommit=True) as conn:
+            row = conn.execute("select count(*) from runs").fetchone()
+        assert row is not None
+        return row[0]
+
+    before = count()
+    # The empty value overrides any ANTHROPIC_API_KEY in the repository's .env.
+    result = cli("run", str(SYNTHETIC), "--profile", "default", env={"ANTHROPIC_API_KEY": ""})
+    assert result.returncode == 2 and "ANTHROPIC_API_KEY" in result.stderr
+    unknown = cli("run", str(SYNTHETIC), "--profile", "nope")
+    assert unknown.returncode == 2 and "nope" in unknown.stderr
+    assert result.stdout == "" and unknown.stdout == "" and count() == before

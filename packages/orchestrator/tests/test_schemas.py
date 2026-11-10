@@ -7,6 +7,7 @@ from modelforge_orchestrator.schemas import (
     ApprovalSummary,
     Manifest,
     RefName,
+    ReplayReport,
     RunState,
     merge_dicts,
 )
@@ -26,7 +27,7 @@ def test_run_state_round_trips_and_merges() -> None:
     assert merge_dicts({"profile": ref}, {"split": ref}) == {"profile": ref, "split": ref}
     assert set(DETERMINISTIC_REFS) < set(get_args(RefName))
     assert "document_sections" not in DETERMINISTIC_REFS
-    assert len(get_args(RefName)) == 27 and len(DETERMINISTIC_REFS) == 22
+    assert len(get_args(RefName)) == 29 and len(DETERMINISTIC_REFS) == 23
 
 
 def test_manifest_carries_no_timestamp() -> None:
@@ -58,3 +59,29 @@ def test_manifest_carries_no_timestamp() -> None:
         return set()
 
     assert "ts" not in keys(manifest.model_dump(mode="json"))
+
+
+def test_run_state_and_replay_report_new_fields() -> None:
+    state = RunState(
+        run_id="run_a",
+        requester="alice",
+        seed=42,
+        brief_hash="h",
+        brief_ref="b" * 64,
+        dataset_ref=DatasetRef(adapter="synthetic_credit"),
+    )
+    assert state.rerun_llm is False
+    report = ReplayReport(
+        original_run_id="run_a",
+        replay_run_id="run_b",
+        matched=[],
+        mismatched=[],
+        missing=[],
+        ok=True,
+        regenerated=["document_md"],
+    )
+    assert report.regenerated == ["document_md"]
+    assert ReplayReport.model_validate(report.model_dump() | {"regenerated": []}).regenerated == []
+    assert "knowledge_index" in DETERMINISTIC_REFS and DETERMINISTIC_REFS[-1] == "knowledge_index"
+    assert {"scope_notes", "knowledge_index"} <= set(get_args(RefName))
+    assert "scope_notes" not in DETERMINISTIC_REFS

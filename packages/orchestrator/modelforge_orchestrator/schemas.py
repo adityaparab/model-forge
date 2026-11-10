@@ -29,6 +29,7 @@ RefName = Literal[
     "benchmark",
     "validation",
     "document_sections",
+    "scope_notes",
     "document_md",
     "document_html",
     "completeness",
@@ -36,6 +37,7 @@ RefName = Literal[
     "responses",
     "manifest",
     "replay_report",
+    "knowledge_index",
 ]
 
 DETERMINISTIC_REFS: tuple[RefName, ...] = (
@@ -61,6 +63,7 @@ DETERMINISTIC_REFS: tuple[RefName, ...] = (
     "document_md",
     "document_html",
     "completeness",
+    "knowledge_index",
 )
 """The refs a replay compares with its original (spec 5.7)."""
 
@@ -78,7 +81,7 @@ class Counters(StrictModel):
 class ErrorRecord(StrictModel):
     node: str
     attempt: int
-    kind: Literal["tool", "validation", "internal"]
+    kind: Literal["tool", "llm", "validation", "internal"]
     error: dict[str, Any]
     ts: str
 
@@ -98,6 +101,7 @@ class RunState(StrictModel):
     brief_ref: str
     dataset_ref: DatasetRef
     replay_of: str | None = None
+    rerun_llm: bool = False
     plan: ModelingPlan | None = None
     refs: Annotated[dict[RefName, ArtifactRef], merge_dicts] = Field(default_factory=dict)
     gates: Annotated[dict[GateName, GateDecision], merge_dicts] = Field(default_factory=dict)
@@ -164,6 +168,7 @@ class ReplayReport(StrictModel):
     mismatched: list[ReplayMismatch]
     missing: list[RefName]
     ok: bool
+    regenerated: list[RefName] = Field(default_factory=list)
 
 
 class Finding(StrictModel):

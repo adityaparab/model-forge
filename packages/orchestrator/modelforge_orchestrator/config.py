@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from modelforge_gateway.settings import GatewaySettings, gateway_settings_from_env
 from modelforge_mcp.common import ServerSettings
 
 DEFAULT_DATABASE_URL = "postgresql://modelforge:modelforge@localhost:5432/modelforge"
@@ -22,6 +23,7 @@ class Settings:
     tool_timeout_s: float
     log_level: str
     knowledge_dir: Path = Path("./knowledge-base")
+    gateway: GatewaySettings = GatewaySettings()
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
@@ -59,6 +61,7 @@ def load_settings(
         tool_timeout_s=float(source.get("MODELFORGE_TOOL_TIMEOUT_S", "600")),
         log_level=source.get("MODELFORGE_LOG_LEVEL", "INFO"),
         knowledge_dir=Path(source.get("MODELFORGE_KNOWLEDGE_DIR", "./knowledge-base")),
+        gateway=gateway_settings_from_env(source),
     )
 
 

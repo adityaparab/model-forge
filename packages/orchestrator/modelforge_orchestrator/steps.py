@@ -5,11 +5,18 @@ or event, and finishing the step) commits in its own transaction, so a failure l
 never rolls back what was already recorded. Tool calls themselves run outside any transaction.
 """
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from types import TracebackType
 from typing import Any, Self
 
 from modelforge_core.schemas import StrictModel
+from modelforge_gateway.schemas import (
+    CallMetadata,
+    CompletionRequest,
+    CompletionResult,
+    GatewayError,
+)
 from modelforge_lineage import events, steps
 from modelforge_lineage.canonical import canonical_json, sha256_hex
 from modelforge_lineage.ids import new_id
@@ -35,6 +42,9 @@ def _error_record(node: str, attempt: int, exc: BaseException) -> ErrorRecord:
     if isinstance(exc, ToolError):
         kind = "tool"
         error: dict[str, Any] = dict(exc.to_dict())
+    elif isinstance(exc, GatewayError):
+        kind = "llm"
+        error = dict(exc.to_dict())
     else:
         kind = "validation" if isinstance(exc, ValidationError | BriefError) else "internal"
         error = {"type": type(exc).__name__, "message": str(exc)}
@@ -58,6 +68,7 @@ class Step:
         self.node = node
         self.output_state_hash: str | None = None
         self.last_error: ErrorRecord | None = None
+        self.spent_usd: float = 0.0
 
     @property
     def run_id(self) -> str:
@@ -139,6 +150,21 @@ class Step:
             for ref in call.refs:
                 self._artifact(conn, ref)
         return call
+
+    def call_metadata(self, section_id: str | None = None) -> CallMetadata:
+        """The lineage keys a gateway call made inside this step carries."""
+        return CallMetadata(run_id=self.run_id, step_id=self.record.id, section_id=section_id)
+
+    def llm(
+        self,
+        request: CompletionRequest,
+        *,
+        validate: Callable[[BaseModel], str | None] | None = None,
+    ) -> CompletionResult:
+        """Complete ``request`` through the gateway, which records it; add its cost to the step."""
+        result = self.deps.gateway.complete(request, validate=validate)
+        self.spent_usd += result.cost_usd
+        return result
 
     def _record_stored(self, ref: ArtifactRef) -> ArtifactRef:
         with self.deps.lineage.transaction() as conn:

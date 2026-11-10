@@ -44,3 +44,12 @@ def test_server_settings_maps_directories() -> None:
         templates_dir=Path("/t"),
         knowledge_dir=Path("/k"),
     )
+
+
+def test_settings_gateway_from_env_and_dotenv(tmp_path: Path) -> None:
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=abc\n")
+    s = load_settings({"MODELFORGE_COST_CAP_USD": "3"}, dotenv=tmp_path / ".env")
+    assert s.gateway.anthropic_api_key == "abc" and s.gateway.cost_cap_usd == 3.0
+    assert s.knowledge_dir == Path("./knowledge-base")
+    assert s.gateway.profiles_dir == Path("./profiles")
+    assert load_settings({}, dotenv=None).gateway.anthropic_api_key is None

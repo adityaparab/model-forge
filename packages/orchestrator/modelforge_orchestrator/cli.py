@@ -13,6 +13,9 @@ import typer
 import yaml
 from modelforge_core.datasets.registry import ADAPTERS
 from modelforge_core.schemas import ModelingPlan
+from modelforge_gateway.gateway import check_credentials
+from modelforge_gateway.profiles import load_profile
+from modelforge_gateway.schemas import GatewayError
 from modelforge_lineage import migrate as lineage_migrate
 from modelforge_lineage import runs
 from modelforge_lineage.approvals import ApprovalError, record_approval
@@ -139,6 +142,12 @@ def run(
             plan_from_brief(brief)
         except ValueError as exc:
             _fail(f"invalid brief {brief_path}: {exc}")
+        profile_name = profile or settings.profile
+        try:
+            resolved = load_profile(settings.gateway.profiles_dir, profile_name)
+            check_credentials(resolved, settings.gateway)
+        except GatewayError as exc:
+            _fail(str(exc))
         ref = store.put(data, kind="brief", media_type=MEDIA_YAML)
         run_id = new_id("run")
         with db.transaction() as conn:
@@ -146,11 +155,12 @@ def run(
                 conn,
                 run_id=run_id,
                 requester=requester or os.environ.get("USER", "requester"),
-                profile=profile or settings.profile,
+                profile=profile_name,
                 brief_hash=brief_hash(data),
                 brief_ref=ref.id,
                 dataset_ref=brief.dataset.as_string(),
                 seed=brief.dataset.seed,
+                cost_cap_usd=settings.gateway.cost_cap_usd,
             )
             insert_artifact(
                 conn, run_id=run_id, ref=ref, uri=store.uri(ref.id), producer_step_id=None

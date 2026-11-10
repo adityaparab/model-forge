@@ -17,6 +17,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.types import Command
+from modelforge_gateway.gateway import Gateway
 from modelforge_lineage import migrate, queue, runs
 from modelforge_lineage.approvals import list_approvals
 from modelforge_lineage.db import Database
@@ -78,6 +79,7 @@ def initial_state(run: RunRecord) -> RunState:
         brief_ref=run.brief_ref,
         dataset_ref=DatasetRef.parse(run.dataset_ref),
         replay_of=run.replay_of,
+        rerun_llm=run.rerun_llm,
     )
 
 
@@ -195,7 +197,10 @@ def execute(
             append_event(conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind})
         log.info("run.claimed", kind=queued.kind, prior_status=run.status)
         with tool_client_factory(settings) as tools:
-            deps = Deps(tools=tools, lineage=Lineage(db), store=store, settings=settings)
+            gateway = Gateway.for_run(settings.gateway, run.profile, Lineage(db), store)
+            deps = Deps(
+                tools=tools, lineage=Lineage(db), store=store, settings=settings, gateway=gateway
+            )
             result = graph.invoke(graph_input, config, context=deps)
         if "__interrupt__" in result:
             prompt = GatePrompt.model_validate(result["__interrupt__"][0].value)

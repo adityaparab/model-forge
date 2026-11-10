@@ -1,7 +1,8 @@
-"""What every graph node receives: the tool client, lineage, the artifact store and settings."""
+"""What every graph node receives: tools, the model gateway, lineage, the store and settings."""
 
 from dataclasses import dataclass
 
+from modelforge_gateway.gateway import Gateway
 from modelforge_lineage.facade import Lineage
 from modelforge_lineage.store import ArtifactStore
 
@@ -15,3 +16,4 @@ class Deps:
     lineage: Lineage
     store: ArtifactStore
     settings: Settings
+    gateway: Gateway
