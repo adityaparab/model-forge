@@ -11,10 +11,7 @@ from typing import Annotated, Any, Literal, NoReturn
 
 import typer
 import yaml
-from modelforge_core.datasets.registry import ADAPTERS
 from modelforge_core.schemas import ModelingPlan
-from modelforge_gateway.gateway import check_credentials
-from modelforge_gateway.profiles import load_profile
 from modelforge_gateway.schemas import GatewayError
 from modelforge_lineage import migrate as lineage_migrate
 from modelforge_lineage import runs
@@ -22,21 +19,21 @@ from modelforge_lineage.approvals import ApprovalError, record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
 from modelforge_lineage.findings import list_findings
-from modelforge_lineage.ids import new_id
 from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.models import ArtifactRef, GateDecision, GateName, RunRecord
 from modelforge_lineage.observability import configure_logging
 from modelforge_lineage.queue import enqueue, release
-from modelforge_lineage.steps import insert_artifact, list_steps
-from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
+from modelforge_lineage.steps import list_steps
+from modelforge_lineage.store import ArtifactStore
 from modelforge_lineage.verify import verify_run
 from pydantic import ValidationError
 
-from modelforge_orchestrator.briefs import BriefError, brief_hash, load_brief, plan_from_brief
+from modelforge_orchestrator.briefs import BriefError
 from modelforge_orchestrator.config import Settings, load_settings
 from modelforge_orchestrator.graph import build_graph
 from modelforge_orchestrator.replay import ReplayError, create_replay
 from modelforge_orchestrator.schemas import ReplayReport
+from modelforge_orchestrator.submit import UnknownAdapterError, create_run_from_brief
 from modelforge_orchestrator.worker import (
     make_checkpointer,
     run_loop,
@@ -153,41 +150,23 @@ def run(
     settings, db, store = _context()
     try:
         try:
-            brief, data = load_brief(brief_path)
+            record = create_run_from_brief(
+                db,
+                store,
+                brief_path,
+                requester=requester or os.environ.get("USER", "requester"),
+                profile=profile or settings.profile,
+                cost_cap_usd=settings.gateway.cost_cap_usd,
+                gateway=settings.gateway,
+            )
         except (BriefError, OSError) as exc:
             _fail(f"invalid brief {brief_path}: {exc}")
-        if brief.dataset.adapter not in ADAPTERS:
-            _fail(f"unknown dataset adapter {brief.dataset.adapter!r}; known: {sorted(ADAPTERS)}")
-        try:
-            plan_from_brief(brief)
-        except ValueError as exc:
-            _fail(f"invalid brief {brief_path}: {exc}")
-        profile_name = profile or settings.profile
-        try:
-            resolved = load_profile(settings.gateway.profiles_dir, profile_name)
-            check_credentials(resolved, settings.gateway)
+        except UnknownAdapterError as exc:
+            _fail(str(exc))
         except GatewayError as exc:
             _fail(str(exc))
-        ref = store.put(data, kind="brief", media_type=MEDIA_YAML)
-        run_id = new_id("run")
-        with db.transaction() as conn:
-            record = runs.create_run(
-                conn,
-                run_id=run_id,
-                requester=requester or os.environ.get("USER", "requester"),
-                profile=profile_name,
-                brief_hash=brief_hash(data),
-                brief_ref=ref.id,
-                dataset_ref=brief.dataset.as_string(),
-                seed=brief.dataset.seed,
-                cost_cap_usd=settings.gateway.cost_cap_usd,
-            )
-            insert_artifact(
-                conn, run_id=run_id, ref=ref, uri=store.uri(ref.id), producer_step_id=None
-            )
-            enqueue(conn, run_id, "start")
         if not detach:
-            record = _execute(settings, db, store, run_id)
+            record = _execute(settings, db, store, record.id)
         _print_run(db, record, as_json=as_json)
     finally:
         db.close()

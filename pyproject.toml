@@ -133,3 +133,6 @@ name = "evals reach models and tools only through the orchestrator and gateway"
 type = "forbidden"
 source_modules = ["modelforge_evals"]
 forbidden_modules = ["langchain_core", "langgraph", "mcp", "langchain_anthropic", "langchain_ollama", "langchain_openai"]
+# Direct imports only: the harness and probes drive the worker and the challenger node, which
+# reach LangGraph, LangChain and the MCP SDK; evals itself must never import them.
+allow_indirect_imports = true

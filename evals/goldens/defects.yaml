@@ -1,0 +1,25 @@
+# The planted-defect suite (spec 10.4): each case mutates the base run's rendered document and
+# names the finding the challenger must raise on it. A signature matches a finding by its
+# pre-check `check_key` (an fnmatch glob) or, failing that, by `category` with `section` among
+# the finding's evidence.
+- id: removed_section
+  mutation: {kind: remove_section, section: monitoring}
+  expect: {check_key: "missing_section:monitoring"}
+- id: swapped_number
+  mutation: {kind: swap_digit, section: performance}
+  expect: {check_key: "reverify:performance"}
+- id: claimed_absent_test
+  mutation:
+    kind: append_sentence
+    section: performance
+    text: "An independent bootstrap stability test was performed and passed."
+  expect: {category: performance, section: performance}
+- id: miscited_regulation
+  mutation: {kind: swap_citation, section: regulatory_context, doc_id: ifrs9-ecl}
+  expect: {check_key: "miscited_regulation:regulatory_context:*"}
+- id: undiscussed_breach
+  mutation: {kind: remove_test_sentences, section: performance, statuses: [fail, warn]}
+  expect: {check_key: "undiscussed_test:*"}
+- id: missing_limitation
+  mutation: {kind: remove_sentences_containing, section: limitations, text: proxy}
+  expect: {category: data, section: limitations}
