@@ -190,7 +190,7 @@ def matches(token: NumberToken, value: Any) -> bool:
     return _matches_scalar(token, value)
 
 
-def _sentences(body: str) -> list[str]:
+def sentences(body: str) -> list[str]:
     """The body's sentences: blank lines and list items or headings start a new paragraph."""
     paragraphs: list[str] = []
     for block in _PARAGRAPH_BREAK.split(body):
@@ -206,6 +206,10 @@ def _sentences(body: str) -> list[str]:
         if current:
             paragraphs.append(" ".join(current))
     return [s for p in paragraphs for s in SENTENCE_BREAK.split(p.strip()) if s]
+
+
+_sentences = sentences
+"""The former private name, kept so existing callers keep working."""
 
 
 def check_section(
@@ -230,7 +234,7 @@ def check_section(
     unresolved: list[str] = []
     uncited: list[str] = []
     foreign: list[str] = []
-    for sentence in _sentences(body):
+    for sentence in sentences(body):
         values: list[Any] = []
         for match in MARKER.finditer(sentence):
             kind, target = match.group(1), match.group(2)

@@ -20,7 +20,7 @@ from typing import Any, Literal, cast
 
 from langgraph.runtime import Runtime
 from modelforge_core.schemas import ColumnDictionary, StrictModel
-from modelforge_gateway.schemas import CompletionRequest, Message, RedactionContext
+from modelforge_gateway.schemas import CompletionRequest, Message, Purpose, RedactionContext
 from modelforge_lineage.models import ArtifactRef
 from modelforge_mcp.schemas import (
     Citation,
@@ -53,23 +53,23 @@ from modelforge_orchestrator.excerpts import (
 )
 from modelforge_orchestrator.grounding import check_section, expand_aliases
 from modelforge_orchestrator.nodes import brief_of, original_manifest, plan_of
-from modelforge_orchestrator.schemas import RunState
+from modelforge_orchestrator.schemas import RefName, RunState
 from modelforge_orchestrator.steps import Step
 
 __all__ = [
+    "DOCUMENT_PROMPTS",
     "TEMPLATE_ID",
     "SectionOutcome",
+    "SectionPrompts",
     "document",
     "excerpt_floats_to_four_sig_figs",
+    "render_and_check",
+    "restricted_terms",
     "write_section",
 ]
 
 SERVER = "doc-renderer"
 TEMPLATE_ID = "sr11-7-dev-doc"
-SYSTEM_PROMPT_NAME = "document/system"
-PLAN_PROMPT_NAME = "document/plan_queries"
-WRITE_PROMPT_NAME = "document/write_section"
-PROMPT_VERSION = 1
 QUERY_K = 3
 GOVERNANCE_SECTION = "governance"
 LLM_CALLS_PER_ATTEMPT = 2
@@ -77,6 +77,25 @@ PLAN_MAX_OUTPUT_TOKENS = 1024
 WRITE_MAX_OUTPUT_TOKENS = 8192
 """A section draft is long, and a thinking model's reasoning counts against the limit."""
 ALIAS_TO_KIND: dict[str, str] = {alias: kind for kind, alias in KIND_TO_REF.items()}
+
+
+class SectionPrompts(StrictModel):
+    """The prompts, their version and the gateway purpose one section is written under."""
+
+    purpose: Purpose
+    system: str
+    plan_queries: str
+    write: str
+    version: int
+
+
+DOCUMENT_PROMPTS = SectionPrompts(
+    purpose="document",
+    system="document/system",
+    plan_queries="document/plan_queries",
+    write="document/write_section",
+    version=1,
+)
 
 
 class SectionOutcome(StrictModel):
@@ -136,6 +155,7 @@ def _passages_json(passages: list[Passage]) -> str:
 def _request(
     step: Step,
     spec: SectionSpec,
+    prompts: SectionPrompts,
     prompt_name: str,
     output_schema: type[BaseModel],
     restricted_terms: list[str],
@@ -143,12 +163,12 @@ def _request(
     **values: Any,
 ) -> CompletionRequest:
     registry = step.deps.gateway.registry
-    system = registry.render(registry.get(SYSTEM_PROMPT_NAME, PROMPT_VERSION))
-    user = registry.render(registry.get(prompt_name, PROMPT_VERSION), **values)
+    system = registry.render(registry.get(prompts.system, prompts.version))
+    user = registry.render(registry.get(prompt_name, prompts.version), **values)
     return CompletionRequest(
-        purpose="document",
+        purpose=prompts.purpose,
         prompt_name=prompt_name,
-        prompt_version=PROMPT_VERSION,
+        prompt_version=prompts.version,
         system=system,
         messages=[Message(role="user", content=user)],
         output_schema=output_schema,
@@ -225,8 +245,15 @@ def write_section(
     spec: SectionSpec,
     context: SectionContext,
     restricted_terms: list[str],
+    *,
+    prompts: SectionPrompts = DOCUMENT_PROMPTS,
+    findings_json: str | None = None,
 ) -> SectionOutcome:
-    """Plan, retrieve, write and check one section; regenerate once, then banner on failure."""
+    """Plan, retrieve, write and check one section; regenerate once, then banner on failure.
+
+    ``prompts`` selects the prompts and gateway purpose (the documentation agent's by default);
+    ``findings_json`` is passed to both prompts, which the documentation prompts ignore.
+    """
     section = section_json(spec, context, state)
     excerpts = json.dumps(excerpt_floats_to_four_sig_figs(context.excerpts), indent=2)
     aliases = {alias: ref.id for alias, ref in context.aliases.items()}
@@ -236,11 +263,13 @@ def write_section(
         plan_request = _request(
             step,
             spec,
-            PLAN_PROMPT_NAME,
+            prompts,
+            prompts.plan_queries,
             QueryPlan,
             restricted_terms,
             PLAN_MAX_OUTPUT_TOKENS,
             section_json=section,
+            findings_json=findings_json,
         )
         plan = step.llm(plan_request).parsed
         if not isinstance(plan, QueryPlan):
@@ -249,7 +278,8 @@ def write_section(
         write_request = _request(
             step,
             spec,
-            WRITE_PROMPT_NAME,
+            prompts,
+            prompts.write,
             SectionDraft,
             restricted_terms,
             WRITE_MAX_OUTPUT_TOKENS,
@@ -257,6 +287,7 @@ def write_section(
             excerpts_json=excerpts,
             passages_json=_passages_json(passages),
             failures_json=failures_json,
+            findings_json=findings_json,
         )
         draft = step.llm(write_request).parsed
         if not isinstance(draft, SectionDraft):
@@ -288,7 +319,7 @@ def write_section(
     )
 
 
-def _restricted_terms(deps: Deps, state: RunState) -> list[str]:
+def restricted_terms(deps: Deps, state: RunState) -> list[str]:
     """The brief's restricted terms plus the dataset's original column names."""
     dictionary = deps.store.get_model(state.refs["dictionary"].id, ColumnDictionary)
     originals = [column.original for column in dictionary.columns]
@@ -299,15 +330,10 @@ def _outcomes(step: Step, deps: Deps, state: RunState) -> list[SectionOutcome]:
     request = ListTemplateSectionsInput(template_id=TEMPLATE_ID)
     template: TemplateSections = step.tool(SERVER, "list_template_sections", request).output
     plan_ref: ArtifactRef = deps.store.put_model(plan_of(state), kind="modeling_plan")
-    restricted_terms = _restricted_terms(deps, state)
+    terms = restricted_terms(deps, state)
     return [
         write_section(
-            step,
-            deps,
-            state,
-            spec,
-            for_section(spec, state, deps.store, plan_ref),
-            restricted_terms,
+            step, deps, state, spec, for_section(spec, state, deps.store, plan_ref), terms
         )
         for spec in template.sections
     ]
@@ -332,10 +358,37 @@ def _summary(outcomes: list[SectionOutcome]) -> dict[str, Any]:
     }
 
 
+def render_and_check(
+    step: Step, state: RunState, sections_ref: ArtifactRef
+) -> dict[RefName, ArtifactRef]:
+    """Render ``sections_ref`` and check the document's completeness; the four document refs."""
+    plan = plan_of(state)
+    rendered = step.tool(
+        SERVER,
+        "render_document",
+        RenderDocumentInput(
+            template_id=TEMPLATE_ID,
+            sections_id=sections_ref.id,
+            title=f"{plan.model_name} development document",
+            context={"model": plan.model_name, "dataset": state.dataset_ref.as_string()},
+        ),
+    ).output
+    completeness = step.tool(
+        SERVER,
+        "check_completeness",
+        CheckCompletenessInput(document_id=rendered.markdown.id, template_id=TEMPLATE_ID),
+    ).refs[0]
+    return {
+        "document_sections": sections_ref,
+        "document_md": rendered.markdown,
+        "document_html": rendered.html,
+        "completeness": completeness,
+    }
+
+
 def document(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
     deps = runtime.context
     with Step(deps, state, "document") as step:
-        plan = plan_of(state)
         if state.replay_of is not None and not state.rerun_llm:
             original = original_manifest(state, deps).refs["document_sections"]
             sections = deps.store.get_model(original.id, DocumentSections)
@@ -345,29 +398,9 @@ def document(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
             sections_ref = step.store(
                 _sections(outcomes), kind="document_sections", summary=_summary(outcomes)
             )
-        rendered = step.tool(
-            SERVER,
-            "render_document",
-            RenderDocumentInput(
-                template_id=TEMPLATE_ID,
-                sections_id=sections_ref.id,
-                title=f"{plan.model_name} development document",
-                context={"model": plan.model_name, "dataset": state.dataset_ref.as_string()},
-            ),
-        ).output
-        completeness = step.tool(
-            SERVER,
-            "check_completeness",
-            CheckCompletenessInput(document_id=rendered.markdown.id, template_id=TEMPLATE_ID),
-        ).refs[0]
         return step.complete(
             {
-                "refs": {
-                    "document_sections": sections_ref,
-                    "document_md": rendered.markdown,
-                    "document_html": rendered.html,
-                    "completeness": completeness,
-                },
+                "refs": render_and_check(step, state, sections_ref),
                 "cost_usd": state.cost_usd + step.spent_usd,
             }
         )
