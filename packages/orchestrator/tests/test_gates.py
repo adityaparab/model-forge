@@ -102,3 +102,11 @@ def test_replay_mode_uses_recorded_approvals_without_interrupt(
         replay_of=original,
     ).model_copy(update={"plan": scoped_state.plan})
     assert gate_scope(replay_state, runtime).goto == "profile"
+
+
+@pytest.mark.db
+def test_gate_scope_summary_shows_rationale(deps: Deps, scoped_state: RunState) -> None:
+    summary = gate_summary("scope", scoped_state, deps.store)
+    assert set(summary) == {"plan", "rationale", "assumptions"}
+    assert summary["rationale"] == scoped_state.refs["scope_notes"].summary["rationale"]
+    assert summary["assumptions"]

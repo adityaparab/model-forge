@@ -28,7 +28,12 @@ def gate_summary(gate: GateName, state: RunState, store: ArtifactStore) -> dict[
     del store  # every summary is read from the refs' own summaries
     refs = state.refs
     if gate == "scope":
-        return {"plan": plan_of(state).model_dump(mode="json")}
+        summary: dict[str, Any] = {"plan": plan_of(state).model_dump(mode="json")}
+        notes = refs.get("scope_notes")
+        if notes is not None:  # SP2 runs and their replays have no scope notes
+            summary["rationale"] = notes.summary["rationale"]
+            summary["assumptions"] = notes.summary["assumptions"]
+        return summary
     if gate == "model":
         return {
             "validation": refs["validation"].summary,
