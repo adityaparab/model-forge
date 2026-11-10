@@ -16,7 +16,12 @@ def test_committed_config_has_the_three_profiles() -> None:
     assert fake.brief == "synthetic"
     assert "wall_time_by_node_s.*" in fake.ignore
     assert config.profiles["default"].compare == "tolerance"
-    assert config.profiles["default"].budgets == {"cost_usd": 8.0, "wall_time_s": 2700}
+    assert config.profiles["default"].budgets == {
+        "cost_usd": 8.0,
+        "probe_cost_usd": 2.0,
+        "wall_time_s": 2700,
+    }
+    assert config.profiles["ci-cheap"].budgets["probe_cost_usd"] == 1.0
     assert config.profiles["ci-cheap"].tolerances["defect_recall"] == -0.34
     assert config.briefs["synthetic"] == REPO / "examples/briefs/synthetic.yaml"
     assert config.briefs["polish"].is_file()
