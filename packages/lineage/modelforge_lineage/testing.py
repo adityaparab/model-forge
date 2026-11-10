@@ -1,4 +1,4 @@
-"""Temporary Postgres databases and pytest fixtures for packages that use the lineage store."""
+"""Temporary Postgres databases, an in-memory span exporter and pytest fixtures for the packages."""
 
 import os
 import uuid
@@ -8,6 +8,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 import psycopg
 import pytest
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from psycopg import Connection, sql
 from psycopg.rows import DictRow
 
@@ -15,6 +16,7 @@ from modelforge_lineage.db import Database
 from modelforge_lineage.migrate import TABLES, apply
 from modelforge_lineage.models import RunRecord
 from modelforge_lineage.runs import create_run
+from modelforge_lineage.tracing import configure_tracing, shutdown_tracing
 
 DEFAULT_DATABASE_URL = "postgresql://modelforge:modelforge@localhost:5432/modelforge"
 
@@ -66,6 +68,17 @@ def db(database: Database) -> Iterator[Database]:
     with database.transaction() as conn:
         conn.execute(truncate)
     yield database
+
+
+@pytest.fixture
+def spans() -> Iterator[InMemorySpanExporter]:
+    """Install the tracing provider with an in-memory exporter; yield it, then shut tracing down."""
+    exporter = InMemorySpanExporter()
+    configure_tracing("test", exporter=exporter)
+    try:
+        yield exporter
+    finally:
+        shutdown_tracing()
 
 
 def create_test_run(
