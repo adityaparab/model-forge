@@ -32,3 +32,10 @@ def test_scan_messages_reports_role_and_pattern() -> None:
 def test_scan_messages_checks_system_first() -> None:
     hit = scan_messages("see Attr7", [Message(role="user", content="x@y.io")], ["Attr7"])
     assert hit == RedactionHit(pattern="restricted_term", role="system")
+
+
+def test_digit_run_skips_decimals_and_citation_ids() -> None:
+    assert scan("the PD is 0.123456789012") is None
+    assert scan("see [K:k_123456789012]") is None
+    assert scan("obligor 123456789012") == "digit_run"
+    assert scan("ids 123456789012 and 0.5") == "digit_run"

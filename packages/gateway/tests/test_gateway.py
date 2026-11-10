@@ -12,6 +12,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_core.outputs import ChatResult
 from langchain_core.runnables import Runnable, RunnableLambda
 from modelforge_gateway.gateway import Gateway
+from modelforge_gateway.pricing import project_cost_usd
 from modelforge_gateway.profiles import Price, Profile, Route, load_profile
 from modelforge_gateway.prompts import PromptRegistry
 from modelforge_gateway.schemas import (
@@ -320,6 +321,46 @@ def test_complete_parks_on_cost_cap_before_sending(
     assert exc.value.message.endswith("exceeds the cap of 0.00 USD")
     assert model.calls == []
     assert failed_payload(db, metadata.run_id)["kind"] == "cost_cap"
+
+
+def test_cost_cap_is_checked_before_every_attempt(
+    gateway_for: GatewayFor, metadata: CallMetadata, db: Database
+) -> None:
+    req = request(metadata)
+    chars = len(req.system) + sum(len(m.content) for m in req.messages)
+    projected = project_cost_usd(chars, req.max_output_tokens, PRICED.prices["scripted-v1"])
+    first = (850 * 4.0 + 200 * 20.0) / 1e6
+    # The first attempt fits under the cap; its recorded cost pushes the retry over it.
+    with db.transaction() as conn:
+        runs.set_cost_cap(conn, metadata.run_id, projected + first / 2)
+    model = stub(Outcome(parsing_error=ValueError("missing field text")))
+    with pytest.raises(GatewayError) as exc:
+        gateway_for(model).complete(req)
+    assert exc.value.kind == "cost_cap"
+    assert len(model.calls) == 1
+    with db.connection() as conn:
+        rows = llm_calls.list_llm_calls(conn, metadata.run_id)
+        run = runs.get_run(conn, metadata.run_id)
+    assert [r.schema_valid for r in rows] == [False]
+    assert rows[0].cost_usd == pytest.approx(first) and run.cost_usd == pytest.approx(first)
+    assert failed_payload(db, metadata.run_id)["kind"] == "cost_cap"
+
+
+def test_retry_message_is_scanned_before_it_is_sent(
+    gateway_for: GatewayFor, metadata: CallMetadata, db: Database
+) -> None:
+    model = stub(Outcome(parsing_error=ValueError("field text got 123456789012")))
+    with pytest.raises(GatewayError) as exc:
+        gateway_for(model).complete(request(metadata))
+    assert exc.value.kind == "redaction"
+    assert "digit_run" in exc.value.message and "retry" in exc.value.message
+    assert "123456789012" not in str(exc.value)
+    assert len(model.calls) == 1
+    with db.connection() as conn:
+        rows = llm_calls.list_llm_calls(conn, metadata.run_id)
+    assert [r.schema_valid for r in rows] == [False]
+    payload = failed_payload(db, metadata.run_id)
+    assert payload["kind"] == "redaction" and "123456789012" not in str(payload)
 
 
 def test_missing_usage_metadata_records_zero_usage(

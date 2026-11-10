@@ -16,7 +16,8 @@ RedactionPattern = Literal["email", "iban", "digit_run", "restricted_term"]
 _PATTERNS: tuple[tuple[RedactionPattern, re.Pattern[str]], ...] = (
     ("email", re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")),
     ("iban", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b")),
-    ("digit_run", re.compile(r"(?<![0-9A-Fa-f])\d{9,}(?![0-9A-Fa-f])")),
+    # Not inside a hex id, a decimal fraction (``0.123456789012``) or a ``k_`` citation id.
+    ("digit_run", re.compile(r"(?<![0-9A-Fa-f.])(?<!k_)\d{9,}(?![0-9A-Fa-f])")),
 )
 
 

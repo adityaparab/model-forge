@@ -13,6 +13,7 @@ class GatewaySettings:
     anthropic_base_url: str | None = None
     ollama_base_url: str = "http://localhost:11434"
     ollama_model: str | None = None
+    ollama_num_ctx: int = 32768
     lmstudio_base_url: str = "http://localhost:1234/v1"
     lmstudio_model: str | None = None
     cost_cap_usd: float = 10.0
@@ -35,6 +36,7 @@ def gateway_settings_from_env(source: Mapping[str, str]) -> GatewaySettings:
     profiles_dir = get("MODELFORGE_PROFILES_DIR")
     cost_cap = get("MODELFORGE_COST_CAP_USD")
     timeout = get("MODELFORGE_LLM_TIMEOUT_S")
+    num_ctx = get("MODELFORGE_OLLAMA_NUM_CTX")
     return GatewaySettings(
         prompts_dir=Path(prompts_dir) if prompts_dir else defaults.prompts_dir,
         profiles_dir=Path(profiles_dir) if profiles_dir else defaults.profiles_dir,
@@ -42,6 +44,7 @@ def gateway_settings_from_env(source: Mapping[str, str]) -> GatewaySettings:
         anthropic_base_url=get("MODELFORGE_ANTHROPIC_BASE_URL"),
         ollama_base_url=get("MODELFORGE_OLLAMA_BASE_URL") or defaults.ollama_base_url,
         ollama_model=get("MODELFORGE_OLLAMA_MODEL"),
+        ollama_num_ctx=int(num_ctx) if num_ctx else defaults.ollama_num_ctx,
         lmstudio_base_url=get("MODELFORGE_LMSTUDIO_BASE_URL") or defaults.lmstudio_base_url,
         lmstudio_model=get("MODELFORGE_LMSTUDIO_MODEL"),
         cost_cap_usd=float(cost_cap) if cost_cap else defaults.cost_cap_usd,

@@ -1,8 +1,8 @@
 """The model gateway: one entry point for every LLM call.
 
 ``Gateway.complete`` routes the request, records the prompt, scans for sensitive text,
-checks the run's cost cap, invokes the provider with bounded schema retries and writes
-every attempt to lineage (spec section 3.2).
+invokes the provider with bounded schema retries (checking the run's cost cap before every
+attempt and scanning every retry message) and writes every attempt to lineage (spec 3.2).
 """
 
 import time
@@ -25,7 +25,7 @@ from modelforge_gateway.pricing import cost_usd, project_cost_usd
 from modelforge_gateway.profiles import Profile, Route, load_profile
 from modelforge_gateway.prompts import PromptRecord, PromptRegistry
 from modelforge_gateway.providers import ChatModelFactory, build_chat_model, structured
-from modelforge_gateway.redaction import scan_messages
+from modelforge_gateway.redaction import scan, scan_messages
 from modelforge_gateway.schemas import (
     CompletionRequest,
     CompletionResult,
@@ -147,7 +147,6 @@ class Gateway:
         hit = scan_messages(request.system, request.messages, request.redaction.restricted_terms)
         if hit is not None:
             raise GatewayError("redaction", f"{hit.pattern} in {hit.role} message")
-        self._check_cost_cap(request, route)
         request_hash = sha256_hex(
             canonical_json(
                 {
@@ -166,7 +165,10 @@ class Gateway:
         total_usage = Usage()
         total_cost = 0.0
         last_error: str | None = None
+        retry_chars = 0
         for number in range(1, MAX_ATTEMPTS + 1):
+            # `_record` has already added the previous attempts' cost to the run.
+            self._check_cost_cap(request, route, retry_chars)
             attempt = self._invoke(runnable, messages, number, validate)
             attempt_cost = cost_usd(attempt.usage, price)
             ref = self._record(request, route, prompt, request_hash, attempt, attempt_cost)
@@ -197,7 +199,12 @@ class Gateway:
                     raw_ref=ref,
                 )
             last_error = attempt.error
-            messages = [*messages, HumanMessage(RETRY_MESSAGE.format(error=last_error))]
+            retry = RETRY_MESSAGE.format(error=last_error)
+            pattern = scan(retry, request.redaction.restricted_terms)
+            if pattern is not None:
+                raise GatewayError("redaction", f"{pattern} in retry message")
+            retry_chars += len(retry)
+            messages = [*messages, HumanMessage(retry)]
         raise GatewayError(
             "schema",
             f"no valid {request.output_schema.__name__} after {MAX_ATTEMPTS} attempts: "
@@ -218,10 +225,13 @@ class Gateway:
             ),
         ]
 
-    def _check_cost_cap(self, request: CompletionRequest, route: Route) -> None:
+    def _check_cost_cap(self, request: CompletionRequest, route: Route, retry_chars: int) -> None:
+        """Raise ``cost_cap`` when the run's spend plus this attempt's worst case exceeds it."""
         with self._lineage.connection() as conn:
             run = runs.get_run(conn, request.metadata.run_id)
-        text_chars = len(request.system) + sum(len(m.content) for m in request.messages)
+        text_chars = (
+            len(request.system) + sum(len(m.content) for m in request.messages) + retry_chars
+        )
         projected = project_cost_usd(
             text_chars, request.max_output_tokens, self.profile.prices.get(route.model)
         )

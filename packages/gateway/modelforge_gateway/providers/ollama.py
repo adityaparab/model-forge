@@ -7,8 +7,10 @@ from modelforge_gateway.settings import GatewaySettings
 
 
 def build(route: Route, settings: GatewaySettings, max_output_tokens: int) -> ChatOllama:
+    """``num_ctx`` is explicit: the server's default window truncates the long prompts silently."""
     return ChatOllama(
         model=settings.ollama_model or route.model,
         base_url=settings.ollama_base_url,
         num_predict=max_output_tokens,
+        num_ctx=settings.ollama_num_ctx,
     )

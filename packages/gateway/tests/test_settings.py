@@ -36,9 +36,12 @@ def test_settings_reads_every_variable() -> None:
             "MODELFORGE_LMSTUDIO_BASE_URL": "http://l",
             "MODELFORGE_LMSTUDIO_MODEL": "lm",
             "MODELFORGE_LLM_TIMEOUT_S": "12",
+            "MODELFORGE_OLLAMA_NUM_CTX": "65536",
         }
     )
     assert s.prompts_dir == Path("/p") and s.profiles_dir == Path("/q")
     assert (s.ollama_base_url, s.ollama_model) == ("http://o", "om")
     assert (s.lmstudio_base_url, s.lmstudio_model) == ("http://l", "lm")
     assert s.request_timeout_s == 12.0
+    assert s.ollama_num_ctx == 65536
+    assert GatewaySettings().ollama_num_ctx == 32768

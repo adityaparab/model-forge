@@ -1,18 +1,24 @@
 """Provider builders: construction only, never invoked, so no network."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from langchain_anthropic import ChatAnthropic
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models import BaseChatModel, LanguageModelInput
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatResult
+from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from modelforge_gateway.gateway import check_credentials
 from modelforge_gateway.profiles import Route, load_profile
-from modelforge_gateway.providers import build_chat_model
+from modelforge_gateway.providers import build_chat_model, structured
 from modelforge_gateway.providers.fake import ScriptedChatModel
-from modelforge_gateway.schemas import GatewayError
+from modelforge_gateway.schemas import GatewayError, Provider
 from modelforge_gateway.settings import GatewaySettings
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr
 
 
 def test_anthropic_builder_passes_key_url_effort_and_ignores_env(
@@ -59,6 +65,7 @@ def test_local_builders_use_settings_urls_and_model_overrides() -> None:
     )
     assert isinstance(o, ChatOllama)
     assert o.model == "qwen3:8b" and o.base_url == "http://h:1" and o.num_predict == 9
+    assert o.num_ctx == 32768
     lm = build_chat_model(
         Route(provider="lmstudio", model="google/gemma-4-26b-a4b-qat"),
         GatewaySettings(),
@@ -94,3 +101,56 @@ def test_check_credentials(repo_profiles_dir: Path) -> None:
     check_credentials(default, GatewaySettings(anthropic_api_key="k"))
     check_credentials(load_profile(repo_profiles_dir, "fake"), GatewaySettings())
     check_credentials(load_profile(repo_profiles_dir, "local-ollama"), GatewaySettings())
+
+
+def test_ollama_builder_passes_the_configured_context_window() -> None:
+    o = build_chat_model(
+        Route(provider="ollama", model="gpt-oss:20b"), GatewaySettings(ollama_num_ctx=8192), 9
+    )
+    assert isinstance(o, ChatOllama) and o.num_ctx == 8192
+
+
+class Answer(BaseModel):
+    text: str
+
+
+class RecordingModel(BaseChatModel):
+    """Records the keyword arguments of every `with_structured_output` call."""
+
+    seen: list[dict[str, Any]] = []
+
+    @property
+    def _llm_type(self) -> str:
+        return "recording"
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        raise NotImplementedError
+
+    def with_structured_output(
+        self, schema: dict[str, Any] | type, **kwargs: Any
+    ) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
+        self.seen.append(kwargs)
+        return RunnableLambda(lambda model_input: {})
+
+
+@pytest.mark.parametrize(
+    ("provider", "expected"),
+    [
+        ("anthropic", {"method": "json_schema", "include_raw": True}),
+        ("ollama", {"method": "json_schema", "include_raw": True}),
+        ("lmstudio", {"method": "json_schema", "include_raw": True}),
+        ("fake", {"include_raw": True}),
+    ],
+)
+def test_structured_output_method_per_provider(
+    provider: Provider, expected: dict[str, Any]
+) -> None:
+    model = RecordingModel(seen=[])
+    structured(model, provider, Answer)
+    assert model.seen == [expected]

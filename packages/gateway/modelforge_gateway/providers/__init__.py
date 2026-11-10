@@ -34,7 +34,11 @@ def build_chat_model(
 def structured(
     chat_model: BaseChatModel, provider: Provider, schema: type[BaseModel]
 ) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
-    """The raw-including structured runnable; local servers use JSON-schema mode."""
-    if provider in ("ollama", "lmstudio"):
+    """The raw-including structured runnable; every real provider uses JSON-schema mode.
+
+    Anthropic's forced tool calling is unsupported with thinking enabled, so it too uses the
+    integration's ``json_schema`` method. The scripted fake takes no method.
+    """
+    if provider in ("anthropic", "ollama", "lmstudio"):
         return chat_model.with_structured_output(schema, method="json_schema", include_raw=True)
     return chat_model.with_structured_output(schema, include_raw=True)
