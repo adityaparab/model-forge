@@ -1,8 +1,10 @@
 """Response models of the API; the console's TypeScript types are generated from them."""
 
+from datetime import date, datetime
 from typing import Any, Literal
 
 from modelforge_core.schemas import ModelingPlan
+from modelforge_gateway.profiles import Price
 from modelforge_lineage.models import (
     ApprovalRecord,
     ArtifactRef,
@@ -13,6 +15,7 @@ from modelforge_lineage.models import (
     LlmCallRecord,
     RunRecord,
     RunStatus,
+    SettingsAuditRow,
     StepRecord,
     ToolCallRecord,
 )
@@ -23,9 +26,15 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "ApprovalRequest",
     "ArtifactItem",
+    "BriefItem",
     "ConfigResponse",
     "CostBucket",
+    "CostDay",
+    "CostGroup",
+    "CostRunRow",
     "CostSummary",
+    "CostTokens",
+    "CostsResponse",
     "Directories",
     "DocumentResponse",
     "EventsResponse",
@@ -39,14 +48,19 @@ __all__ = [
     "IdentityConfig",
     "LlmCallsResponse",
     "PassageView",
+    "ProfileView",
     "ReplayItem",
     "ReplayRequest",
     "ResolvedCitation",
     "ResumeRequest",
+    "RouteView",
     "RunDetail",
     "RunListItem",
     "RunListResponse",
     "SectionView",
+    "SettingsEditable",
+    "SettingsPatch",
+    "SettingsResponse",
     "StepDetail",
     "SubmitRequest",
     "TraceLinks",
@@ -342,3 +356,117 @@ class ResumeRequest(_Request):
 class ReplayRequest(_Request):
     rerun_llm: bool = False
     """Call the LLM again instead of copying the original's outputs."""
+
+
+class SettingsEditable(BaseModel):
+    """The server-side settings an admin may change (spec 3.8)."""
+
+    default_profile: str
+    default_cost_cap_usd: float
+    auto_replay: bool
+
+
+class SettingsPatch(_Request):
+    """Any subset of the editable settings; a wrong type is a 422, never coerced."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    default_profile: str | None = None
+    """Must name a valid profile file in the profiles directory."""
+    default_cost_cap_usd: float | None = None
+    """USD; must be positive."""
+    auto_replay: bool | None = None
+
+
+class RouteView(BaseModel):
+    provider: str
+    model: str
+    effort: str
+    structured: str | None
+
+
+class ProfileView(BaseModel):
+    """A profile file of the profiles directory; ``error`` when it does not load."""
+
+    name: str
+    routes: dict[str, RouteView]
+    """By purpose; empty when the profile does not load."""
+    prices: dict[str, Price]
+    """By model, USD per million tokens."""
+    error: str | None
+
+
+class SettingsResponse(BaseModel):
+    editable: SettingsEditable
+    audit: list[SettingsAuditRow]
+    """The last 20 changes, newest first."""
+    config: ConfigResponse
+    """The ``GET /config`` document."""
+    profiles: list[ProfileView]
+    """Every profile file, by name."""
+
+
+class CostTokens(BaseModel):
+    input: int
+    output: int
+    cache_read: int
+    cache_write: int
+
+
+class CostRunRow(BaseModel):
+    run_id: str
+    status: RunStatus
+    profile: str
+    requester: str
+    created_at: datetime
+    cost_usd: float
+    """From the run's calls in the window; ``0`` when it made none."""
+    cost_cap_usd: float
+    n_calls: int
+
+
+class CostGroup(BaseModel):
+    """The calls of the window sharing a profile, model or purpose; unused fields are 0."""
+
+    key: str
+    cost_usd: float
+    n_runs: int
+    n_calls: int
+    input_tokens: int
+    output_tokens: int
+
+
+class CostDay(BaseModel):
+    day: date
+    """The UTC day of the calls."""
+    cost_usd: float
+    n_calls: int
+
+
+class CostsResponse(BaseModel):
+    """Spend across runs (spec 3.9): the totals and groups are over the ``llm_calls`` whose
+    ``ts`` is in the window; ``by_run`` lists every run created in the window."""
+
+    since: datetime
+    until: datetime
+    total_usd: float
+    n_runs: int
+    """The runs with a call in the window."""
+    n_calls: int
+    tokens: CostTokens
+    by_run: list[CostRunRow]
+    by_profile: list[CostGroup]
+    """``key`` is the profile; model and token fields are 0."""
+    by_model: list[CostGroup]
+    """``key`` is the model; ``n_runs`` is 0."""
+    by_purpose: list[CostGroup]
+    """``key`` is the purpose; ``n_runs`` and the token fields are 0."""
+    by_day: list[CostDay]
+
+
+class BriefItem(BaseModel):
+    """An example brief of the briefs directory."""
+
+    name: str
+    path: str
+    text: str

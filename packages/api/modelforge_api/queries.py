@@ -1,8 +1,8 @@
 """Aggregates and composite reads the lineage package has no function for; parameterised SQL."""
 
 from collections.abc import Sequence
-from datetime import UTC
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, LiteralString
 
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
@@ -13,11 +13,22 @@ from modelforge_orchestrator.schemas import ReplayReport
 from psycopg import Connection
 from psycopg.rows import DictRow
 
-from modelforge_api.schemas import CostBucket, CostSummary, FindingsCounts, ReplayItem
+from modelforge_api.schemas import (
+    CostBucket,
+    CostDay,
+    CostGroup,
+    CostRunRow,
+    CostsResponse,
+    CostSummary,
+    CostTokens,
+    FindingsCounts,
+    ReplayItem,
+)
 
 __all__ = [
     "SEVERITY_ORDER",
     "cost_summary",
+    "costs_window",
     "events_head",
     "findings_counts",
     "get_artifact_row",
@@ -77,6 +88,115 @@ def cost_summary(
         n_schema_retries=int(totals["n_schema_retries"]),
         by_purpose=grouped["purpose"],
         by_model=grouped["model"],
+    )
+
+
+_WINDOW_CALLS = (
+    "from llm_calls lc join steps s on s.id = lc.step_id join runs r on r.id = s.run_id"
+    " where lc.ts >= %(since)s and lc.ts <= %(until)s"
+)
+
+
+def _group(row: DictRow) -> CostGroup:
+    return CostGroup(
+        key=row["key"] if row["key"] is not None else "",
+        cost_usd=float(row["cost_usd"]),
+        n_runs=int(row["n_runs"]),
+        n_calls=int(row["n_calls"]),
+        input_tokens=int(row["input_tokens"]),
+        output_tokens=int(row["output_tokens"]),
+    )
+
+
+def costs_window(conn: Connection[DictRow], since: datetime, until: datetime) -> CostsResponse:
+    """Spend across runs between ``since`` and ``until`` (spec 3.9).
+
+    The totals and groups are over the ``llm_calls`` whose ``ts`` is in the window; ``by_run``
+    lists every run created in the window with its calls in the window (zero when none).
+    """
+    window = {"since": since, "until": until}
+    totals = conn.execute(
+        "select count(distinct r.id) as n_runs, count(*) as n_calls,"
+        " coalesce(sum(lc.cost_usd), 0) as cost_usd,"
+        " coalesce(sum(lc.input_tokens), 0) as input_tokens,"
+        " coalesce(sum(lc.output_tokens), 0) as output_tokens,"
+        " coalesce(sum(lc.cache_read_tokens), 0) as cache_read_tokens,"
+        " coalesce(sum(lc.cache_write_tokens), 0) as cache_write_tokens "
+        f"{_WINDOW_CALLS}",
+        window,
+    ).fetchone()
+    assert totals is not None
+    by_run = [
+        CostRunRow(
+            run_id=row["id"],
+            status=row["status"],
+            profile=row["profile"],
+            requester=row["requester"],
+            created_at=row["created_at"],
+            cost_usd=float(row["cost_usd"]),
+            cost_cap_usd=float(row["cost_cap_usd"]),
+            n_calls=int(row["n_calls"]),
+        )
+        for row in conn.execute(
+            "select r.id, r.status, r.profile, r.requester, r.created_at, r.cost_cap_usd,"
+            " count(c.id) as n_calls, coalesce(sum(c.cost_usd), 0) as cost_usd"
+            " from runs r left join ("
+            "  select s.run_id, lc.id, lc.cost_usd from llm_calls lc"
+            "  join steps s on s.id = lc.step_id"
+            "  where lc.ts >= %(since)s and lc.ts <= %(until)s"
+            " ) c on c.run_id = r.id"
+            " where r.created_at >= %(since)s and r.created_at <= %(until)s"
+            " group by r.id order by r.created_at desc, r.id",
+            window,
+        )
+    ]
+    # the fields a group does not use are 0 (spec 3.9)
+    groups: dict[str, LiteralString] = {
+        "profile": "r.profile as key, count(distinct r.id) as n_runs, 0 as input_tokens,"
+        " 0 as output_tokens",
+        "model": "lc.model as key, 0 as n_runs,"
+        " coalesce(sum(lc.input_tokens), 0) as input_tokens,"
+        " coalesce(sum(lc.output_tokens), 0) as output_tokens",
+        "purpose": "lc.purpose as key, 0 as n_runs, 0 as input_tokens, 0 as output_tokens",
+    }
+    grouped = {
+        name: [
+            _group(row)
+            for row in conn.execute(
+                f"select {columns}, count(*) as n_calls,"
+                f" coalesce(sum(lc.cost_usd), 0) as cost_usd {_WINDOW_CALLS}"
+                " group by 1 order by 1",
+                window,
+            )
+        ]
+        for name, columns in groups.items()
+    }
+    by_day = [
+        CostDay(day=row["day"], cost_usd=float(row["cost_usd"]), n_calls=int(row["n_calls"]))
+        for row in conn.execute(
+            "select date_trunc('day', lc.ts at time zone 'UTC')::date as day,"
+            " count(*) as n_calls, coalesce(sum(lc.cost_usd), 0) as cost_usd "
+            f"{_WINDOW_CALLS} group by 1 order by 1",
+            window,
+        )
+    ]
+    return CostsResponse(
+        since=since,
+        until=until,
+        total_usd=float(totals["cost_usd"]),
+        n_runs=int(totals["n_runs"]),
+        n_calls=int(totals["n_calls"]),
+        tokens=CostTokens(
+            input=int(totals["input_tokens"]),
+            output=int(totals["output_tokens"]),
+            cache_read=int(totals["cache_read_tokens"]),
+            cache_write=int(totals["cache_write_tokens"]),
+        ),
+        by_run=by_run,
+        by_profile=grouped["profile"],
+        by_model=grouped["model"],
+        by_purpose=grouped["purpose"],
+        by_day=by_day,
     )
 
 
