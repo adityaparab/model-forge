@@ -27,11 +27,12 @@ def create_run(
     replay_of: str | None = None,
     cost_cap_usd: float = 10.0,
     rerun_llm: bool = False,
+    trace_id: str | None = None,
 ) -> RunRecord:
     row = conn.execute(
         "insert into runs (id, requester, status, profile, brief_hash, brief_ref, dataset_ref,"
-        " seed, replay_of, cost_usd, cost_cap_usd, rerun_llm)"
-        " values (%s, %s, 'queued', %s, %s, %s, %s, %s, %s, 0, %s, %s) returning *",
+        " seed, replay_of, cost_usd, cost_cap_usd, rerun_llm, trace_id)"
+        " values (%s, %s, 'queued', %s, %s, %s, %s, %s, %s, 0, %s, %s, %s) returning *",
         (
             run_id,
             requester,
@@ -43,6 +44,7 @@ def create_run(
             replay_of,
             cost_cap_usd,
             rerun_llm,
+            trace_id,
         ),
     ).fetchone()
     assert row is not None
@@ -58,8 +60,58 @@ def get_run(conn: Connection[DictRow], run_id: str) -> RunRecord:
     return RunRecord.model_validate(row)
 
 
-def list_runs(conn: Connection[DictRow], *, limit: int = 50) -> list[RunRecord]:
-    rows = conn.execute("select * from runs order by created_at desc, id limit %s", (limit,))
+def _run_filters(
+    status: str | None, profile: str | None, requester: str | None, include_replays: bool
+) -> tuple[sql.Composable, list[object]]:
+    clauses: list[sql.Composable] = []
+    params: list[object] = []
+    for column, value in (("status", status), ("profile", profile), ("requester", requester)):
+        if value is not None:
+            clauses.append(sql.SQL("{} = %s").format(sql.Identifier(column)))
+            params.append(value)
+    if not include_replays:
+        clauses.append(sql.SQL("replay_of is null"))
+    if not clauses:
+        return sql.SQL(""), params
+    return sql.SQL(" where ") + sql.SQL(" and ").join(clauses), params
+
+
+def list_runs(
+    conn: Connection[DictRow],
+    *,
+    limit: int = 50,
+    offset: int = 0,
+    status: str | None = None,
+    profile: str | None = None,
+    requester: str | None = None,
+    include_replays: bool = True,
+) -> list[RunRecord]:
+    where, params = _run_filters(status, profile, requester, include_replays)
+    query = sql.SQL("select * from runs{} order by created_at desc, id limit %s offset %s").format(
+        where
+    )
+    rows = conn.execute(query, (*params, limit, offset))
+    return [RunRecord.model_validate(r) for r in rows]
+
+
+def count_runs(
+    conn: Connection[DictRow],
+    *,
+    status: str | None = None,
+    profile: str | None = None,
+    requester: str | None = None,
+    include_replays: bool = True,
+) -> int:
+    where, params = _run_filters(status, profile, requester, include_replays)
+    row = conn.execute(sql.SQL("select count(*) as n from runs{}").format(where), params).fetchone()
+    assert row is not None
+    return int(row["n"])
+
+
+def list_replays(conn: Connection[DictRow], run_id: str) -> list[RunRecord]:
+    rows = conn.execute(
+        "select * from runs where replay_of = %s order by created_at, id", (run_id,)
+    )
     return [RunRecord.model_validate(r) for r in rows]
 
 
@@ -79,6 +131,21 @@ def _set_column(conn: Connection[DictRow], run_id: str, column: str, value: obje
     cur = conn.execute(query, (value, run_id))
     if cur.rowcount == 0:
         raise RunNotFound(run_id)
+
+
+def request_pause(conn: Connection[DictRow], run_id: str) -> None:
+    _set_column(conn, run_id, "pause_requested", True)
+
+
+def clear_pause(conn: Connection[DictRow], run_id: str) -> None:
+    _set_column(conn, run_id, "pause_requested", False)
+
+
+def pause_requested(conn: Connection[DictRow], run_id: str) -> bool:
+    row = conn.execute("select pause_requested from runs where id = %s", (run_id,)).fetchone()
+    if row is None:
+        raise RunNotFound(run_id)
+    return bool(row["pause_requested"])
 
 
 def add_cost(conn: Connection[DictRow], run_id: str, usd: float) -> float:

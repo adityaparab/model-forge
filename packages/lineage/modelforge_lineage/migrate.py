@@ -18,6 +18,8 @@ TABLES: tuple[str, ...] = (
     "runs",
     "llm_calls",
     "prompts",
+    "settings",
+    "settings_audit",
 )
 
 

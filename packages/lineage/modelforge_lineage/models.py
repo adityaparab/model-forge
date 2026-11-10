@@ -16,6 +16,7 @@ RunStatus = Literal[
     "completed",
     "rejected",
     "aborted",
+    "paused",
 ]
 GateName = Literal["scope", "model", "signoff"]
 QueueKind = Literal["start", "resume", "replay"]
@@ -68,6 +69,7 @@ class RunRecord(StrictModel):
     replay_of: str | None
     error: dict[str, Any] | None
     rerun_llm: bool
+    pause_requested: bool = False
 
 
 class StepRecord(StrictModel):
@@ -164,6 +166,15 @@ class ApprovalRecord(StrictModel):
     plan_diff: list[PlanDiffEntry] | None
     conditions: list[str] | None
     adjust_target: str | None
+    ts: datetime
+
+
+class SettingsAuditRow(StrictModel):
+    id: int
+    key: str
+    old_value: Any
+    new_value: Any
+    updated_by: str
     ts: datetime
 
 
