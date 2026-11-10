@@ -4,7 +4,9 @@ import { Shell } from "./components/Shell";
 import { NewRunPage } from "./pages/NewRunPage";
 import { RunPage } from "./pages/RunPage";
 import { RunsPage } from "./pages/RunsPage";
+import { DocumentTab } from "./pages/run/DocumentTab";
 import { OverviewTab } from "./pages/run/OverviewTab";
+import { ValidationTab } from "./pages/run/ValidationTab";
 
 /** Stands in for a page until its task fills the route. */
 function Placeholder({ title }: { title: string }) {
@@ -20,8 +22,8 @@ export function App() {
         <Route path="runs/new" element={<NewRunPage />} />
         <Route path="runs/:runId" element={<RunPage />}>
           <Route index element={<OverviewTab />} />
-          <Route path="document" element={<Placeholder title="Document" />} />
-          <Route path="validation" element={<Placeholder title="Validation" />} />
+          <Route path="document" element={<DocumentTab />} />
+          <Route path="validation" element={<ValidationTab />} />
           <Route path="findings" element={<Placeholder title="Findings" />} />
           <Route path="lineage" element={<Placeholder title="Lineage" />} />
           <Route path="llm-calls" element={<Placeholder title="LLM calls" />} />
