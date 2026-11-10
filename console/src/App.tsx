@@ -2,16 +2,19 @@ import { lazy, Suspense } from "react";
 import { Navigate, Route, Routes } from "react-router";
 
 import { Shell } from "./components/Shell";
+import { CostsPage } from "./pages/CostsPage";
+import { InventoryPage } from "./pages/InventoryPage";
 import { NewRunPage } from "./pages/NewRunPage";
 import { RunPage } from "./pages/RunPage";
 import { RunsPage } from "./pages/RunsPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { FindingsTab } from "./pages/run/FindingsTab";
 import { LineageTab } from "./pages/run/LineageTab";
 import { LlmCallsTab } from "./pages/run/LlmCallsTab";
 import { OverviewTab } from "./pages/run/OverviewTab";
 import { ValidationTab } from "./pages/run/ValidationTab";
 
-/** Stands in for a page until its task fills the route. */
+/** A titled page with no content: the not-found route. */
 function Placeholder({ title }: { title: string }) {
   return <h1 className="text-base font-semibold">{title}</h1>;
 }
@@ -43,9 +46,9 @@ export function App() {
           <Route path="lineage" element={<LineageTab />} />
           <Route path="llm-calls" element={<LlmCallsTab />} />
         </Route>
-        <Route path="inventory" element={<Placeholder title="Inventory" />} />
-        <Route path="costs" element={<Placeholder title="Costs" />} />
-        <Route path="settings" element={<Placeholder title="Settings" />} />
+        <Route path="inventory" element={<InventoryPage />} />
+        <Route path="costs" element={<CostsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Placeholder title="Not found" />} />
       </Route>
     </Routes>
