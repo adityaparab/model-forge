@@ -19,7 +19,7 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
 import modelforge_api
 from modelforge_api import errors
-from modelforge_api.routers import documents, findings, inventory, runs, system, writes
+from modelforge_api.routers import documents, events, findings, inventory, runs, system, writes
 from modelforge_api.settings import ApiSettings
 
 __all__ = ["API_PREFIX", "EXCLUDED_URLS", "create_app"]
@@ -73,4 +73,5 @@ def create_app(settings: ApiSettings) -> FastAPI:
     app.include_router(documents.router, prefix=API_PREFIX)
     app.include_router(findings.router, prefix=API_PREFIX)
     app.include_router(inventory.router, prefix=API_PREFIX)
+    app.include_router(events.router, prefix=API_PREFIX)
     return app
