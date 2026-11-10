@@ -3,19 +3,21 @@ from typing import Any
 import pytest
 import structlog
 from langgraph.checkpoint.postgres import PostgresSaver
+from langgraph.runtime import Runtime
 from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
 from modelforge_lineage.inventory import get_for_run
 from modelforge_lineage.models import GateDecision
 from modelforge_lineage.queue import claim, enqueue
-from modelforge_lineage.runs import get_run, set_error
+from modelforge_lineage.runs import get_run, request_pause, set_error
 from modelforge_lineage.steps import list_artifacts, list_steps
 from modelforge_lineage.store import ArtifactStore
-from modelforge_orchestrator import worker
+from modelforge_orchestrator import graph, worker
 from modelforge_orchestrator.config import Settings
+from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.replay import ReplayError, create_replay
-from modelforge_orchestrator.schemas import ReplayReport
+from modelforge_orchestrator.schemas import ReplayReport, RunState
 from modelforge_orchestrator.tools import InProcessToolClient, ToolError
 from modelforge_orchestrator.worker import run_loop, run_once
 from structlog.testing import capture_logs
@@ -284,3 +286,66 @@ def test_run_loop_logs_ready_with_redacted_url_and_idle(
     assert ready[0]["poll_interval_s"] == 2.0
     assert ready[0]["worker_id"]
     assert [e["log_level"] for e in logs if e["event"] == "worker.idle"] == ["debug"]
+
+
+@pytest.mark.db
+def test_worker_parks_paused_and_resume_continues(
+    settings: Settings, database: Database, store: ArtifactStore, checkpointer: PostgresSaver
+) -> None:
+    run_id = queued_run(database, store, SYNTHETIC)
+    with database.transaction() as conn:
+        request_pause(conn, run_id)
+    run = run_once(
+        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "paused"
+    assert run.pause_requested is False and run.error is None
+    with database.connection() as conn:
+        events = list_events(conn, run_id)
+        assert list_steps(conn, run_id) == []
+        assert claim(conn, "x", run_id=run_id) is None  # the queue row was released
+    paused = [e for e in events if e.type == "run.paused"]
+    assert [e.payload for e in paused] == [{"node": "intake"}]
+    with database.transaction() as conn:
+        enqueue(conn, run_id, "resume")
+    run = run_once(
+        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "awaiting_scope"
+    with database.connection() as conn:
+        assert [s.node for s in list_steps(conn, run_id)] == ["intake", "scope"]
+
+
+@pytest.mark.db
+def test_late_pause_request_is_cleared_on_finish(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pause requested during the exempt `seal` node must not outlive the execution."""
+    real_seal = graph.NODES["seal"]
+
+    def seal_then_pause(state: RunState, runtime: Runtime[Deps]) -> Any:
+        update = real_seal(state, runtime)
+        with runtime.context.lineage.transaction() as conn:
+            request_pause(conn, state.run_id)
+        return update
+
+    monkeypatch.setitem(graph.NODES, "seal", seal_then_pause)
+    run_id = queued_run(database, store, SYNTHETIC)
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    for decision in (
+        GateDecision(gate="scope", decision="approve", approver="bob"),
+        GateDecision(gate="model", decision="accept", approver="bob"),
+        GateDecision(gate="signoff", decision="approve", approver="bob"),
+    ):
+        with database.transaction() as conn:
+            record_approval(conn, run_id, decision, current_plan=None)
+            enqueue(conn, run_id, "resume")
+        run = run_once(
+            settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+        )
+    assert run is not None and run.status == "completed"
+    assert run.pause_requested is False

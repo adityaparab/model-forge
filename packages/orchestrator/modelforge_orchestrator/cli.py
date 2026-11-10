@@ -1,4 +1,4 @@
-"""The ``modelforge`` command line: submit, approve, inspect, replay and verify runs.
+"""The ``modelforge`` command line: submit, approve, pause, inspect, replay and verify runs.
 
 Exit codes: 0 success, 1 a check that ran and failed (replay mismatch, verify failure),
 2 a request the run cannot take (bad brief, wrong gate, unknown run, ...).
@@ -215,14 +215,14 @@ def resume(
     ] = None,
     detach: DetachOption = False,
 ) -> None:
-    """Retry a run in needs_attention from its last checkpoint."""
+    """Retry a run in needs_attention, or continue a paused one, from its last checkpoint."""
     settings, db, store = _context()
     try:
         if cost_cap is not None and cost_cap <= 0:
             _fail(f"invalid cost cap {cost_cap}; it must be positive")
         current = _get_run(db, run_id)
-        if current.status != "needs_attention":
-            _fail(f"run {run_id} is {current.status}; only a needs_attention run resumes")
+        if current.status not in ("needs_attention", "paused"):
+            _fail(f"run {run_id} is {current.status}; only a needs_attention or paused run resumes")
         with db.transaction() as conn:
             if cost_cap is not None:
                 runs.set_cost_cap(conn, run_id, cost_cap)
@@ -230,6 +230,21 @@ def resume(
             enqueue(conn, run_id, "resume")
         record = _execute(settings, db, store, run_id) if not detach else _get_run(db, run_id)
         _print_run(db, record, as_json=False)
+    finally:
+        db.close()
+
+
+@app.command()
+def pause(run_id: Annotated[str, typer.Argument(metavar="RUN_ID")]) -> None:
+    """Ask a running run to pause at its next node boundary."""
+    _, db, _ = _context()
+    try:
+        current = _get_run(db, run_id)
+        if current.status != "running":
+            _fail(f"run {run_id} is {current.status}; only a running run pauses")
+        with db.transaction() as conn:
+            runs.request_pause(conn, run_id)
+        _print_run(db, _get_run(db, run_id), as_json=False)
     finally:
         db.close()
 
@@ -244,8 +259,8 @@ def abort(run_id: Annotated[str, typer.Argument(metavar="RUN_ID")]) -> None:
             _fail(f"run {run_id} is {current.status} and cannot be aborted")
         if current.status == "running":
             _fail(
-                f"run {run_id} is running; SP2 has no cancellation, abort it after it parks"
-                " at a gate or in needs_attention"
+                f"run {run_id} is running and there is no cancellation; pause it first"
+                f" (modelforge pause {run_id}), then abort it once it is paused"
             )
         with db.transaction() as conn:
             if current.status == "queued":

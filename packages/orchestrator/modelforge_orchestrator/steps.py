@@ -17,7 +17,7 @@ from modelforge_gateway.schemas import (
     CompletionResult,
     GatewayError,
 )
-from modelforge_lineage import events, steps
+from modelforge_lineage import events, runs, steps
 from modelforge_lineage.canonical import canonical_json, sha256_hex
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import ArtifactRef, StepRecord, ToolCallRecord
@@ -31,7 +31,20 @@ from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.schemas import ErrorRecord, RunState, apply_update
 from modelforge_orchestrator.tools import ToolCall, ToolError
 
-__all__ = ["Step", "state_hash"]
+__all__ = ["PAUSE_EXEMPT", "PauseRequested", "Step", "state_hash"]
+
+PAUSE_EXEMPT: frozenset[str] = frozenset({"gate_scope", "gate_model", "gate_signoff", "seal"})
+"""Nodes that run even with a pause requested: a gate resumes an interrupt and must not stop
+between the answer and its step, and `seal` is seconds long."""
+
+
+class PauseRequested(Exception):  # noqa: N818 - a control signal, not an error
+    """A pause was requested for ``run_id``; raised before ``node`` records anything."""
+
+    def __init__(self, run_id: str, node: str) -> None:
+        super().__init__(f"run {run_id}: pause requested before {node}")
+        self.run_id = run_id
+        self.node = node
 
 
 def state_hash(state: RunState) -> str:
@@ -88,6 +101,11 @@ class Step:
         self._event(conn, "artifact.stored", {"id": ref.id, "kind": ref.kind})
 
     def __enter__(self) -> Self:
+        if self.node not in PAUSE_EXEMPT:
+            with self.deps.lineage.connection() as conn:
+                if runs.pause_requested(conn, self.run_id):
+                    # Nothing recorded yet: the checkpoint stays at the previous node's end.
+                    raise PauseRequested(self.run_id, self.node)
         input_hash = state_hash(self.state)
         with self.deps.lineage.transaction() as conn:
             self.record = steps.start_step(conn, self.run_id, self.node, input_hash)

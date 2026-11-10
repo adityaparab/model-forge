@@ -1,8 +1,9 @@
 """The worker: claims queued runs, drives the graph, and parks runs at gates or for attention.
 
-One `execute` call runs a claimed run until the graph pauses at a gate, finishes, or raises.
-The run's status, `gate.requested` events and `runs.error` are written here; the nodes write the
-rest. The checkpointed state is never edited here, so a resumed run continues where it failed.
+One `execute` call runs a claimed run until the graph pauses at a gate, finishes, is paused at a
+node boundary (`steps.PauseRequested`), or raises. The run's status, `gate.requested` events and
+`runs.error` are written here; the nodes write the rest. The checkpointed state is never edited
+here, so a resumed run continues where it failed.
 """
 
 import importlib
@@ -34,6 +35,7 @@ from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.graph import build_graph
 from modelforge_orchestrator.schemas import ErrorRecord, GatePrompt, RunState
+from modelforge_orchestrator.steps import PauseRequested
 from modelforge_orchestrator.tools import StdioToolClient, ToolClient
 
 __all__ = [
@@ -140,7 +142,7 @@ def _graph_input(db: Database, run: RunRecord, kind: str) -> RunState | Command[
                 f"run {run.id}: resume claimed at gate {gate} with no recorded approval"
             )
         return Command(resume=approvals[-1].payload.model_dump(mode="json"))
-    if kind == "resume" and run.status == "needs_attention":
+    if kind == "resume" and run.status in ("needs_attention", "paused"):
         return None
     raise WorkerError(f"run {run.id}: cannot execute a {kind!r} claim in status {run.status!r}")
 
@@ -216,6 +218,13 @@ def execute(
             with db.transaction() as conn:
                 runs.set_status(conn, run_id, result["status"])
             log.info("run.finished", status=result["status"])
+    except PauseRequested as exc:
+        # LangGraph 1.2.20 re-raises a node's exception as itself, not in an `ExceptionGroup`.
+        with db.transaction() as conn:
+            runs.set_status(conn, run_id, "paused")
+            runs.clear_pause(conn, run_id)
+            append_event(conn, run_id, "run.paused", {"node": exc.node})
+        log.info("run.paused", node=exc.node)
     except Exception as exc:
         record = _error_record(db, run_id, exc)
         payload = record.model_dump(mode="json")
@@ -228,6 +237,8 @@ def execute(
         log.error("run.needs_attention", error=payload)
     finally:
         with db.transaction() as conn:
+            # A pause requested too late (during an exempt node) must not reach a later execution.
+            runs.clear_pause(conn, run_id)
             queue.release(conn, run_id)
     with db.connection() as conn:
         return runs.get_run(conn, run_id)

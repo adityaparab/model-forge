@@ -85,6 +85,29 @@ def test_cli_abort_refuses_running_run(cli: Cli, settings: Settings) -> None:
 
 
 @pytest.mark.db
+def test_cli_pause_refuses_unless_running(cli: Cli, settings: Settings, db: Database) -> None:
+    del db  # truncated: `worker --once` below must claim this run's row, not another test's
+    run_id = run_id_from(cli("run", str(SYNTHETIC), "--requester", "alice", "--detach").stdout)
+    refused = cli("pause", run_id)
+    assert refused.returncode == 2 and "running" in refused.stderr
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        conn.execute("update runs set status = 'running' where id = %s", (run_id,))
+    paused = cli("pause", run_id)
+    assert paused.returncode == 0
+    assert paused.stdout.splitlines()[0] == f"{run_id} running"
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        row = conn.execute("select pause_requested from runs where id = %s", (run_id,)).fetchone()
+        assert row is not None and row[0] is True
+        # back to queued so the worker takes its start row and pauses before `intake`
+        conn.execute("update runs set status = 'queued' where id = %s", (run_id,))
+    assert cli("worker", "--once").returncode == 0
+    assert cli("status", run_id).stdout.splitlines()[0] == f"{run_id} paused"
+    resumed = cli("resume", run_id)
+    assert resumed.returncode == 0
+    assert resumed.stdout.splitlines()[0] == f"{run_id} awaiting_scope"
+
+
+@pytest.mark.db
 def test_cli_run_unknown_threshold_exits_2_without_a_run(
     cli: Cli, settings: Settings, tmp_path: Path
 ) -> None:

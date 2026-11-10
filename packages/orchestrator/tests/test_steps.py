@@ -6,12 +6,13 @@ from modelforge_gateway.prompts import PromptRegistry
 from modelforge_gateway.schemas import CallMetadata, CompletionRequest, GatewayError, Message
 from modelforge_lineage.events import list_events
 from modelforge_lineage.llm_calls import list_llm_calls
+from modelforge_lineage.runs import request_pause
 from modelforge_lineage.steps import list_artifacts, list_steps, list_tool_calls
 from modelforge_mcp.servers.data_profiler import LoadDatasetInput, ProfileDatasetInput
 from modelforge_orchestrator.agent_schemas import QueryPlan
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.schemas import RunState
-from modelforge_orchestrator.steps import Step, state_hash
+from modelforge_orchestrator.steps import PAUSE_EXEMPT, PauseRequested, Step, state_hash
 from modelforge_orchestrator.tools import ToolError
 
 
@@ -103,3 +104,30 @@ def test_step_records_gateway_error_as_llm_kind(deps: Deps, synthetic_state: Run
     recorded = [e for e in events if e.type == "error.recorded"]
     assert len(recorded) == 1 and recorded[0].payload["kind"] == "llm"
     assert recorded[0].payload["error"]["message"] == "x"
+
+
+@pytest.mark.db
+def test_step_raises_pause_requested_before_writing(deps: Deps, synthetic_state: RunState) -> None:
+    run_id = synthetic_state.run_id
+    with deps.lineage.transaction() as conn:
+        request_pause(conn, run_id)
+        before = len(list_events(conn, run_id))
+    with pytest.raises(PauseRequested) as raised:
+        with Step(deps, synthetic_state, "profile"):
+            pytest.fail("the body of a paused step must not run")
+    assert raised.value.run_id == run_id and raised.value.node == "profile"
+    with deps.lineage.connection() as conn:
+        assert list_steps(conn, run_id) == []
+        assert len(list_events(conn, run_id)) == before
+
+
+@pytest.mark.db
+def test_exempt_nodes_ignore_the_flag(deps: Deps, synthetic_state: RunState) -> None:
+    assert PAUSE_EXEMPT == frozenset({"gate_scope", "gate_model", "gate_signoff", "seal"})
+    with deps.lineage.transaction() as conn:
+        request_pause(conn, synthetic_state.run_id)
+    with Step(deps, synthetic_state, "seal") as step:
+        step.complete({})
+    with deps.lineage.connection() as conn:
+        steps_ = list_steps(conn, synthetic_state.run_id)
+    assert [(s.node, s.status) for s in steps_] == [("seal", "succeeded")]
