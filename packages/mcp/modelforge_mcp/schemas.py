@@ -51,10 +51,21 @@ class Citation(StrictModel):
     target: str
 
 
+class GroundingReport(StrictModel):
+    """What the grounding checks found in one section body; ``ok`` when every list is empty."""
+
+    ungrounded_numbers: list[str] = []
+    unresolved_markers: list[str] = []
+    uncited_regulatory_sentences: list[str] = []
+    foreign_passages: list[str] = []
+    ok: bool
+
+
 class DocumentSection(StrictModel):
     section_id: str
     body_md: str
     citations: list[Citation] = []
+    grounding: GroundingReport | None = None
 
 
 class DocumentSections(StrictModel):
