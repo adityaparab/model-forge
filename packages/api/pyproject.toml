@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "modelforge-api"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "modelforge-orchestrator",
+    "fastapi>=0.120",
+    "uvicorn[standard]>=0.30",
+    "opentelemetry-instrumentation-fastapi",
+    "typer>=0.28",
+    "pyyaml>=6",
+    "pydantic>=2.7",
+]
+
+[project.scripts]
+modelforge-api = "modelforge_api.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["modelforge_api"]

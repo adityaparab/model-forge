@@ -18,7 +18,8 @@ __pycache__/
 
 # node
 node_modules/
-ui/dist/
+console/dist/
+console/node_modules/
 
 # os / editor
 .DS_Store
