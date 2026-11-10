@@ -175,6 +175,7 @@ def run_probe(
             update, _ = invoke_node(challenge, state, deps)
         except Exception as exc:
             _park(deps, probe_id, exc)
+            exc.add_note(f"probe run {probe_id} ({case.id}) is needs_attention")
             raise
         findings = deps.store.get_model(update["refs"]["findings"].id, FindingsList).findings
     with deps.lineage.transaction() as conn:

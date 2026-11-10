@@ -2,15 +2,23 @@
 
 import json
 import os
+import re
 import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
 
 import pytest
+import typer
+from modelforge_evals import cli as evals_cli
+from modelforge_evals.defects import DefectCase
+from modelforge_evals.probes import run_probes
 from modelforge_evals.report import EvalReport
+from modelforge_gateway.schemas import GatewayError
+from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.steps import list_artifacts
 from modelforge_orchestrator.config import Settings
+from modelforge_orchestrator.deps import Deps
 
 from .conftest import REPO
 
@@ -19,12 +27,9 @@ BASELINE = REPO / "evals/baselines/fake.json"
 Cli = Callable[..., "subprocess.CompletedProcess[str]"]
 
 
-@pytest.fixture
-def cli(settings: Settings, checkpointer: object) -> Cli:
-    """``cli(*args, env=None)`` runs ``uv run modelforge-evals *args`` on the test database."""
-    del checkpointer  # the checkpoint tables must exist before the CLI drives a run
-    base_env = {
-        **{k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"},
+def _env(settings: Settings) -> dict[str, str]:
+    """The ``MODELFORGE_*`` variables pointing the CLI at the test database and directories."""
+    return {
         "MODELFORGE_DATABASE_URL": settings.database_url,
         "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
         "MODELFORGE_DATA_DIR": str(settings.data_dir),
@@ -33,6 +38,16 @@ def cli(settings: Settings, checkpointer: object) -> Cli:
         "MODELFORGE_KNOWLEDGE_DIR": str(settings.knowledge_dir),
         "MODELFORGE_PROMPTS_DIR": str(settings.gateway.prompts_dir),
         "MODELFORGE_PROFILES_DIR": str(settings.gateway.profiles_dir),
+    }
+
+
+@pytest.fixture
+def cli(settings: Settings, checkpointer: object) -> Cli:
+    """``cli(*args, env=None)`` runs ``uv run modelforge-evals *args`` on the test database."""
+    del checkpointer  # the checkpoint tables must exist before the CLI drives a run
+    base_env = {
+        **{k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"},
+        **_env(settings),
     }
 
     def run(*args: str, env: Mapping[str, str] | None = None) -> subprocess.CompletedProcess[str]:
@@ -162,3 +177,89 @@ def test_evals_compare_reports_regressions(cli: Cli, tmp_path: Path) -> None:
     assert clean.returncode == 0, clean.stdout + clean.stderr
     regressed = cli("compare", str(report_path), str(worse), "--profile", "fake")
     assert regressed.returncode == 1 and "retrieval_recall_at_5" in regressed.stdout
+
+
+def _run_count(database: Database) -> int:
+    with database.connection() as conn:
+        return len(runs.list_runs(conn, limit=1000))
+
+
+@pytest.mark.db
+def test_evals_run_checks_the_baseline_before_any_layer(
+    cli: Cli, database: Database, tmp_path: Path
+) -> None:
+    malformed = tmp_path / "malformed.json"
+    malformed.write_text('{"profile": "fake"}')
+    blocked = tmp_path / "file"
+    blocked.write_text("")
+    before = _run_count(database)
+    for args, needle in (
+        (("--baseline", str(tmp_path / "missing.json")), "missing.json"),
+        (("--baseline", str(malformed)), "metrics"),
+        (("--write-baseline", str(blocked / "baseline.json")), "baseline.json"),
+    ):
+        result = cli("run", "--profile", "fake", *args, "--report-dir", str(tmp_path / "r"))
+        assert result.returncode == 2, result.stdout + result.stderr
+        assert needle in result.stderr and "Traceback" not in result.stderr
+    assert _run_count(database) == before
+    assert not (tmp_path / "r").exists()
+
+
+@pytest.mark.db
+def test_evals_run_warns_when_the_step_summary_cannot_be_written(cli: Cli, tmp_path: Path) -> None:
+    result = cli(
+        "run",
+        "--profile",
+        "fake",
+        "--layers",
+        "retrieval",
+        "--report-dir",
+        str(tmp_path / "reports"),
+        env={"GITHUB_STEP_SUMMARY": str(tmp_path / "absent" / "summary.md")},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "warning: cannot append" in result.stderr and "No regressions." in result.stdout
+
+
+@pytest.mark.db
+def test_evals_run_exits_2_when_a_probe_fails(
+    settings: Settings,
+    database: Database,
+    checkpointer: object,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """In process: the challenger of the first probe raises a provider `GatewayError`."""
+    del checkpointer
+    for name, value in _env(settings).items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+
+    def failing_probes(deps: Deps, base_run_id: str, cases: list[DefectCase]) -> object:
+        def fail(*args: object, **kwargs: object) -> object:
+            raise GatewayError("provider", "planted provider failure")
+
+        monkeypatch.setattr(deps.gateway, "complete", fail)
+        return run_probes(deps, base_run_id, cases)
+
+    monkeypatch.setattr(evals_cli, "run_probes", failing_probes)
+    with pytest.raises(typer.Exit) as exited:
+        evals_cli.run(
+            profile="fake",
+            report_dir=tmp_path / "reports",
+            config=REPO / "evals/evals.yml",
+        )
+    assert exited.value.exit_code == 2
+    err = capsys.readouterr().err.strip().splitlines()[-1]
+    assert "GatewayError" in err and "planted provider failure" in err
+    pipeline_id = re.search(r"pipeline run (run_\w+)", err)
+    probe_id = re.search(r"probe run (run_\w+)", err)
+    assert pipeline_id is not None and probe_id is not None, err
+    with database.connection() as conn:
+        pipeline = runs.get_run(conn, pipeline_id.group(1))
+        probe = runs.get_run(conn, probe_id.group(1))
+    assert pipeline.status == "completed" and pipeline.requester != "evals"
+    assert probe.status == "needs_attention" and probe.requester == "evals"
+    assert probe.brief_hash == pipeline.brief_hash
+    assert not (tmp_path / "reports").exists()

@@ -2,7 +2,8 @@
 
 Exit codes: 0 clean, 1 a regression against the baseline or a budget exceeded, 2 a
 configuration error (bad ``evals.yml``, unknown profile, brief or layer, ``challenger``
-without ``pipeline``) or a pipeline run that parked.
+without ``pipeline``, an unreadable baseline), a pipeline run that parked, or any other
+failure while the layers ran (a provider error or cost cap in a probe, ...).
 """
 
 import json
@@ -153,9 +154,13 @@ def run_eval(
         metrics |= flatten(run_metrics(db, store, run_id))
         models, prompts = _run_identity(db, run_id)
         if "challenger" in chosen:
-            found, by_class, probe_ids = _challenger_metrics(
-                settings, db, store, run_id, goldens / "defects.yaml"
-            )
+            try:
+                found, by_class, probe_ids = _challenger_metrics(
+                    settings, db, store, run_id, goldens / "defects.yaml"
+                )
+            except Exception as exc:
+                exc.add_note(f"pipeline run {run_id}")
+                raise
             metrics |= found
     return EvalReport(
         profile=profile,
@@ -196,8 +201,11 @@ def _summarize(report: EvalReport, regressions: list[Regression], *, as_json: bo
     typer.echo(report.model_dump_json(indent=2) if as_json else summary, nl=not as_json)
     step_summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if step_summary:
-        with Path(step_summary).open("a", encoding="utf-8") as handle:
-            handle.write(summary)
+        try:
+            with Path(step_summary).open("a", encoding="utf-8") as handle:
+                handle.write(summary)
+        except OSError as exc:
+            typer.echo(f"warning: cannot append to GITHUB_STEP_SUMMARY: {exc}", err=True)
 
 
 def _read_json(path: Path) -> Any:
@@ -205,6 +213,21 @@ def _read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         _fail(f"cannot read {path}: {exc}")
+
+
+def _read_baseline(path: Path) -> dict[str, Any]:
+    """The baseline at ``path``; exit 2 unless it is a mapping with a ``metrics`` mapping."""
+    document = _read_json(path)
+    if not isinstance(document, dict) or not isinstance(document.get("metrics"), dict):
+        _fail(f"{path} is not a baseline: expected a mapping with a 'metrics' mapping")
+    return dict(document)
+
+
+def _failure(exc: Exception) -> str:
+    """``exc`` on one line, with its notes (the pipeline and probe runs it concerns)."""
+    notes = "; ".join(getattr(exc, "__notes__", []))
+    line = f"eval failed: {type(exc).__name__}: {exc}" + (f" ({notes})" if notes else "")
+    return " ".join(line.split())
 
 
 def _load_config(path: Path) -> EvalsConfig:
@@ -243,6 +266,13 @@ def run(
     ] = False,
 ) -> None:
     """Run a profile's eval layers, record the report, and compare it with a baseline."""
+    # Inputs and outputs are checked before any layer runs (and spends).
+    against = _read_baseline(baseline) if baseline is not None else None
+    if write_baseline is not None:
+        try:
+            write_baseline.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            _fail(f"cannot create the directory of {write_baseline}: {exc}")
     settings = load_settings()
     configure_logging("WARNING" if "MODELFORGE_LOG_LEVEL" not in os.environ else settings.log_level)
     evals = _load_config(config)
@@ -252,10 +282,13 @@ def run(
         _fail(str(exc))
     except EvalError as exc:
         _fail(f"pipeline run parked: {exc}")
+    except Exception as exc:
+        _fail(_failure(exc))
     _record(settings, report, report_dir)
     spec = evals.profiles[profile]
     # Without a baseline the report is its own, so only the budgets can fail.
-    against = _read_json(baseline) if baseline is not None else baseline_of(report)
+    if against is None:
+        against = baseline_of(report)
     regressions = compare(report, against, spec)
     _summarize(report, regressions, as_json=as_json)
     if regressions:
@@ -264,7 +297,6 @@ def run(
             typer.echo(f"  {r.metric}: {r.value!r} (baseline {r.baseline!r}; {r.rule})", err=True)
         raise typer.Exit(code=1)
     if write_baseline is not None:
-        write_baseline.parent.mkdir(parents=True, exist_ok=True)
         text = json.dumps(baseline_of(report), indent=2, sort_keys=True) + "\n"
         write_baseline.write_text(text, encoding="utf-8")
 
@@ -285,7 +317,7 @@ def compare_command(
         loaded = EvalReport.model_validate(_read_json(report))
     except ValueError as exc:
         _fail(f"{report} is not an eval report: {exc}")
-    regressions = compare(loaded, _read_json(baseline), spec)
+    regressions = compare(loaded, _read_baseline(baseline), spec)
     typer.echo(markdown_summary(loaded, regressions))
     if regressions:
         raise typer.Exit(code=1)
