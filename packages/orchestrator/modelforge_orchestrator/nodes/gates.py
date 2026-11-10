@@ -17,7 +17,7 @@ from modelforge_lineage.store import ArtifactStore
 
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.nodes import plan_of
-from modelforge_orchestrator.schemas import Counters, GatePrompt, RunState
+from modelforge_orchestrator.schemas import GatePrompt, RunState
 from modelforge_orchestrator.steps import Step
 
 __all__ = ["decide", "gate_model", "gate_scope", "gate_signoff", "gate_summary", "interrupt"]
@@ -120,9 +120,9 @@ def gate_model(
                 raise RuntimeError("'adjust' at gate model carries no adjust_target")
             _store_plan(step, deps, state, plan)
             update["plan"] = plan
-            update["counters"] = Counters(
-                build_loops=state.counters.build_loops + 1,
-                remediation_rounds=state.counters.remediation_rounds,
+            # Counters are replaced whole, so copy them to keep every other counter.
+            update["counters"] = state.counters.model_copy(
+                update={"build_loops": state.counters.build_loops + 1}
             )
             goto = decision.adjust_target
         elif decision.decision == "reject":

@@ -7,7 +7,7 @@ from modelforge_lineage.runs import get_run, set_status
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.nodes import gates
 from modelforge_orchestrator.nodes.gates import gate_model, gate_scope, gate_summary
-from modelforge_orchestrator.schemas import RunState
+from modelforge_orchestrator.schemas import Counters, RunState
 
 from .conftest import REPO, make_run
 
@@ -70,6 +70,31 @@ def test_gate_model_adjust_and_reject(
     cmd = gate_model(validated_state, runtime)
     assert cmd.update is not None
     assert cmd.goto == "seal" and cmd.update["status"] == "rejected"
+
+
+@pytest.mark.db
+def test_gate_model_adjust_keeps_other_counters(
+    runtime: Runtime[Deps], validated_state: RunState, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    state = validated_state.model_copy(
+        update={"counters": Counters(build_loops=1, remediation_rounds=1, challenge_rounds=1)}
+    )
+    monkeypatch.setattr(
+        gates,
+        "interrupt",
+        lambda value: GateDecision(
+            gate="model",
+            decision="adjust",
+            approver="bob",
+            plan=state.plan,
+            adjust_target="build",
+        ).model_dump(mode="json"),
+    )
+    cmd = gate_model(state, runtime)
+    assert cmd.update is not None
+    assert cmd.update["counters"] == Counters(
+        build_loops=2, remediation_rounds=1, challenge_rounds=1
+    )
 
 
 @pytest.mark.db
