@@ -18,6 +18,8 @@ class GatewaySettings:
     lmstudio_model: str | None = None
     cost_cap_usd: float = 10.0
     request_timeout_s: float = 300.0
+    otlp_endpoints: tuple[str, ...] = ()
+    trace_content: bool = False
 
 
 def gateway_settings_from_env(source: Mapping[str, str]) -> GatewaySettings:
@@ -37,6 +39,8 @@ def gateway_settings_from_env(source: Mapping[str, str]) -> GatewaySettings:
     cost_cap = get("MODELFORGE_COST_CAP_USD")
     timeout = get("MODELFORGE_LLM_TIMEOUT_S")
     num_ctx = get("MODELFORGE_OLLAMA_NUM_CTX")
+    endpoints = get("MODELFORGE_OTLP_ENDPOINTS") or ""
+    trace_content = (get("MODELFORGE_TRACE_CONTENT") or "").lower() in ("1", "true", "yes")
     return GatewaySettings(
         prompts_dir=Path(prompts_dir) if prompts_dir else defaults.prompts_dir,
         profiles_dir=Path(profiles_dir) if profiles_dir else defaults.profiles_dir,
@@ -49,4 +53,6 @@ def gateway_settings_from_env(source: Mapping[str, str]) -> GatewaySettings:
         lmstudio_model=get("MODELFORGE_LMSTUDIO_MODEL"),
         cost_cap_usd=float(cost_cap) if cost_cap else defaults.cost_cap_usd,
         request_timeout_s=float(timeout) if timeout else defaults.request_timeout_s,
+        otlp_endpoints=tuple(e.strip() for e in endpoints.split(",") if e.strip()),
+        trace_content=trace_content,
     )

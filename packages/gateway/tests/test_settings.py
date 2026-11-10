@@ -45,3 +45,15 @@ def test_settings_reads_every_variable() -> None:
     assert s.request_timeout_s == 12.0
     assert s.ollama_num_ctx == 65536
     assert GatewaySettings().ollama_num_ctx == 32768
+
+
+def test_env_parses_endpoints_and_content() -> None:
+    s = gateway_settings_from_env(
+        {"MODELFORGE_OTLP_ENDPOINTS": "a, b,,", "MODELFORGE_TRACE_CONTENT": "Yes"}
+    )
+    assert s.otlp_endpoints == ("a", "b") and s.trace_content is True
+    assert gateway_settings_from_env({"MODELFORGE_TRACE_CONTENT": "TRUE"}).trace_content
+    assert gateway_settings_from_env({"MODELFORGE_TRACE_CONTENT": "1"}).trace_content
+    assert not gateway_settings_from_env({"MODELFORGE_TRACE_CONTENT": "0"}).trace_content
+    unset = gateway_settings_from_env({})
+    assert unset.otlp_endpoints == () and unset.trace_content is False
