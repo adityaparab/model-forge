@@ -163,3 +163,18 @@ def test_years_inside_decimals_are_not_dates() -> None:
         f"KS is 0.2015 [A:{ida}#ks].", load_artifact=_loader({"ks": 0.2015}, ida), retrieved=set()
     )
     assert report.ok
+
+
+def test_bracketed_discriminator_paths_expand_and_resolve() -> None:
+    artifact_id = "b" * 64
+    body, unknown = expand_aliases(
+        "The AUC test passed [A:validation#tests[disc.auc.oot].status].",
+        {"validation": artifact_id},
+    )
+    assert unknown == []
+    assert body == f"The AUC test passed [A:{artifact_id}#tests[disc.auc.oot].status]."
+    artifact = {"tests": [{"test_id": "disc.auc.oot", "status": "pass"}]}
+    report = check_section(
+        body, load_artifact=lambda i: artifact if i == artifact_id else {}, retrieved=set()
+    )
+    assert report.ok and report.unresolved_markers == []

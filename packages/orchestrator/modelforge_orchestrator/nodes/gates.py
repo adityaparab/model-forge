@@ -40,11 +40,15 @@ def gate_summary(gate: GateName, state: RunState, store: ArtifactStore) -> dict[
             "selected": refs["selection"].summary["selected"],
             "build_loops": state.counters.build_loops,
         }
-    return {
+    summary = {
         "completeness": refs["completeness"].summary,
         "findings": refs["findings"].summary,
         "validation_overall": refs["validation"].summary["overall"],
     }
+    sections = refs.get("document_sections")
+    if sections is not None:
+        summary["document"] = sections.summary
+    return summary
 
 
 def decide(gate: GateName, state: RunState, deps: Deps) -> GateDecision:

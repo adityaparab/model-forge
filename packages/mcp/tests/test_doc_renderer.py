@@ -246,6 +246,38 @@ def test_empty_marker_targets_are_unresolved(call: CallFn, store: ArtifactStore)
     assert report.unresolved_markers == ["[K:]", "[A:]"]
 
 
+def test_marker_targets_may_nest_one_bracket_level(call: CallFn, store: ArtifactStore) -> None:
+    artifact_id = "a" * 64
+    body = (
+        f"Calibration passed [A:{artifact_id}#tests[cal.binomial].status] and [K:k_abc]. "
+        f"Unterminated [A:{artifact_id}#tests[cal.binomial].status and empty [K:] markers."
+    )
+    sid = store.put_model(
+        DocumentSections(
+            template_id=TEMPLATE,
+            sections=[DocumentSection(section_id="executive_summary", body_md=body)],
+        ),
+        kind="document_sections",
+    ).id
+    doc = RenderOutput.model_validate(
+        call(
+            "doc-renderer",
+            "render_document",
+            RenderDocumentInput(template_id=TEMPLATE, sections_id=sid, title="t"),
+        ).structured_content
+    )
+    ref = ArtifactRef.model_validate(
+        call(
+            "doc-renderer",
+            "check_completeness",
+            CheckCompletenessInput(document_id=doc.markdown.id, template_id=TEMPLATE),
+        ).structured_content
+    )
+    report = store.get_model(ref.id, CompletenessReport)
+    # The unterminated marker is not a marker at all, so it is neither resolved nor reported.
+    assert report.unresolved_markers == ["[K:]"]
+
+
 def test_raw_html_in_sections_and_title_is_escaped(call: CallFn, store: ArtifactStore) -> None:
     sections = DocumentSections(
         template_id=TEMPLATE,

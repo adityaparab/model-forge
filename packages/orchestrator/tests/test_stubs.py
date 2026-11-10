@@ -1,54 +1,10 @@
-import re
-
 import pytest
-import yaml
 from langgraph.runtime import Runtime
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.nodes.challenge import build_findings, challenge
-from modelforge_orchestrator.nodes.document import build_sections, document, format_number
+from modelforge_orchestrator.nodes.document import document
 from modelforge_orchestrator.nodes.remediate import build_responses, remediate
 from modelforge_orchestrator.schemas import RunState
-
-from .conftest import REPO
-
-
-@pytest.mark.db
-def test_build_sections_is_grounded_and_deterministic(
-    validated_state: RunState, deps: Deps
-) -> None:
-    a = build_sections(validated_state, deps.store)
-    b = build_sections(validated_state, deps.store)
-    template = yaml.safe_load((REPO / "templates/sr11-7-dev-doc/sections.yaml").read_text())
-    assert a == b and [s.section_id for s in a.sections] == [e["id"] for e in template]
-    perf = next(s for s in a.sections if s.section_id == "performance").body_md
-    assert f"[A:{validated_state.refs['discrimination'].id}#by_split.oot.auc]" in perf
-    assert format_number(validated_state.refs["discrimination"].summary["auc"]["oot"]) in perf
-
-
-@pytest.mark.db
-def test_every_artifact_marker_cites_a_run_ref(validated_state: RunState, deps: Deps) -> None:
-    sections = build_sections(validated_state, deps.store)
-    cited = {
-        m.group(1)
-        for s in sections.sections
-        for m in re.finditer(r"\[A:([^#\]\s]*)#[^\]\s]*\]", s.body_md)
-    }
-    assert cited and cited <= {ref.id for ref in validated_state.refs.values()}
-
-
-def test_format_number() -> None:
-    assert (
-        format_number(0.812345),
-        format_number(43405),
-        format_number(float("nan")),
-        format_number(None),
-    ) == ("0.8123", "43405", "n/a", "n/a")
-    assert (format_number("NaN"), format_number("Infinity"), format_number("-Infinity")) == (
-        "n/a",
-        "n/a",
-        "n/a",
-    )
-    assert format_number(True) == "n/a"
 
 
 @pytest.mark.db

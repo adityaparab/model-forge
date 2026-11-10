@@ -36,7 +36,7 @@ INSTRUCTIONS = (
     "returns artifact ids; no document travels inline."
 )
 
-MARKER = re.compile(r"\[(A|K):([^\]\s]*)\]")
+MARKER = re.compile(r"\[(A|K):((?:[^\[\]\s]|\[[^\[\]\s]*\])*)\]")
 REGULATIONS = ("SR 11-7", "SR 26-2", "OCC Bulletin 2026-13", "CECL", "IFRS 9", "Basel")
 BANNER = "> **REQUIRES AUTHOR ATTENTION**: this section was not supplied."
 
