@@ -121,7 +121,7 @@ def _with_document(deps: Deps, state: RunState, mutated: str) -> RunState:
     return state.model_copy(update={"refs": {**state.refs, **refs}})
 
 
-def _park(deps: Deps, probe_id: str, exc: Exception) -> None:
+def _park(deps: Deps, probe_id: str, exc: BaseException) -> None:
     """Record ``exc`` on the probe and mark it ``needs_attention``, as the worker parks a run.
 
     The error is the one the failing step recorded (its ``error.recorded`` event), else an
@@ -152,8 +152,9 @@ def run_probe(
 
     An inapplicable case (the mutation changes nothing) still gets its probe run and event, but
     no challenger call. `EvalError` when ``deps.gateway`` serves another profile than the base
-    run's. A failure of the probe's steps or the challenger parks the probe in
-    ``needs_attention`` with its error recorded, then propagates.
+    run's. Any failure or interrupt once the probe exists (its steps, the challenger, the
+    findings read, the ``completed`` transition) parks it in ``needs_attention`` with its error
+    recorded, then propagates.
     """
     base, manifest = _base(deps, base_run_id)
     if deps.gateway.profile.name != base.profile:
@@ -169,20 +170,21 @@ def run_probe(
     mutated = apply_mutation(markdown, template, case.mutation, ctx)
     probe_id = _create_probe(deps, base)
     findings: list[Finding] = []
-    if mutated is not None:
-        try:
+    try:
+        if mutated is not None:
             state = _with_document(deps, _state(deps, probe_id, base, manifest), mutated)
             update, _ = invoke_node(challenge, state, deps)
-        except Exception as exc:
-            _park(deps, probe_id, exc)
-            exc.add_note(f"probe run {probe_id} ({case.id}) is needs_attention")
-            raise
-        findings = deps.store.get_model(update["refs"]["findings"].id, FindingsList).findings
-    with deps.lineage.transaction() as conn:
-        append_event(
-            conn, probe_id, "eval.probe", {"base_run_id": base_run_id, "defect_id": case.id}
-        )
-        runs.set_status(conn, probe_id, "completed")
+            ref = update["refs"]["findings"]
+            findings = deps.store.get_model(ref.id, FindingsList).findings
+        with deps.lineage.transaction() as conn:
+            append_event(
+                conn, probe_id, "eval.probe", {"base_run_id": base_run_id, "defect_id": case.id}
+            )
+            runs.set_status(conn, probe_id, "completed")
+    except BaseException as exc:  # a KeyboardInterrupt must not leave the probe running
+        _park(deps, probe_id, exc)
+        exc.add_note(f"probe run {probe_id} ({case.id}) is needs_attention")
+        raise
     with deps.lineage.connection() as conn:
         calls = list_llm_calls(conn, probe_id)
     return ProbeResult(

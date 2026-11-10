@@ -11,6 +11,7 @@ dependencies = [
     "modelforge-lineage",
     "modelforge-knowledge",
     "modelforge-gateway",
+    "modelforge-mcp",
     "modelforge-orchestrator",
     "typer>=0.28",
     "pyyaml>=6",

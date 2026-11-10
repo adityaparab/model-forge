@@ -1,6 +1,6 @@
 """The challenger's deterministic pre-checks (spec 3.2).
 
-Six pure checks over the rendered development document, run before any model call. Each failing
+Seven pure checks over the rendered development document, run before any model call. Each failing
 check is a `PrecheckFinding` with a stable ``check_key``, so a later round closes the finding when
 the check no longer fires; keys carry ids and ordinals only, never text that a revision changes.
 The challenger node builds the `PrecheckContext` from lineage; nothing here touches the database,
@@ -30,6 +30,7 @@ __all__ = [
     "REVERIFY",
     "UNADDRESSED_NA",
     "UNDISCUSSED_TEST",
+    "UNREPORTED_TEST",
     "PrecheckContext",
     "PrecheckFinding",
     "run_prechecks",
@@ -39,6 +40,7 @@ MISSING_SECTION = "missing_section"
 BANNERED_SECTION = "bannered_section"
 UNDISCUSSED_TEST = "undiscussed_test"
 UNADDRESSED_NA = "unaddressed_na"
+UNREPORTED_TEST = "unreported_test"
 REVERIFY = "reverify"
 MISCITED_REGULATION = "miscited_regulation"
 
@@ -55,7 +57,15 @@ REGULATION_DOCS: dict[str, str] = {
 
 VALIDATION_ALIAS = "validation"
 """The alias evidence markers use; the challenger node expands it to the validation id."""
-_NOT_APPLICABLE = ("not applicable", "not_applicable", "not available")
+_NOT_APPLICABLE = (
+    "not applicable",
+    "not_applicable",
+    "not available",
+    "n/a",
+    "not assessed",
+    "could not be assessed",
+    "unavailable",
+)
 _CODE_SPAN = re.compile(r"`[^`]*`")
 _FAILURE_BULLET = re.compile(
     r"^- (?:ungrounded_numbers|unresolved_markers|uncited_regulatory_sentences|foreign_passages): "
@@ -180,13 +190,21 @@ def check_bannered_sections(ctx: PrecheckContext) -> list[PrecheckFinding]:
 
 
 def _cites_test(ctx: PrecheckContext, test_id: str) -> bool:
+    """A claim (outside the banner and code spans) carries a ``tests[<test_id>]`` marker."""
     needle = f"tests[{test_id}]"
     return any(
         match.group(1) == "A"
         and match.group(2).startswith(f"{ctx.validation_id}#")
         and needle in match.group(2)
         for body in ctx.sections.values()
-        for match in MARKER.finditer(body)
+        for match in MARKER.finditer(_claims(body))
+    )
+
+
+def _discussed(ctx: PrecheckContext, test: ValidationTest) -> bool:
+    """The test is cited by marker or named, outside banners and code spans."""
+    return _cites_test(ctx, test.test_id) or any(
+        _names_test(_claims(body), test) for body in ctx.sections.values()
     )
 
 
@@ -196,9 +214,7 @@ def check_undiscussed_tests(ctx: PrecheckContext) -> list[PrecheckFinding]:
     for test in _tests(ctx):
         if test.status not in ("fail", "warn"):
             continue
-        if _cites_test(ctx, test.test_id) or any(
-            _names_test(body, test) for body in ctx.sections.values()
-        ):
+        if _discussed(ctx, test):
             continue
         findings.append(
             PrecheckFinding(
@@ -222,7 +238,7 @@ def check_undiscussed_tests(ctx: PrecheckContext) -> list[PrecheckFinding]:
 
 def check_unaddressed_not_applicable(ctx: PrecheckContext) -> list[PrecheckFinding]:
     """Check 4: a ``not_applicable`` test is named in a sentence that says so."""
-    sentences = [s for _, body in _ordered_bodies(ctx) for s in section_sentences(body)]
+    sentences = [s for _, body in _ordered_bodies(ctx) for s in section_sentences(_claims(body))]
     findings: list[PrecheckFinding] = []
     for test in _tests(ctx):
         if test.status != "not_applicable":
@@ -250,8 +266,47 @@ def check_unaddressed_not_applicable(ctx: PrecheckContext) -> list[PrecheckFindi
     return findings
 
 
+def _reportable(test: ValidationTest) -> bool:
+    """An out-of-time discrimination test (``disc.*.oot``) or a sensitivity test (``sens.*``)."""
+    tid = test.test_id
+    return (tid.startswith("disc.") and tid.endswith(".oot")) or tid.startswith("sens.")
+
+
+def check_unreported_tests(ctx: PrecheckContext) -> list[PrecheckFinding]:
+    """Check 4b: a passing out-of-time or sensitivity test is cited by marker or named.
+
+    Check 3 covers ``fail`` and ``warn`` and check 4 ``not_applicable``; without this one, a
+    document could silently drop a passing out-of-time or sensitivity result."""
+    findings: list[PrecheckFinding] = []
+    for test in _tests(ctx):
+        if test.status != "pass" or not _reportable(test) or _discussed(ctx, test):
+            continue
+        findings.append(
+            PrecheckFinding(
+                check_key=f"{UNREPORTED_TEST}:{test.test_id}",
+                severity="medium",
+                category="performance",
+                title="Out-of-time or sensitivity result not reported",
+                description=(
+                    f"The validation test `{test.test_id}` ({test.name}) passed, but the "
+                    "document neither cites nor names it, so the out-of-time or sensitivity "
+                    "evidence is missing."
+                ),
+                evidence=["performance", _test_marker(test.test_id, "status")],
+                required_action=(
+                    f"Report the result of `{test.test_id}` in the performance section, "
+                    "citing the validation report."
+                ),
+            )
+        )
+    return findings
+
+
 def check_reverify(ctx: PrecheckContext) -> list[PrecheckFinding]:
-    """Check 5: the grounding check, re-run over each section against sealed artifacts."""
+    """Check 5: the grounding check, re-run over each section against sealed artifacts.
+
+    A section that carries the banner is already reported by check 2, so it is skipped here:
+    one defect, one finding."""
 
     def load(artifact_id: str) -> Any:
         if artifact_id not in ctx.artifact_kinds:
@@ -260,6 +315,8 @@ def check_reverify(ctx: PrecheckContext) -> list[PrecheckFinding]:
 
     findings: list[PrecheckFinding] = []
     for section_id, body in _ordered_bodies(ctx):
+        if body.strip().startswith(BANNER):
+            continue
         report = check_section(_claims(body), load_artifact=load, retrieved=set(ctx.passages))
         if report.ok:
             continue
@@ -308,7 +365,10 @@ def _consistent(ctx: PrecheckContext, citation_id: str, names: list[str]) -> boo
 
 
 def check_miscited_regulations(ctx: PrecheckContext) -> list[PrecheckFinding]:
-    """Check 6: a sentence naming a regulation cites passages of that regulation."""
+    """Check 6: a sentence naming a regulation cites passages of that regulation.
+
+    A ``[K:<id>]`` whose id is not in the index is a foreign passage, reported by check 5, so it
+    is skipped here: one bad marker, one finding."""
     findings: list[PrecheckFinding] = []
     for section_id, body in _ordered_bodies(ctx):
         for n, sentence in enumerate(section_sentences(_claims(body)), start=1):
@@ -316,7 +376,11 @@ def check_miscited_regulations(ctx: PrecheckContext) -> list[PrecheckFinding]:
                 " ".join(m.group(0).split())
                 for m in REGULATION_NAME.finditer(MARKER.sub(" ", sentence))
             ]
-            cited = [m.group(2) for m in MARKER.finditer(sentence) if m.group(1) == "K"]
+            cited = [
+                m.group(2)
+                for m in MARKER.finditer(sentence)
+                if m.group(1) == "K" and m.group(2) in ctx.passages
+            ]
             if not names or not cited:
                 continue
             wrong = [c for c in cited if not _consistent(ctx, c, names)]
@@ -343,12 +407,13 @@ def check_miscited_regulations(ctx: PrecheckContext) -> list[PrecheckFinding]:
 
 
 def run_prechecks(ctx: PrecheckContext) -> list[PrecheckFinding]:
-    """All six checks' findings, in the spec table's order."""
+    """All seven checks' findings, in the spec table's order (1, 2, 3, 4, 4b, 5, 6)."""
     return [
         *check_missing_sections(ctx),
         *check_bannered_sections(ctx),
         *check_undiscussed_tests(ctx),
         *check_unaddressed_not_applicable(ctx),
+        *check_unreported_tests(ctx),
         *check_reverify(ctx),
         *check_miscited_regulations(ctx),
     ]

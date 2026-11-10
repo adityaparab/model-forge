@@ -1,6 +1,6 @@
 """`challenge`: the independent challenger agent (spec 3).
 
-Every round runs the six deterministic pre-checks over the rendered document first. Round 1
+Every round runs the deterministic pre-checks over the rendered document first. Round 1
 then reviews the document in two gateway calls (query planning, then the review over the
 retrieved passages); later rounds close or reopen pre-check findings deterministically and make
 one re-review call over the review findings the developer accepted or disputed. The `findings`
@@ -298,11 +298,14 @@ def _counts(values: list[str], order: tuple[str, ...]) -> dict[str, int]:
 
 
 def findings_summary(findings: list[Finding], round: int) -> dict[str, Any]:
-    """The `findings` ref summary; ``max_severity`` is over every finding, closed ones too."""
+    """The `findings` ref summary; ``max_severity`` is over every finding, closed ones too, and
+    ``max_open_severity`` over the findings still ``open`` or ``disputed``."""
     severities = [f.severity for f in findings]
+    unresolved = [f.severity for f in findings if f.status in ("open", "disputed")]
     return {
         "n_findings": len(findings),
         "max_severity": next((s for s in SEVERITY_ORDER if s in severities), None),
+        "max_open_severity": next((s for s in SEVERITY_ORDER if s in unresolved), None),
         "by_severity": _counts(severities, SEVERITY_ORDER),
         "by_status": _counts([f.status for f in findings], STATUS_ORDER),
         "by_source": _counts([f.source for f in findings], SOURCE_ORDER),

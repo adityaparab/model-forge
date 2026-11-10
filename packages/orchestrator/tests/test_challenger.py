@@ -28,11 +28,13 @@ from modelforge_orchestrator.agent_schemas import (
 )
 from modelforge_orchestrator.briefs import parse_brief, plan_from_brief
 from modelforge_orchestrator.deps import Deps
+from modelforge_orchestrator.nodes import challenge as challenge_node
 from modelforge_orchestrator.nodes import invoke_node, original_manifest
 from modelforge_orchestrator.nodes.challenge import (
     CHECK_PASSES,
     ChallengerContext,
     challenge,
+    findings_summary,
     reconcile,
     validate_re_review,
     validate_review,
@@ -212,6 +214,7 @@ def test_challenge_round_one_raises_prechecks_then_review_findings(
         k: v for k, v in {"precheck": len(ids) - len(reviews), "review": len(reviews)}.items() if v
     }
     assert sum(summary["by_severity"].values()) == len(ids)
+    assert summary["max_open_severity"] == summary["max_severity"]  # every finding is open
     assert update["cost_usd"] >= state.cost_usd
     with db.connection() as conn:
         rows = list_findings(conn, state.run_id)
@@ -288,6 +291,18 @@ def _after_remediation(
     return state, {name: next(f for f in remediated if f.id == i) for name, i in keys.items()}
 
 
+def _without_unreported_tests(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop check 4b's findings: the fake document omits its passing out-of-time and
+    sensitivity results, so they would fire every round, and the round-two tests are about
+    the three findings the bannered document raises."""
+    original = challenge_node.run_prechecks
+    monkeypatch.setattr(
+        challenge_node,
+        "run_prechecks",
+        lambda ctx: [p for p in original(ctx) if not p.check_key.startswith("unreported_test:")],
+    )
+
+
 def _re_review_calls(db: Database, run_id: str) -> int:
     with db.connection() as conn:
         calls = list_llm_calls(conn, run_id)
@@ -296,8 +311,12 @@ def _re_review_calls(db: Database, run_id: str) -> int:
 
 @pytest.mark.db
 def test_challenge_round_two_re_reviews_and_closes(
-    documented_state: RunState, runtime: Runtime[Deps], db: Database
+    documented_state: RunState,
+    runtime: Runtime[Deps],
+    db: Database,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _without_unreported_tests(monkeypatch)
     statuses: dict[str, Status] = {
         "precheck": "accepted",
         "monitoring": "accepted",
@@ -346,8 +365,12 @@ def test_challenge_round_two_re_reviews_and_closes(
 
 @pytest.mark.db
 def test_challenge_round_two_skips_re_review_without_findings_under_review(
-    documented_state: RunState, runtime: Runtime[Deps], db: Database
+    documented_state: RunState,
+    runtime: Runtime[Deps],
+    db: Database,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    _without_unreported_tests(monkeypatch)
     statuses: dict[str, Status] = {
         "precheck": "accepted",
         "monitoring": "closed",
@@ -463,6 +486,21 @@ def _finding(
     return Finding(**{**fields, **kw})
 
 
+def test_findings_summary_max_open_severity() -> None:
+    findings = [
+        _finding(1, "closed", severity="critical"),
+        _finding(2, "accepted", severity="high"),
+        _finding(3, "disputed", severity="medium"),
+        _finding(4, "open", severity="low"),
+    ]
+    summary = findings_summary(findings, 2)
+    assert (summary["max_severity"], summary["max_open_severity"]) == ("critical", "medium")
+    assert summary["by_status"] == {"open": 1, "accepted": 1, "disputed": 1, "closed": 1}
+    resolved = findings_summary(findings[:2], 2)
+    assert (resolved["max_severity"], resolved["max_open_severity"]) == ("critical", None)
+    assert findings_summary([], 1)["max_open_severity"] is None
+
+
 def _precheck(key: str) -> PrecheckFinding:
     return PrecheckFinding(
         check_key=key,
@@ -530,5 +568,16 @@ def test_challenge_replay_copies_findings_and_routes(
         rows = list_findings(conn, state.run_id)
         assert list_llm_calls(conn, state.run_id) == []
     assert {r["id"] for r in rows} == {f"{state.run_id}/{f.id}" for f in copied.findings}
+    with db.connection() as conn:
+        originals = list_findings(conn, completed_run_id)
+
+    def verdicts(run_rows: list[dict[str, Any]], run_id: str) -> dict[str, tuple[Any, ...]]:
+        return {
+            r["id"].removeprefix(f"{run_id}/"): (r["status"], r["verdict"], r["closed_round"])
+            for r in run_rows
+        }
+
+    assert verdicts(rows, state.run_id) == verdicts(originals, completed_run_id)
+    assert any(r["verdict"] is not None and r["closed_round"] is not None for r in rows)
     after = state.model_copy(update={"counters": Counters(remediation_rounds=1)})
     assert challenge(after, runtime).goto == "gate_signoff"

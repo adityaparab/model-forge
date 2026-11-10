@@ -27,7 +27,7 @@ from modelforge_orchestrator.grounding import (
 )
 from modelforge_orchestrator.schemas import Finding
 from modelforge_orchestrator.sections import SECTION_HEADING
-from pydantic import Field, TypeAdapter
+from pydantic import Field, TypeAdapter, model_validator
 
 __all__ = [
     "DefectCase",
@@ -60,6 +60,14 @@ class Mutation(StrictModel):
     """``swap_citation``: the knowledge document whose first chunk replaces the citation."""
     statuses: list[str] = Field(default_factory=lambda: ["fail", "warn"])
     """``remove_test_sentences``: the validation test statuses whose sentences are removed."""
+
+    @model_validator(mode="after")
+    def _requires_its_field(self) -> "Mutation":
+        if self.kind in ("append_sentence", "remove_sentences_containing") and not self.text:
+            raise ValueError(f"a {self.kind} mutation requires text")
+        if self.kind == "swap_citation" and not self.doc_id:
+            raise ValueError("a swap_citation mutation requires doc_id")
+        return self
 
 
 class Signature(StrictModel):
@@ -242,7 +250,7 @@ def apply_mutation(
                 ),
             )
         needle = (mutation.text or "").lower()
-        return _without(body, lambda s: needle in s.lower()) if needle else None
+        return _without(body, lambda s: needle in s.lower())
 
     return _replace_body(markdown, template, mutation.section, edit)
 

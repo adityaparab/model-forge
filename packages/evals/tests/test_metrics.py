@@ -99,4 +99,3 @@ def test_run_metrics_from_a_completed_fake_run(
         metrics.wall_time_by_node_s
     )
     assert metrics.wall_time_s >= max(metrics.wall_time_by_node_s.values())
-    print(metrics.model_dump_json(indent=2))

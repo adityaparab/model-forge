@@ -20,8 +20,9 @@ def insert_findings(conn: Connection[DictRow], run_id: str, rows: list[dict[str,
     for row in rows:
         conn.execute(
             "insert into findings (id, run_id, round, severity, category, title, description,"
-            " evidence, required_action, status, response, response_evidence, source, check_key)"
-            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            " evidence, required_action, status, response, response_evidence, source, check_key,"
+            " verdict, closed_round)"
+            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
             " on conflict (id) do nothing",
             (
                 row["id"],
@@ -38,6 +39,8 @@ def insert_findings(conn: Connection[DictRow], run_id: str, rows: list[dict[str,
                 Jsonb(row["response_evidence"]) if row["response_evidence"] is not None else None,
                 row.get("source", "review"),
                 row.get("check_key"),
+                row.get("verdict"),
+                row.get("closed_round"),
             ),
         )
 

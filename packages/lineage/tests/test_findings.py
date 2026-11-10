@@ -117,3 +117,17 @@ def test_findings_new_columns_verdict_and_blocking(db: Database) -> None:
         assert blocking_findings(conn, "run_a") == []
     with db.transaction() as conn, pytest.raises(FindingNotFound):
         set_verdict(conn, "run_a", "run_a/F-9", status="closed", verdict="x", closed_round=2)
+
+
+@pytest.mark.db
+def test_insert_findings_carries_verdict_and_closed_round(db: Database) -> None:
+    closed = {**_row("F-1"), "status": "closed", "verdict": "check passes", "closed_round": 2}
+    with db.transaction() as conn:
+        create_test_run(conn)
+        insert_findings(conn, "run_a", [closed, _row("F-2")])
+    with db.connection() as conn:
+        rows = list_findings(conn, "run_a")
+    assert [(r["status"], r["verdict"], r["closed_round"]) for r in rows] == [
+        ("closed", "check passes", 2),
+        ("open", None, None),
+    ]

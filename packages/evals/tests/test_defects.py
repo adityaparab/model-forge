@@ -19,10 +19,11 @@ from modelforge_knowledge.index import KnowledgeIndex
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.store import ArtifactStore
-from modelforge_mcp.schemas import TemplateSections
+from modelforge_mcp.schemas import SectionSpec, TemplateSections
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.schemas import Finding, Manifest
 from modelforge_orchestrator.sections import split_sections
+from pydantic import ValidationError
 
 from .conftest import REPO
 
@@ -84,6 +85,43 @@ def test_the_suite_holds_the_six_spec_cases() -> None:
         "undiscussed_breach",
         "missing_limitation",
     ]
+
+
+def test_mutation_requires_the_field_its_kind_reads() -> None:
+    for kind in ("append_sentence", "remove_sentences_containing"):
+        with pytest.raises(ValidationError, match="requires text"):
+            Mutation(kind=kind, section="performance")
+        assert Mutation(kind=kind, section="performance", text="x.").text == "x."
+    with pytest.raises(ValidationError, match="requires doc_id"):
+        Mutation(kind="swap_citation", section="regulatory_context")
+    assert Mutation(kind="swap_citation", section="regulatory_context", doc_id="ifrs9-ecl").doc_id
+    assert Mutation(kind="remove_section", section="monitoring").text is None
+
+
+def test_remove_test_sentences_over_a_hand_built_document() -> None:
+    template = TemplateSections(
+        template_id="t",
+        sections=[
+            SectionSpec(id=i, title=t, required=True, artifact_kinds=[], guidance="g")
+            for i, t in (("performance", "Performance"), ("limitations", "Limitations"))
+        ],
+    )
+    marked = f"Calibration warned [A:{'e' * 64}#tests[cal.hl].status]."
+    markdown = (
+        "# Document\n\n## 1. Performance\n\n"
+        f"The AUC is high. {marked}\n\n"
+        f"## 2. Limitations\n\nThe data is a proxy. {marked}\n"
+    )
+    index = KnowledgeIndex(built_from={}, documents=[], chunks=[])
+    mutation = Mutation(kind="remove_test_sentences", section="performance")
+
+    def ctx(status: str) -> MutationContext:
+        tests = [{"test_id": "cal.hl", "status": status}, {"test_id": "disc.auc", "status": "pass"}]
+        return MutationContext(validation={"tests": tests}, index=index)
+
+    mutated = apply_mutation(markdown, template, mutation, ctx("warn"))
+    assert mutated == markdown.replace(f"The AUC is high. {marked}", "The AUC is high.")
+    assert apply_mutation(markdown, template, mutation, ctx("pass")) is None
 
 
 @pytest.mark.db

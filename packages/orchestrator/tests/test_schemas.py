@@ -113,8 +113,10 @@ def test_finding_and_response_new_fields() -> None:
         Finding.model_validate(finding.model_dump() | {"source": "llm"})
     response = FindingResponse(finding_id="F-001", decision="accept", action="x", round=2)
     assert response.round == 2 and response.sections_regenerated == []
-    with pytest.raises(ValidationError):
-        FindingResponse.model_validate({"finding_id": "F-001", "decision": "accept", "action": "x"})
+    legacy = FindingResponse.model_validate(
+        {"finding_id": "F-001", "decision": "accept", "action": "x"}
+    )  # a responses artifact written before the remediation loop carries no round
+    assert legacy.round == 1
     state = RunState(
         run_id="run_a",
         requester="alice",

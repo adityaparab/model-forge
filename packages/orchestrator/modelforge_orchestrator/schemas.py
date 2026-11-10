@@ -216,7 +216,9 @@ class FindingResponse(StrictModel):
     decision: Literal["accept", "dispute"]
     action: str
     evidence: list[str] = Field(default_factory=list)
-    round: int
+    round: int = 1
+    """Defaults to 1 so a ``responses`` artifact sealed before the remediation loop, which
+    lacks it, still validates on replay; the remediation node always sets it."""
     sections_regenerated: list[str] = Field(default_factory=list)
 
 

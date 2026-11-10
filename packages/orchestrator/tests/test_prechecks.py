@@ -76,7 +76,7 @@ PASSAGES = {
     "k_sr26": ("sr26-2", "This guidance supersedes SR 11-7 for traditional models."),
 }
 PERFORMANCE = (
-    f"The AUC on the out-of-time split is 0.874 [A:{DISC}#by_split.oot.auc]. "
+    f"The out-of-time AUC is 0.874 [A:{DISC}#by_split.oot.auc]. "
     f"The calibration check returned a warning [A:{VAL}#tests[cal.hl].status]. "
     "The score PSI test stab.psi.score failed. "
     "The coefficient sign check is not applicable because no sensitivity results exist."
@@ -121,7 +121,8 @@ def test_a_clean_document_raises_nothing() -> None:
 
 
 def test_missing_and_bannered_sections() -> None:
-    sections = _sections(governance=BANNER, appendices=BANNER + "\n\nPartial.")
+    unresolved = f"Partial, with {'c' * 64} unresolved [A:{'c' * 64}#n_rows]."
+    sections = _sections(governance=BANNER, appendices=f"{BANNER}\n\n{unresolved}")
     del sections["monitoring"]
     findings = run_prechecks(_ctx(sections, missing=["governance", "data"]))
     missing = _with_prefix(findings, "missing_section:")
@@ -136,6 +137,9 @@ def test_missing_and_bannered_sections() -> None:
     assert [(f.check_key, f.severity, f.category, f.evidence) for f in bannered] == [
         ("bannered_section:appendices", "high", "documentation", ["appendices"]),
     ]
+    assert _with_prefix(findings, "reverify:") == []
+    unbannered = run_prechecks(_ctx(_sections(appendices=unresolved)))
+    assert [f.check_key for f in unbannered] == ["reverify:appendices"]
     clean = run_prechecks(_ctx(_sections()))
     assert _with_prefix(clean, "missing_section:") == _with_prefix(clean, "bannered_section:") == []
 
@@ -178,10 +182,70 @@ def test_undiscussed_tests_by_marker_name_or_id() -> None:
     assert findings[1].evidence == ["performance", "[A:validation#tests[stab.psi.score].status]"]
 
 
+def test_a_test_quoted_only_in_the_banner_is_not_discussed() -> None:
+    performance = PERFORMANCE.replace("The score PSI test stab.psi.score failed. ", "")
+    bannered = (
+        f"{BANNER}\n\n- unresolved_markers: `[A:{VAL}#tests[stab.psi.score].status]`\n"
+        "- ungrounded_numbers: `stab.psi.score`\n\n"
+        f"{performance}"
+    )
+    findings = run_prechecks(_ctx(_sections(performance=bannered)))
+    assert [f.check_key for f in findings] == [
+        "bannered_section:performance",
+        "undiscussed_test:stab.psi.score",
+    ]
+
+
+def test_unreported_out_of_time_and_sensitivity_results() -> None:
+    validation = {
+        "tests": [
+            *VALIDATION["tests"],
+            {
+                "test_id": "sens.shock",
+                "name": "Feature shock sensitivity",
+                "status": "pass",
+                "value": 0.01,
+                "threshold": "< 0.05",
+                "message": "stable under shocks",
+            },
+            {
+                "test_id": "disc.auc.test",
+                "name": "Test-split AUC",
+                "status": "pass",
+                "value": 0.88,
+                "threshold": ">= 0.70",
+                "message": "AUC above threshold",
+            },
+        ]
+    }
+    silent = _sections(performance=PERFORMANCE.replace("The out-of-time AUC is", "The AUC is"))
+    artifacts = {**ARTIFACTS, VAL: validation}
+    update = {"validation": validation, "load_artifact": lambda i: artifacts[i]}
+    ctx = _ctx(silent).model_copy(update=update)
+    findings = run_prechecks(ctx)
+    assert [f.check_key for f in findings] == [
+        "unreported_test:disc.auc.oot",
+        "unreported_test:sens.shock",
+    ]
+    assert [(f.severity, f.category, f.evidence) for f in findings] == [
+        ("medium", "performance", ["performance", "[A:validation#tests[disc.auc.oot].status]"]),
+        ("medium", "performance", ["performance", "[A:validation#tests[sens.shock].status]"]),
+    ]
+    assert "disc.auc.oot" in findings[0].description
+    reported = _sections(
+        limitations=f"Shocks moved scores little [A:{VAL}#tests[sens.shock].status]. "
+        "DISC.AUC.OOT passed."
+    )
+    reported["performance"] = silent["performance"]
+    ctx = _ctx(reported).model_copy(update=update)
+    assert run_prechecks(ctx) == []
+
+
 def test_unaddressed_not_applicable() -> None:
     for text in (
         "Test sens.signs is NOT_APPLICABLE.",
         "The Coefficient Sign Check is not available for this model.",
+        "The coefficient sign check could not be assessed without sensitivity results.",
     ):
         findings = run_prechecks(_ctx(_sections(limitations=text)))
         assert _with_prefix(findings, "unaddressed_na:") == []
@@ -233,15 +297,19 @@ def test_miscited_regulation() -> None:
         assert _with_prefix(findings, "miscited_regulation:") == []
     bad = _sections(
         regulatory_context="SR 11-7 requires effective challenge [K:k_bbb]. "
-        "IFRS 9 measures losses [K:k_bbb]. Basel III applies [K:k_zzz] [K:k_aaa]."
+        "IFRS 9 measures losses [K:k_bbb]. Basel III applies [K:k_zzz] [K:k_aaa]. "
+        "SR 11-7 also applies [K:k_zzz]."
     )
     findings = _with_prefix(run_prechecks(_ctx(bad)), "miscited_regulation:")
     assert [(f.check_key, f.severity, f.category, f.evidence) for f in findings] == [
         ("miscited_regulation:regulatory_context:1", "medium", "documentation",
          ["regulatory_context", "[K:k_bbb]"]),
         ("miscited_regulation:regulatory_context:3", "medium", "documentation",
-         ["regulatory_context", "[K:k_zzz]", "[K:k_aaa]"]),
+         ["regulatory_context", "[K:k_aaa]"]),
     ]  # fmt: skip
+    reverify = _with_prefix(run_prechecks(_ctx(bad)), "reverify:")
+    assert [f.check_key for f in reverify] == ["reverify:regulatory_context"]
+    assert '"[K:k_zzz]"' in reverify[0].description
 
 
 def test_prechecks_order_and_keys_are_stable() -> None:

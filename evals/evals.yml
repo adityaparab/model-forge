@@ -25,7 +25,7 @@ profiles:
       defect_recall: -0.17
       defect_precision: -0.20
       cost_usd: 1.50
-    budgets: {cost_usd: 8.0, wall_time_s: 2700}
+    budgets: {cost_usd: 8.0, probe_cost_usd: 2.0, wall_time_s: 2700}
   ci-cheap:
     brief: polish
     layers: [retrieval, pipeline, challenger, cost]
@@ -35,4 +35,4 @@ profiles:
       defect_recall: -0.34
       defect_precision: -0.25
       cost_usd: 1.00
-    budgets: {cost_usd: 5.0, wall_time_s: 2700}
+    budgets: {cost_usd: 5.0, probe_cost_usd: 1.0, wall_time_s: 2700}
