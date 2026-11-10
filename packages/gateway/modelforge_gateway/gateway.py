@@ -190,7 +190,7 @@ class Gateway:
         last_error: str | None = None
         retry_chars = 0
         for number in range(1, MAX_ATTEMPTS + 1):
-            with _llm_span(request.purpose) as span:
+            with _llm_span(request.purpose, self.settings.trace_content) as span:
                 set_attributes(span, _identity(request, route, prompt, request_hash, number))
                 if self.settings.trace_content:
                     set_attributes(span, _input_content(request))
@@ -392,16 +392,28 @@ class Gateway:
 
 
 @contextmanager
-def _llm_span(purpose: str) -> Iterator[Span]:
-    """One ``llm.<purpose>`` span; a ``GatewayError`` marks it failed and propagates."""
+def _llm_span(purpose: str, trace_content: bool) -> Iterator[Span]:
+    """One ``llm.<purpose>`` span; an exception marks it failed and propagates unchanged.
+
+    Exception messages and stack traces can carry prompt or response text, so without
+    ``trace_content`` the ``exception`` event names only the type (and the error kind).
+    """
     with tracer().start_as_current_span(
         f"llm.{purpose}", record_exception=False, set_status_on_exception=False
     ) as span:
         try:
             yield span
-        except GatewayError as exc:
-            span.set_attribute(attr("error_kind"), exc.kind)
-            span.record_exception(exc)
+        except Exception as exc:
+            kind = exc.kind if isinstance(exc, GatewayError) else None
+            if kind is not None:
+                span.set_attribute(attr("error_kind"), kind)
+            if trace_content:
+                span.record_exception(exc)
+            else:
+                event: dict[str, str] = {"exception.type": type(exc).__name__}
+                if kind is not None:
+                    event[attr("error_kind")] = kind
+                span.add_event("exception", event)
             span.set_status(Status(StatusCode.ERROR))
             raise
 

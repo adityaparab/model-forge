@@ -9,6 +9,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "modelforge-core",
     "modelforge-lineage",
+    "opentelemetry-api>=1.30",
     "langchain-core>=1.7",
     "langchain-anthropic>=1.7",
     "langchain-ollama>=1.1",

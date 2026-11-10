@@ -26,8 +26,10 @@ from modelforge_lineage.tracing import (
     OUTPUT_VALUE,
     SPAN_KIND,
 )
+from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import StatusCode
+from pydantic import BaseModel
 from structlog.testing import capture_logs
 
 from .test_gateway import PRICED, PROMPT, SYSTEM, Outcome, StubModel, request, stub
@@ -147,3 +149,84 @@ def test_llm_span_records_gateway_error(
     assert "modelforge.input_tokens" not in attrs
     assert span.status.status_code is StatusCode.ERROR
     assert [e.name for e in span.events] == ["exception"]
+
+
+SENTINEL = "SECRET-PROMPT-ECHO-7731"
+
+
+def _everything(span: ReadableSpan) -> str:
+    values = [str(v) for v in (span.attributes or {}).values()]
+    for event in span.events:
+        values += [event.name, *(str(v) for v in (event.attributes or {}).values())]
+    return " ".join(values)
+
+
+def test_error_event_carries_no_content_when_disabled(
+    spans: InMemorySpanExporter, build: Build, meta: CallMetadata
+) -> None:
+    model = stub(Outcome(raises=RuntimeError(f"400 bad request: {SENTINEL}")))
+    with pytest.raises(GatewayError) as exc:
+        build(model).complete(request(meta))
+    assert exc.value.kind == "provider" and SENTINEL in str(exc.value)
+    (span,) = spans.get_finished_spans()
+    assert SENTINEL not in _everything(span)
+    assert span.status.status_code is StatusCode.ERROR
+    (event,) = span.events
+    assert event.name == "exception"
+    assert dict(event.attributes or {}) == {
+        "exception.type": "GatewayError",
+        "modelforge.error_kind": "provider",
+    }
+
+
+def test_validate_hook_error_carries_no_content_when_disabled(
+    spans: InMemorySpanExporter, build: Build, meta: CallMetadata
+) -> None:
+    def explode(parsed: BaseModel) -> str | None:
+        raise ValueError(SENTINEL)
+
+    with pytest.raises(GatewayError):
+        build(stub()).complete(request(meta), validate=explode)
+    (span,) = spans.get_finished_spans()
+    assert SENTINEL not in _everything(span)
+    assert span.attributes and span.attributes["modelforge.error_kind"] == "config"
+    (event,) = span.events
+    assert dict(event.attributes or {}) == {
+        "exception.type": "GatewayError",
+        "modelforge.error_kind": "config",
+    }
+
+
+def test_error_event_carries_the_message_when_content_enabled(
+    spans: InMemorySpanExporter, build: Build, meta: CallMetadata
+) -> None:
+    model = stub(Outcome(raises=RuntimeError(f"400 bad request: {SENTINEL}")))
+    with capture_logs(), pytest.raises(GatewayError):
+        build(model, trace_content=True).complete(request(meta))
+    (span,) = spans.get_finished_spans()
+    (event,) = span.events
+    assert event.name == "exception"
+    assert SENTINEL in str((event.attributes or {})["exception.message"])
+    assert span.status.status_code is StatusCode.ERROR
+
+
+def test_non_gateway_error_marks_the_span_and_propagates(
+    spans: InMemorySpanExporter,
+    build: Build,
+    meta: CallMetadata,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gateway = build(stub())
+
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError(SENTINEL)
+
+    monkeypatch.setattr(gateway, "_record", broken)
+    with pytest.raises(RuntimeError, match=SENTINEL):
+        gateway.complete(request(meta))
+    (span,) = spans.get_finished_spans()
+    assert SENTINEL not in _everything(span)
+    assert span.status.status_code is StatusCode.ERROR
+    assert "modelforge.error_kind" not in (span.attributes or {})
+    (event,) = span.events
+    assert dict(event.attributes or {}) == {"exception.type": "RuntimeError"}
