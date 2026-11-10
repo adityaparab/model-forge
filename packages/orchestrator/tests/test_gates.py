@@ -135,3 +135,14 @@ def test_gate_scope_summary_shows_rationale(deps: Deps, scoped_state: RunState) 
     assert set(summary) == {"plan", "rationale", "assumptions"}
     assert summary["rationale"] == scoped_state.refs["scope_notes"].summary["rationale"]
     assert summary["assumptions"]
+
+
+@pytest.mark.db
+def test_signoff_summary_shows_findings_and_responses(
+    deps: Deps, signed_off_state: RunState
+) -> None:
+    summary = gate_summary("signoff", signed_off_state, deps.store)
+    findings = summary["findings"]
+    assert "open" not in findings["by_status"] and findings["by_status"]
+    assert findings["rounds"] == 1 and findings["n_findings"] >= 2
+    assert summary["responses"]["n_disputed"] == 1

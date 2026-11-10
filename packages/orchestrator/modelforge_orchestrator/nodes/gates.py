@@ -42,9 +42,12 @@ def gate_summary(gate: GateName, state: RunState, store: ArtifactStore) -> dict[
         }
     summary = {
         "completeness": refs["completeness"].summary,
-        "findings": refs["findings"].summary,
+        "findings": {**refs["findings"].summary, "rounds": state.counters.remediation_rounds},
         "validation_overall": refs["validation"].summary["overall"],
     }
+    responses = refs.get("responses")
+    if responses is not None:  # a review-only run has no responses
+        summary["responses"] = responses.summary
     sections = refs.get("document_sections")
     if sections is not None:
         summary["document"] = sections.summary

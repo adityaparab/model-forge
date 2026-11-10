@@ -4,12 +4,12 @@ import subprocess
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import BaseChatModel, LanguageModelInput
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatResult
 from langchain_core.runnables import Runnable, RunnableLambda
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -30,6 +30,7 @@ from modelforge_lineage.queue import enqueue
 from modelforge_lineage.store import MEDIA_YAML, ArtifactStore
 from modelforge_lineage.testing import database, database_url, db
 from modelforge_mcp.schemas import DatasetRef
+from modelforge_orchestrator.agent_schemas import FindingResponseDraft, ReReviewDraft
 from modelforge_orchestrator.briefs import BriefError, brief_hash, parse_brief
 from modelforge_orchestrator.config import Settings
 from modelforge_orchestrator.deps import Deps
@@ -52,6 +53,7 @@ __all__ = [
     "REPO",
     "SYNTHETIC_BRIEF",
     "Cli",
+    "RemediationStub",
     "apply_node",
     "assert_llm_outputs",
     "checkpointer",
@@ -353,6 +355,47 @@ def recording_runtime(deps: Deps) -> tuple["Runtime[Deps]", list[list[BaseMessag
     return cast("Runtime[Deps]", SimpleNamespace(context=context)), model.captured
 
 
+class RemediationStub(ScriptedChatModel):
+    """The scripted model with the developer's responses or the re-review's verdicts overridden.
+
+    ``response`` answers every `FindingResponseDraft` request: ``"no_evidence"`` disputes with
+    no evidence, ``"dispute_all"`` disputes citing ``[A:plan#model_name]``; ``None`` keeps the
+    script. ``re_review_open`` turns every scripted re-review verdict to ``open``.
+    """
+
+    response: Literal["no_evidence", "dispute_all"] | None = None
+    re_review_open: bool = False
+
+    def with_structured_output(
+        self, schema: dict[str, Any] | type, *, include_raw: bool = False, **kwargs: Any
+    ) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
+        inner = super().with_structured_output(schema, include_raw=True, **kwargs)
+
+        def respond(model_input: LanguageModelInput) -> Any:
+            parsed: Any
+            if schema is FindingResponseDraft and self.response is not None:
+                evidence = [] if self.response == "no_evidence" else ["[A:plan#model_name]"]
+                parsed = FindingResponseDraft(
+                    decision="dispute",
+                    action="The plan shows the finding is wrong.",
+                    evidence=evidence,
+                )
+            else:
+                parsed = cast("dict[str, Any]", inner.invoke(model_input))["parsed"]
+                if isinstance(parsed, ReReviewDraft) and self.re_review_open:
+                    parsed = ReReviewDraft(
+                        verdicts=[v.model_copy(update={"status": "open"}) for v in parsed.verdicts]
+                    )
+            raw = AIMessage(
+                content=parsed.model_dump_json(),
+                usage_metadata={"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                response_metadata={"stop_reason": "end_turn"},
+            )
+            return {"raw": raw, "parsed": parsed, "parsing_error": None} if include_raw else parsed
+
+        return RunnableLambda(respond)
+
+
 def apply_node(state: RunState, result: dict[str, Any] | Command[Any]) -> RunState:
     """``state`` after a node's result: a plain update or a `Command`'s update."""
     update = result.update if isinstance(result, Command) else result
@@ -449,9 +492,10 @@ def validated_state(prepared_state: RunState, runtime: Runtime[Deps]) -> RunStat
 
 @pytest.fixture
 def signed_off_state(validated_state: RunState, runtime: Runtime[Deps]) -> RunState:
-    """``validated_state`` after `document`, `challenge` and `remediate`, signed off."""
+    """``validated_state`` after `document`, `challenge`, `remediate` and `challenge` again, so
+    every finding has its final status, signed off."""
     state = validated_state
-    for node in (document, challenge, remediate):
+    for node in (document, challenge, remediate, challenge):
         state = apply_node(state, node(state, runtime))
     signoff = GateDecision(
         gate="signoff",
