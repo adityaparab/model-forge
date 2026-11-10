@@ -15,7 +15,8 @@ from modelforge_lineage.models import (
     StepRecord,
     ToolCallRecord,
 )
-from modelforge_orchestrator.schemas import Counters, ReplayReport
+from modelforge_mcp.schemas import GroundingReport
+from modelforge_orchestrator.schemas import Counters, FindingResponse, ReplayReport
 from pydantic import BaseModel
 
 __all__ = [
@@ -24,17 +25,24 @@ __all__ = [
     "CostBucket",
     "CostSummary",
     "Directories",
+    "DocumentResponse",
     "EventsResponse",
+    "FindingRow",
     "FindingsCounts",
+    "FindingsResponse",
+    "FindingsSummary",
     "GateInfo",
     "GateView",
     "HealthResponse",
     "IdentityConfig",
     "LlmCallsResponse",
+    "PassageView",
     "ReplayItem",
+    "ResolvedCitation",
     "RunDetail",
     "RunListItem",
     "RunListResponse",
+    "SectionView",
     "StepDetail",
     "TraceLinks",
     "TraceUrls",
@@ -201,3 +209,92 @@ class EventsResponse(BaseModel):
     events: list[EventRecord]
     next_after: int
     """The ``after`` that fetches the events following these."""
+
+
+class PassageView(BaseModel):
+    citation_id: str
+    doc_id: str
+    title: str
+    """The title of the passage's document."""
+    section: str
+    text: str
+    url: str
+    """The source URL of the passage's document."""
+
+
+class ResolvedCitation(BaseModel):
+    """A citation marker of a section body and what it points at (spec 3.3.2)."""
+
+    marker: str
+    kind: Literal["A", "K"]
+    target: str
+    resolved: bool
+    artifact_id: str | None = None
+    artifact_kind: str | None = None
+    path: str | None = None
+    value: Any = None
+    """The JSON value at ``path``; a value longer than 2000 characters of JSON is its first
+    2000 characters, with ``note`` ``truncated``."""
+    passage: PassageView | None = None
+    note: str | None = None
+    """Why the citation did not resolve, or ``truncated``."""
+
+
+class SectionView(BaseModel):
+    section_id: str
+    title: str
+    """From the template; the section id when the template lacks the section."""
+    required: bool
+    body_md: str
+    grounding: GroundingReport | None
+    citations: list[ResolvedCitation]
+    """One per distinct marker, in order of first occurrence."""
+
+
+class DocumentResponse(BaseModel):
+    template_id: str
+    document_id: str
+    """The id of the run's rendered Markdown document."""
+    sections: list[SectionView]
+
+
+class FindingRow(BaseModel):
+    id: str
+    """The short id (``F-1``)."""
+    row_id: str
+    """The ``findings`` row id (``<run_id>/F-1``)."""
+    run_id: str
+    round: int
+    severity: str
+    category: str
+    title: str
+    description: str
+    evidence: list[str]
+    required_action: str
+    status: str
+    response: str | None
+    response_evidence: list[str] | None
+    source: str
+    check_key: str | None
+    verdict: str | None
+    closed_round: int | None
+
+
+class FindingsSummary(BaseModel):
+    n_findings: int
+    by_severity: dict[str, int]
+    by_status: dict[str, int]
+    by_source: dict[str, int]
+    max_severity: str | None
+    max_open_severity: str | None
+    challenge_rounds: int
+    remediation_rounds: int
+    sections_regenerated: list[str]
+    """The union of the responses' ``sections_regenerated``, in order of first occurrence."""
+
+
+class FindingsResponse(BaseModel):
+    findings: list[FindingRow]
+    responses: list[FindingResponse]
+    """From the run's ``responses`` ref; empty when it has none."""
+    summary: FindingsSummary
