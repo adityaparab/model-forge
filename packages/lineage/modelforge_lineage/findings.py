@@ -20,8 +20,8 @@ def insert_findings(conn: Connection[DictRow], run_id: str, rows: list[dict[str,
     for row in rows:
         conn.execute(
             "insert into findings (id, run_id, round, severity, category, title, description,"
-            " evidence, required_action, status, response, response_evidence)"
-            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
+            " evidence, required_action, status, response, response_evidence, source, check_key)"
+            " values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
             " on conflict (id) do nothing",
             (
                 row["id"],
@@ -36,6 +36,8 @@ def insert_findings(conn: Connection[DictRow], run_id: str, rows: list[dict[str,
                 row["status"],
                 row["response"],
                 Jsonb(row["response_evidence"]) if row["response_evidence"] is not None else None,
+                row.get("source", "review"),
+                row.get("check_key"),
             ),
         )
 
@@ -56,6 +58,34 @@ def set_response(
     )
     if cur.rowcount == 0:
         raise FindingNotFound(finding_id)
+
+
+def set_verdict(
+    conn: Connection[DictRow],
+    run_id: str,
+    finding_id: str,
+    *,
+    status: str,
+    verdict: str,
+    closed_round: int | None,
+) -> None:
+    cur = conn.execute(
+        "update findings set status = %s, verdict = %s, closed_round = %s"
+        " where id = %s and run_id = %s",
+        (status, verdict, closed_round, finding_id, run_id),
+    )
+    if cur.rowcount == 0:
+        raise FindingNotFound(finding_id)
+
+
+def blocking_findings(conn: Connection[DictRow], run_id: str) -> list[dict[str, Any]]:
+    """Findings still open or disputed at critical or high severity, ordered by id."""
+    rows = conn.execute(
+        "select * from findings where run_id = %s and status in ('open', 'disputed')"
+        " and severity in ('critical', 'high') order by id",
+        (run_id,),
+    )
+    return [dict(r) for r in rows]
 
 
 def list_findings(conn: Connection[DictRow], run_id: str) -> list[dict[str, Any]]:

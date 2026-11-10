@@ -1,4 +1,4 @@
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from modelforge_core.schemas import (
@@ -10,6 +10,7 @@ from modelforge_core.schemas import (
     VintagePolicy,
 )
 from modelforge_lineage.approvals import (
+    BlockingFindingsError,
     FourEyesError,
     GateMismatchError,
     InvalidDecisionError,
@@ -19,6 +20,7 @@ from modelforge_lineage.approvals import (
 )
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
+from modelforge_lineage.findings import insert_findings, set_response, set_verdict
 from modelforge_lineage.models import GateDecision, GateName, PlanDiffEntry, RunStatus
 from modelforge_lineage.runs import set_status
 from modelforge_lineage.testing import create_test_run
@@ -150,3 +152,74 @@ def test_record_approval_requires_transaction(db: Database) -> None:
                 current_plan=PLAN,
             )
         assert list_approvals(conn, "run_a") == []
+
+
+def _high_finding(short_id: str, title: str) -> dict[str, Any]:
+    return {
+        "id": f"run_a/{short_id}",
+        "round": 1,
+        "severity": "high",
+        "category": "performance",
+        "title": title,
+        "description": "d",
+        "evidence": ["e" * 64],
+        "required_action": "a",
+        "status": "open",
+        "response": None,
+        "response_evidence": [],
+    }
+
+
+@pytest.mark.db
+def test_signoff_approve_blocked_by_open_high_finding(db: Database) -> None:
+    approve = GateDecision(gate="signoff", decision="approve", approver="bob")
+    with db.transaction() as conn:
+        _awaiting(conn, "signoff")
+        insert_findings(conn, "run_a", [_high_finding("F-1", "Calibration drifts")])
+    with db.transaction() as conn, pytest.raises(BlockingFindingsError) as exc:
+        record_approval(conn, "run_a", approve, current_plan=None)
+    assert "F-1 (high) Calibration drifts" in str(exc.value)
+    assert "approve_with_conditions" in str(exc.value)
+    with db.connection() as conn:
+        assert list_approvals(conn, "run_a") == []
+
+    with db.transaction() as conn:
+        rec = record_approval(
+            conn,
+            "run_a",
+            GateDecision(
+                gate="signoff",
+                decision="approve_with_conditions",
+                approver="bob",
+                conditions=["recalibrate before go-live"],
+            ),
+            current_plan=None,
+        )
+    assert rec.decision == "approve_with_conditions"
+    with db.connection() as conn:
+        assert [a.decision for a in list_approvals(conn, "run_a")] == ["approve_with_conditions"]
+
+    with db.transaction() as conn:
+        set_response(
+            conn,
+            "run_a",
+            "run_a/F-1",
+            status="disputed",
+            response="drift is within tolerance",
+            response_evidence=["r" * 64],
+        )
+    with db.transaction() as conn, pytest.raises(BlockingFindingsError) as exc:
+        record_approval(conn, "run_a", approve, current_plan=None)
+    assert "F-1 (high) Calibration drifts" in str(exc.value)
+
+    with db.transaction() as conn:
+        set_verdict(
+            conn, "run_a", "run_a/F-1", status="closed", verdict="dispute upheld", closed_round=2
+        )
+        rec = record_approval(conn, "run_a", approve, current_plan=None)
+    assert rec.decision == "approve"
+    with db.connection() as conn:
+        assert [a.decision for a in list_approvals(conn, "run_a")] == [
+            "approve_with_conditions",
+            "approve",
+        ]

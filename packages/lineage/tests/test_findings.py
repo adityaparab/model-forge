@@ -2,7 +2,14 @@ from typing import Any
 
 import pytest
 from modelforge_lineage.db import Database
-from modelforge_lineage.findings import insert_findings, list_findings, set_response
+from modelforge_lineage.findings import (
+    FindingNotFound,
+    blocking_findings,
+    insert_findings,
+    list_findings,
+    set_response,
+    set_verdict,
+)
 from modelforge_lineage.testing import create_test_run
 
 
@@ -60,3 +67,53 @@ def test_insert_findings_twice_is_idempotent(db: Database) -> None:
     with db.connection() as conn:
         rows = list_findings(conn, "run_a")
     assert [r["id"] for r in rows] == ["run_a/F-1", "run_a/F-2"]
+
+
+@pytest.mark.db
+def test_findings_new_columns_verdict_and_blocking(db: Database) -> None:
+    with db.transaction() as conn:
+        create_test_run(conn)
+        insert_findings(
+            conn,
+            "run_a",
+            [
+                {
+                    **_row("F-1"),
+                    "source": "precheck",
+                    "check_key": "undiscussed_test:cal.hl",
+                    "severity": "high",
+                },
+                _row("F-2"),
+            ],
+        )
+    with db.connection() as conn:
+        rows = list_findings(conn, "run_a")
+    first = rows[0]
+    assert (first["source"], first["check_key"], first["verdict"], first["closed_round"]) == (
+        "precheck",
+        "undiscussed_test:cal.hl",
+        None,
+        None,
+    )
+    assert (rows[1]["source"], rows[1]["check_key"]) == ("review", None)
+    with db.connection() as conn:
+        assert [r["id"] for r in blocking_findings(conn, "run_a")] == ["run_a/F-1"]  # F-2 is medium
+    with db.transaction() as conn:
+        set_verdict(
+            conn,
+            "run_a",
+            "run_a/F-1",
+            status="closed",
+            verdict="check passes after remediation",
+            closed_round=2,
+        )
+    with db.connection() as conn:
+        row = list_findings(conn, "run_a")[0]
+        assert (row["status"], row["verdict"], row["closed_round"]) == (
+            "closed",
+            "check passes after remediation",
+            2,
+        )
+        assert blocking_findings(conn, "run_a") == []
+    with db.transaction() as conn, pytest.raises(FindingNotFound):
+        set_verdict(conn, "run_a", "run_a/F-9", status="closed", verdict="x", closed_round=2)

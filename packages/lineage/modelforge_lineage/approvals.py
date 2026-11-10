@@ -9,6 +9,7 @@ from psycopg.rows import DictRow
 from psycopg.types.json import Jsonb
 
 from modelforge_lineage.events import append_event
+from modelforge_lineage.findings import blocking_findings
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.models import ApprovalRecord, GateDecision, GateName, PlanDiffEntry
 from modelforge_lineage.runs import RunNotFound
@@ -39,6 +40,10 @@ class LoopBoundError(ApprovalError):
 
 
 class InvalidDecisionError(ApprovalError):
+    pass
+
+
+class BlockingFindingsError(ApprovalError):
     pass
 
 
@@ -100,6 +105,17 @@ def record_approval(
             f"run {run_id}: approver {decision.approver} requested the run and cannot"
             f" decide gate {decision.gate}"
         )
+    if decision.gate == "signoff" and decision.decision == "approve":
+        blocking = blocking_findings(conn, run_id)
+        if blocking:
+            listed = ", ".join(
+                f"{f['id'].removeprefix(f'{run_id}/')} ({f['severity']}) {f['title']}"
+                for f in blocking
+            )
+            raise BlockingFindingsError(
+                f"run {run_id}: approve is refused while findings are open or disputed at"
+                f" critical or high severity: {listed}; use approve_with_conditions or reject"
+            )
     if decision.decision == "adjust":
         count = conn.execute(
             "select count(*) as n from approvals where run_id = %s and decision = 'adjust'",
