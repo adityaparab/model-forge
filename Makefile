@@ -1,21 +1,21 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures ui-dev api
 
 PROFILE ?= default
 
 lint:
-	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports
+	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports && npm run typecheck --prefix console && npm run lint --prefix console
 
 format:
 	uv run ruff format packages examples && uv run ruff check --fix packages examples
 
 test:
-	uv run pytest
+	uv run pytest && npm test --prefix console
 
 test-fast:
 	uv run pytest -m "not slow"
 
 sync:
-	uv sync --all-groups
+	uv sync --all-groups && npm ci --prefix console
 
 example:
 	uv run python examples/core_pipeline.py
@@ -49,3 +49,21 @@ evals-live:
 
 evals-baseline:
 	uv run modelforge-evals run --profile fake --write-baseline evals/baselines/fake.json
+
+console:
+	npm run build --prefix console
+
+console-test:
+	npm test --prefix console
+
+console-types:
+	uv run modelforge-api openapi > console/openapi.json && npm run types --prefix console
+
+console-fixtures:
+	uv run modelforge-api fixtures --out console/src/fixtures
+
+ui-dev:
+	npm run dev --prefix console
+
+api:
+	uv run modelforge-api

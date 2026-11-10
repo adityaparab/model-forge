@@ -1,0 +1,776 @@
+{
+  "template_id": "sr11-7-dev-doc",
+  "document_id": "c47a18eb4d49fc81691ee7298008ffeb3b15924a68cbfc87e801e8ffe15ada36",
+  "sections": [
+    {
+      "section_id": "executive_summary",
+      "title": "Executive summary",
+      "required": true,
+      "body_md": "synthetic_pd [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name] is a logistic scorecard estimating the probability of default for the portfolio described as: Synthetic credit frame for offline demonstration [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#portfolio]. It was developed on 4000 [A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_rows] observations with an observed event rate of 0.0935 [A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#target_rate]. It uses 4 [A:c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#selected.count] features. Its out-of-time AUC is 0.7373 [A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.auc]. The overall validation outcome is pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]. The material limitations are the proxies used for the default event and for origination vintages, described in the limitations section.",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "model_name",
+          "value": "synthetic_pd",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#portfolio]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#portfolio",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "portfolio",
+          "value": "Synthetic credit frame for offline demonstration",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_rows]",
+          "kind": "A",
+          "target": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_rows",
+          "resolved": true,
+          "artifact_id": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1",
+          "artifact_kind": "profile",
+          "path": "n_rows",
+          "value": 4000,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#target_rate]",
+          "kind": "A",
+          "target": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#target_rate",
+          "resolved": true,
+          "artifact_id": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1",
+          "artifact_kind": "profile",
+          "path": "target_rate",
+          "value": 0.0935,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#selected.count]",
+          "kind": "A",
+          "target": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#selected.count",
+          "resolved": true,
+          "artifact_id": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c",
+          "artifact_kind": "feature_selection",
+          "path": "selected.count",
+          "value": 4,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.auc]",
+          "kind": "A",
+          "target": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.auc",
+          "resolved": true,
+          "artifact_id": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966",
+          "artifact_kind": "discrimination",
+          "path": "by_split.oot.auc",
+          "value": 0.7372533333333334,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "overall",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "purpose_and_use",
+      "title": "Model purpose and intended use",
+      "required": true,
+      "body_md": "The model ranks and quantifies default risk for the portfolio described as: Synthetic credit frame for offline demonstration [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#portfolio]. Its intended use is: offline demonstration of the ModelForge pipeline; not for credit decisions [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#intended_use]. It predicts the default event over the horizon: five synthetic vintages [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon]. It is not intended for uses outside that statement, for portfolios other than the one it was developed on, or for decisions the approved conditions exclude.",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#portfolio]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#portfolio",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "portfolio",
+          "value": "Synthetic credit frame for offline demonstration",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#intended_use]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#intended_use",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "intended_use",
+          "value": "offline demonstration of the ModelForge pipeline; not for credit decisions",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "target.horizon",
+          "value": "five synthetic vintages",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "regulatory_context",
+      "title": "Regulatory and policy context",
+      "required": true,
+      "body_md": "This section identifies the supervisory guidance that applies to the model and ties each regulatory statement to a knowledge passage. The model is developed and documented under the following supervisory guidance: SR 11-7, SR 26-2 [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#regulatory_scope] [K:k_853dddea8b5f] [K:k_b1860ab50e4c]. SR 11-7 established the expectations for model development, implementation, use and validation, including effective challenge and documentation detailed enough for an independent party to understand the model, and this document follows its structure [K:k_853dddea8b5f]. SR 26-2 superseded SR 11-7 and SR 21-8 as the supervisory guidance on model risk management and places generative and agentic AI outside its scope, so the agents that assist in producing this document are governed separately from the model it describes [K:k_b1860ab50e4c].",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#regulatory_scope]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#regulatory_scope",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "regulatory_scope",
+          "value": [
+            "SR 11-7",
+            "SR 26-2"
+          ],
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[K:k_853dddea8b5f]",
+          "kind": "K",
+          "target": "k_853dddea8b5f",
+          "resolved": true,
+          "artifact_id": null,
+          "artifact_kind": null,
+          "path": null,
+          "value": null,
+          "passage": {
+            "citation_id": "k_853dddea8b5f",
+            "doc_id": "modelforge-governance",
+            "title": "ModelForge Governance Controls: gates, four-eyes rule, lineage, replay and redaction",
+            "section": "ModelForge Governance Controls > Regulatory framing",
+            "text": "SR 26-2, issued on April 17, 2026 by the Federal Reserve Board, the OCC and the FDIC, superseded SR 11-7 and SR 21-8. Its text places generative AI and agentic AI models outside its scope, describing them as novel and rapidly evolving, and states that a banking organisation's broader risk management and governance practices should still guide the controls for tools and systems the guidance does not cover. Its principles apply to traditional statistical and quantitative models. Two consequences follow for this system. The PD scorecards it produces are traditional statistical models, so the themes of the guidance (sound development, validation, monitoring, governance and documentation) bear on them. The agentic workflow that helps produce them falls outside that guidance, so the controls below are the system's own application of broader governance practice to an agentic process. They are a design choice, not a claim that the system meets any regulatory standard.",
+            "url": "knowledge-base/modelforge-governance.md"
+          },
+          "note": null
+        },
+        {
+          "marker": "[K:k_b1860ab50e4c]",
+          "kind": "K",
+          "target": "k_b1860ab50e4c",
+          "resolved": true,
+          "artifact_id": null,
+          "artifact_kind": null,
+          "path": null,
+          "value": null,
+          "passage": {
+            "citation_id": "k_b1860ab50e4c",
+            "doc_id": "sr26-2",
+            "title": "SR 26-2: Revised Guidance on Model Risk Management",
+            "section": "Supervisory Guidance on Model Risk Management (attachment to SR 26-2) > Footnotes",
+            "text": "[^1]: See 12 CFR Part 4, Subpart F, Appendix A (OCC); 12 CFR Part 262, Appendix A (Board); 12 CFR Part 302, Appendix A (FDIC). However, supervisory action may result for any violations of law or unsafe or unsound practices stemming from insufficient management of model risk. [^2]: For a description of the banking organizations supervised by each agency, refer to the definition of “appropriate Federal banking agency” in section 3(q) of the Federal Deposit Insurance Act (12 U.S.C. 1813(q)). [^3]: Generative AI and agentic AI models are novel and rapidly evolving. As such, they are not within the scope of this guidance. Nonetheless, a banking organization’s risk management and governance practices should guide the determination of appropriate governance and controls for any tools, processes, or systems not covered in this document. However, the principles described in this guidance apply to traditional statistical and quantitative models and non-generative, non-agentic AI models.",
+            "url": "https://www.federalreserve.gov/supervisionreg/srletters/SR2602.htm"
+          },
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "data",
+      "title": "Data",
+      "required": true,
+      "body_md": "Data quality, leakage and population stability were checked before modelling. After profiling the development data holds 4000 [A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_rows] rows and 6 [A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_features] candidate features with an event rate of 0.0935 [A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#target_rate]. The leakage screen found 0 [A:15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717#duplicate_rows] duplicate rows and raised 0 [A:15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717#flags.count] leakage flags. The data was split into 2540 [A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.train.count] development rows and 635 [A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.val.count] validation rows. The out-of-time sample holds 825 [A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.oot.count] rows. An out-of-time sample by vintage was available: yes [A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#oot_available].",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_rows]",
+          "kind": "A",
+          "target": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_rows",
+          "resolved": true,
+          "artifact_id": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1",
+          "artifact_kind": "profile",
+          "path": "n_rows",
+          "value": 4000,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_features]",
+          "kind": "A",
+          "target": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#n_features",
+          "resolved": true,
+          "artifact_id": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1",
+          "artifact_kind": "profile",
+          "path": "n_features",
+          "value": 6,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#target_rate]",
+          "kind": "A",
+          "target": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1#target_rate",
+          "resolved": true,
+          "artifact_id": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1",
+          "artifact_kind": "profile",
+          "path": "target_rate",
+          "value": 0.0935,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717#duplicate_rows]",
+          "kind": "A",
+          "target": "15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717#duplicate_rows",
+          "resolved": true,
+          "artifact_id": "15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717",
+          "artifact_kind": "leakage",
+          "path": "duplicate_rows",
+          "value": 0,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717#flags.count]",
+          "kind": "A",
+          "target": "15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717#flags.count",
+          "resolved": true,
+          "artifact_id": "15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717",
+          "artifact_kind": "leakage",
+          "path": "flags.count",
+          "value": 0,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.train.count]",
+          "kind": "A",
+          "target": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.train.count",
+          "resolved": true,
+          "artifact_id": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b",
+          "artifact_kind": "split_manifest",
+          "path": "row_ids.train.count",
+          "value": 2540,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.val.count]",
+          "kind": "A",
+          "target": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.val.count",
+          "resolved": true,
+          "artifact_id": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b",
+          "artifact_kind": "split_manifest",
+          "path": "row_ids.val.count",
+          "value": 635,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.oot.count]",
+          "kind": "A",
+          "target": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#row_ids.oot.count",
+          "resolved": true,
+          "artifact_id": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b",
+          "artifact_kind": "split_manifest",
+          "path": "row_ids.oot.count",
+          "value": 825,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#oot_available]",
+          "kind": "A",
+          "target": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b#oot_available",
+          "resolved": true,
+          "artifact_id": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b",
+          "artifact_kind": "split_manifest",
+          "path": "oot_available",
+          "value": true,
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "methodology",
+      "title": "Methodology and conceptual soundness",
+      "required": true,
+      "body_md": "The champion for synthetic_pd [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name] is a weight-of-evidence logistic regression scorecard, chosen for its transparency and its monotone, explainable relationship between each feature and the predicted risk. A gradient-boosted model was built on the same features as a challenger to benchmark the discrimination the scorecard gives up for that transparency. Each feature is binned and replaced by the weight of evidence of its bin before estimation. The model estimates the default event over the horizon: five synthetic vintages [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon].",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "model_name",
+          "value": "synthetic_pd",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "target.horizon",
+          "value": "five synthetic vintages",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "development",
+      "title": "Model development",
+      "required": true,
+      "body_md": "Features were binned and screened on information value and correlation. The screen selected 4 [A:c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#selected.count] features and dropped 2 [A:c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#dropped.count]. The final scorecard was estimated with the stepwise_wrong_sign [A:0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#fit_method] procedure on 4 [A:0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#features.count] features. The challenger is a gradient-boosted model of 35 [A:0b50d18229dc1954a1f8ece3bd89d06af91a3a9e8b879d51c8feca216fca68b4#num_trees] trees on the same features. Predicted probabilities were calibrated on the validation split with the platt [A:77acd2d7f2f7e25554ae71c25d65c29388632f72433e7c71ce163e7d47788814#method] method.",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#selected.count]",
+          "kind": "A",
+          "target": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#selected.count",
+          "resolved": true,
+          "artifact_id": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c",
+          "artifact_kind": "feature_selection",
+          "path": "selected.count",
+          "value": 4,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#dropped.count]",
+          "kind": "A",
+          "target": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c#dropped.count",
+          "resolved": true,
+          "artifact_id": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c",
+          "artifact_kind": "feature_selection",
+          "path": "dropped.count",
+          "value": 2,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#fit_method]",
+          "kind": "A",
+          "target": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#fit_method",
+          "resolved": true,
+          "artifact_id": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715",
+          "artifact_kind": "scorecard",
+          "path": "fit_method",
+          "value": "stepwise_wrong_sign",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#features.count]",
+          "kind": "A",
+          "target": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#features.count",
+          "resolved": true,
+          "artifact_id": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715",
+          "artifact_kind": "scorecard",
+          "path": "features.count",
+          "value": 4,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:0b50d18229dc1954a1f8ece3bd89d06af91a3a9e8b879d51c8feca216fca68b4#num_trees]",
+          "kind": "A",
+          "target": "0b50d18229dc1954a1f8ece3bd89d06af91a3a9e8b879d51c8feca216fca68b4#num_trees",
+          "resolved": true,
+          "artifact_id": "0b50d18229dc1954a1f8ece3bd89d06af91a3a9e8b879d51c8feca216fca68b4",
+          "artifact_kind": "gbm_model",
+          "path": "num_trees",
+          "value": 35,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:77acd2d7f2f7e25554ae71c25d65c29388632f72433e7c71ce163e7d47788814#method]",
+          "kind": "A",
+          "target": "77acd2d7f2f7e25554ae71c25d65c29388632f72433e7c71ce163e7d47788814#method",
+          "resolved": true,
+          "artifact_id": "77acd2d7f2f7e25554ae71c25d65c29388632f72433e7c71ce163e7d47788814",
+          "artifact_kind": "calibration_map",
+          "path": "method",
+          "value": "platt",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "performance",
+      "title": "Performance and validation results",
+      "required": true,
+      "body_md": "Discrimination, calibration, stability, sensitivity and the benchmark against the challenger were evaluated against the agreed thresholds. The champion's AUC on the validation sample is 0.7391 [A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.val.auc]. On the out-of-time sample its AUC is 0.7373 [A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.auc] and its KS statistic is 0.3653 [A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.ks]. The out-of-time AUC test outcome is pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.auc.oot].status]. The Hosmer-Lemeshow p-value is 0.3574 [A:25460466e948d3502580ab082284a194644760b53b29d3c88053d459ad15e192#hl_p_value]. The per-grade binomial calibration test outcome is pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[cal.binomial].status]. The score PSI between the development and out-of-time samples is 0.01558 [A:b3cc8a807028ab71b02ccef435bcbf6bc6d7df2d47b6cf813043d21120517fc3#score_psi]. The champion is within the agreed discrimination gap of the challenger: yes [A:da6161fb21537cafd36f2755c508ffb5ace057d3394f740d6524920c294103b4#champion_within_gap]. The overall validation outcome is pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]. The validation test `disc.ks.oot` has outcome pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.ks.oot].status]. The validation test `sens.signs` has outcome pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.signs].status]. The validation test `sens.monotonic` has outcome pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.monotonic].status].",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.val.auc]",
+          "kind": "A",
+          "target": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.val.auc",
+          "resolved": true,
+          "artifact_id": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966",
+          "artifact_kind": "discrimination",
+          "path": "by_split.val.auc",
+          "value": 0.7391014492753624,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.auc]",
+          "kind": "A",
+          "target": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.auc",
+          "resolved": true,
+          "artifact_id": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966",
+          "artifact_kind": "discrimination",
+          "path": "by_split.oot.auc",
+          "value": 0.7372533333333334,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.ks]",
+          "kind": "A",
+          "target": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966#by_split.oot.ks",
+          "resolved": true,
+          "artifact_id": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966",
+          "artifact_kind": "discrimination",
+          "path": "by_split.oot.ks",
+          "value": 0.3653333333333334,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.auc.oot].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.auc.oot].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[disc.auc.oot].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:25460466e948d3502580ab082284a194644760b53b29d3c88053d459ad15e192#hl_p_value]",
+          "kind": "A",
+          "target": "25460466e948d3502580ab082284a194644760b53b29d3c88053d459ad15e192#hl_p_value",
+          "resolved": true,
+          "artifact_id": "25460466e948d3502580ab082284a194644760b53b29d3c88053d459ad15e192",
+          "artifact_kind": "calibration_tests",
+          "path": "hl_p_value",
+          "value": 0.35736193534570754,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[cal.binomial].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[cal.binomial].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[cal.binomial].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:b3cc8a807028ab71b02ccef435bcbf6bc6d7df2d47b6cf813043d21120517fc3#score_psi]",
+          "kind": "A",
+          "target": "b3cc8a807028ab71b02ccef435bcbf6bc6d7df2d47b6cf813043d21120517fc3#score_psi",
+          "resolved": true,
+          "artifact_id": "b3cc8a807028ab71b02ccef435bcbf6bc6d7df2d47b6cf813043d21120517fc3",
+          "artifact_kind": "stability",
+          "path": "score_psi",
+          "value": 0.015575747175346398,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:da6161fb21537cafd36f2755c508ffb5ace057d3394f740d6524920c294103b4#champion_within_gap]",
+          "kind": "A",
+          "target": "da6161fb21537cafd36f2755c508ffb5ace057d3394f740d6524920c294103b4#champion_within_gap",
+          "resolved": true,
+          "artifact_id": "da6161fb21537cafd36f2755c508ffb5ace057d3394f740d6524920c294103b4",
+          "artifact_kind": "benchmark",
+          "path": "champion_within_gap",
+          "value": true,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "overall",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.ks.oot].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.ks.oot].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[disc.ks.oot].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.signs].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.signs].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[sens.signs].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.monotonic].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.monotonic].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[sens.monotonic].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "limitations",
+      "title": "Limitations and weaknesses",
+      "required": true,
+      "body_md": "The default event is a proxy: where the public company-bankruptcy data is used, bankruptcy within the forecast horizon stands in for default, so the model estimates bankruptcy risk rather than credit default as a lender would define it. The modelled horizon is: five synthetic vintages [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon]. Origination vintages are also a proxy: the dataset's horizon files are treated as vintages, so the out-of-time sample tests stability across forecast horizons rather than across calendar time. These limitations should be read alongside the overall validation outcome of pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall].",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#target.horizon",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "target.horizon",
+          "value": "five synthetic vintages",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "overall",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "monitoring",
+      "title": "Ongoing monitoring plan",
+      "required": true,
+      "body_md": "Once in use, synthetic_pd [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name] is monitored quarterly on discrimination, calibration and population stability of the score and of each feature. It is monitored against the thresholds used at validation, where the overall outcome was pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]. A breach of any threshold is escalated to the model owner and triggers a review of whether the model remains fit for its intended use. This revision addresses the reviewer's finding `Monitoring thresholds are not quantified`.",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "model_name",
+          "value": "synthetic_pd",
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "overall",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "governance",
+      "title": "Governance and lineage",
+      "required": true,
+      "body_md": "Every step of the run is recorded in a hash-chained event log, and every input, intermediate result and output is a content-addressed artifact identified by the hash of its bytes, so the lineage from the source data to each reported figure can be verified. The approvals for synthetic_pd [A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name] are recorded at each human gate. The run can be reproduced and checked against its manifest with modelforge replay.",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "model_name",
+          "value": "synthetic_pd",
+          "passage": null,
+          "note": null
+        }
+      ]
+    },
+    {
+      "section_id": "appendices",
+      "title": "Appendices",
+      "required": false,
+      "body_md": "Supporting artifacts include the binning tables, the scorecard, the full validation report and the citations listed with each section. The scorecard holds 4 [A:0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#features.count] features. The full validation report records an overall outcome of pass [A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall].",
+      "grounding": {
+        "ungrounded_numbers": [],
+        "unresolved_markers": [],
+        "uncited_regulatory_sentences": [],
+        "foreign_passages": [],
+        "ok": true
+      },
+      "citations": [
+        {
+          "marker": "[A:0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#features.count]",
+          "kind": "A",
+          "target": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715#features.count",
+          "resolved": true,
+          "artifact_id": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715",
+          "artifact_kind": "scorecard",
+          "path": "features.count",
+          "value": 4,
+          "passage": null,
+          "note": null
+        },
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#overall",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "overall",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
+    }
+  ]
+}

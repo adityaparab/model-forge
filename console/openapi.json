@@ -1,0 +1,5534 @@
+{
+  "components": {
+    "schemas": {
+      "ApprovalRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "adjust_target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjust Target"
+          },
+          "approver": {
+            "title": "Approver",
+            "type": "string"
+          },
+          "comment": {
+            "title": "Comment",
+            "type": "string"
+          },
+          "conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conditions"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "gate": {
+            "enum": [
+              "scope",
+              "model",
+              "signoff"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/GateDecision"
+          },
+          "plan_diff": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PlanDiffEntry"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Diff"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "gate",
+          "decision",
+          "approver",
+          "comment",
+          "payload",
+          "plan_diff",
+          "conditions",
+          "adjust_target",
+          "ts"
+        ],
+        "title": "ApprovalRecord",
+        "type": "object"
+      },
+      "ApprovalRequest": {
+        "additionalProperties": false,
+        "description": "A gate decision; the approver is the request's identity.",
+        "properties": {
+          "adjust_target": {
+            "anyOf": [
+              {
+                "enum": [
+                  "features",
+                  "build"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjust Target"
+          },
+          "comment": {
+            "default": "",
+            "title": "Comment",
+            "type": "string"
+          },
+          "conditions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "gate": {
+            "enum": [
+              "scope",
+              "model",
+              "signoff"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelingPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "gate",
+          "decision"
+        ],
+        "title": "ApprovalRequest",
+        "type": "object"
+      },
+      "ApprovalSummary": {
+        "additionalProperties": false,
+        "description": "No timestamp: approval times live in the approvals table and `gate.decided` events.",
+        "properties": {
+          "approver": {
+            "title": "Approver",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "gate": {
+            "enum": [
+              "scope",
+              "model",
+              "signoff"
+            ],
+            "title": "Gate",
+            "type": "string"
+          }
+        },
+        "required": [
+          "gate",
+          "decision",
+          "approver"
+        ],
+        "title": "ApprovalSummary",
+        "type": "object"
+      },
+      "ArtifactItem": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "producer_step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Producer Step Id"
+          },
+          "ref_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ref Names",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "uri": {
+            "title": "Uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "kind",
+          "media_type",
+          "size_bytes",
+          "uri",
+          "producer_step_id",
+          "schema_version",
+          "ref_names",
+          "summary"
+        ],
+        "title": "ArtifactItem",
+        "type": "object"
+      },
+      "ArtifactRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "media_type": {
+            "title": "Media Type",
+            "type": "string"
+          },
+          "producer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Producer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "media_type",
+          "size_bytes"
+        ],
+        "title": "ArtifactRef",
+        "type": "object"
+      },
+      "BriefItem": {
+        "description": "An example brief of the briefs directory.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "path",
+          "text"
+        ],
+        "title": "BriefItem",
+        "type": "object"
+      },
+      "ChainReport": {
+        "additionalProperties": false,
+        "properties": {
+          "events": {
+            "title": "Events",
+            "type": "integer"
+          },
+          "first_bad_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Bad Id"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "events",
+          "ok",
+          "first_bad_id"
+        ],
+        "title": "ChainReport",
+        "type": "object"
+      },
+      "ConfigResponse": {
+        "description": "The redacted effective configuration: never a URL with a password or a key.",
+        "properties": {
+          "console": {
+            "enum": [
+              "built",
+              "missing",
+              "dev"
+            ],
+            "title": "Console",
+            "type": "string"
+          },
+          "directories": {
+            "$ref": "#/components/schemas/Directories"
+          },
+          "gates": {
+            "items": {
+              "$ref": "#/components/schemas/GateInfo"
+            },
+            "title": "Gates",
+            "type": "array"
+          },
+          "identity": {
+            "$ref": "#/components/schemas/IdentityConfig"
+          },
+          "nodes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "profile_default": {
+            "title": "Profile Default",
+            "type": "string"
+          },
+          "trace_urls": {
+            "$ref": "#/components/schemas/TraceUrls"
+          },
+          "tracing": {
+            "$ref": "#/components/schemas/TracingConfig"
+          },
+          "versions": {
+            "$ref": "#/components/schemas/Versions"
+          }
+        },
+        "required": [
+          "profile_default",
+          "console",
+          "identity",
+          "trace_urls",
+          "tracing",
+          "directories",
+          "versions",
+          "nodes",
+          "gates"
+        ],
+        "title": "ConfigResponse",
+        "type": "object"
+      },
+      "CostBucket": {
+        "properties": {
+          "cache_read_tokens": {
+            "title": "Cache Read Tokens",
+            "type": "integer"
+          },
+          "cache_write_tokens": {
+            "title": "Cache Write Tokens",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "n_calls": {
+            "title": "N Calls",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n_calls",
+          "input_tokens",
+          "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "cost_usd"
+        ],
+        "title": "CostBucket",
+        "type": "object"
+      },
+      "CostDay": {
+        "properties": {
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "day": {
+            "format": "date",
+            "title": "Day",
+            "type": "string"
+          },
+          "n_calls": {
+            "title": "N Calls",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "day",
+          "cost_usd",
+          "n_calls"
+        ],
+        "title": "CostDay",
+        "type": "object"
+      },
+      "CostGroup": {
+        "description": "The calls of the window sharing a profile, model or purpose; unused fields are 0.",
+        "properties": {
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "n_calls": {
+            "title": "N Calls",
+            "type": "integer"
+          },
+          "n_runs": {
+            "title": "N Runs",
+            "type": "integer"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "cost_usd",
+          "n_runs",
+          "n_calls",
+          "input_tokens",
+          "output_tokens"
+        ],
+        "title": "CostGroup",
+        "type": "object"
+      },
+      "CostRunRow": {
+        "properties": {
+          "cost_cap_usd": {
+            "title": "Cost Cap Usd",
+            "type": "number"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "n_calls": {
+            "title": "N Calls",
+            "type": "integer"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "requester": {
+            "title": "Requester",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "awaiting_scope",
+              "awaiting_model",
+              "awaiting_signoff",
+              "needs_attention",
+              "completed",
+              "rejected",
+              "aborted",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "status",
+          "profile",
+          "requester",
+          "created_at",
+          "cost_usd",
+          "cost_cap_usd",
+          "n_calls"
+        ],
+        "title": "CostRunRow",
+        "type": "object"
+      },
+      "CostSummary": {
+        "description": "The run's spend from its ``llm_calls`` rows (spec 3.3.1).",
+        "properties": {
+          "by_model": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CostBucket"
+            },
+            "title": "By Model",
+            "type": "object"
+          },
+          "by_purpose": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/CostBucket"
+            },
+            "title": "By Purpose",
+            "type": "object"
+          },
+          "cap_usd": {
+            "title": "Cap Usd",
+            "type": "number"
+          },
+          "n_calls": {
+            "title": "N Calls",
+            "type": "integer"
+          },
+          "n_schema_retries": {
+            "title": "N Schema Retries",
+            "type": "integer"
+          },
+          "spent_usd": {
+            "title": "Spent Usd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "spent_usd",
+          "cap_usd",
+          "n_calls",
+          "n_schema_retries",
+          "by_purpose",
+          "by_model"
+        ],
+        "title": "CostSummary",
+        "type": "object"
+      },
+      "CostTokens": {
+        "properties": {
+          "cache_read": {
+            "title": "Cache Read",
+            "type": "integer"
+          },
+          "cache_write": {
+            "title": "Cache Write",
+            "type": "integer"
+          },
+          "input": {
+            "title": "Input",
+            "type": "integer"
+          },
+          "output": {
+            "title": "Output",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "input",
+          "output",
+          "cache_read",
+          "cache_write"
+        ],
+        "title": "CostTokens",
+        "type": "object"
+      },
+      "CostsResponse": {
+        "description": "Spend across runs (spec 3.9): the totals and groups are over the ``llm_calls`` whose\n``ts`` is in the window; ``by_run`` lists every run created in the window.",
+        "properties": {
+          "by_day": {
+            "items": {
+              "$ref": "#/components/schemas/CostDay"
+            },
+            "title": "By Day",
+            "type": "array"
+          },
+          "by_model": {
+            "items": {
+              "$ref": "#/components/schemas/CostGroup"
+            },
+            "title": "By Model",
+            "type": "array"
+          },
+          "by_profile": {
+            "items": {
+              "$ref": "#/components/schemas/CostGroup"
+            },
+            "title": "By Profile",
+            "type": "array"
+          },
+          "by_purpose": {
+            "items": {
+              "$ref": "#/components/schemas/CostGroup"
+            },
+            "title": "By Purpose",
+            "type": "array"
+          },
+          "by_run": {
+            "items": {
+              "$ref": "#/components/schemas/CostRunRow"
+            },
+            "title": "By Run",
+            "type": "array"
+          },
+          "n_calls": {
+            "title": "N Calls",
+            "type": "integer"
+          },
+          "n_runs": {
+            "title": "N Runs",
+            "type": "integer"
+          },
+          "since": {
+            "format": "date-time",
+            "title": "Since",
+            "type": "string"
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/CostTokens"
+          },
+          "total_usd": {
+            "title": "Total Usd",
+            "type": "number"
+          },
+          "until": {
+            "format": "date-time",
+            "title": "Until",
+            "type": "string"
+          }
+        },
+        "required": [
+          "since",
+          "until",
+          "total_usd",
+          "n_runs",
+          "n_calls",
+          "tokens",
+          "by_run",
+          "by_profile",
+          "by_model",
+          "by_purpose",
+          "by_day"
+        ],
+        "title": "CostsResponse",
+        "type": "object"
+      },
+      "Counters": {
+        "additionalProperties": false,
+        "properties": {
+          "build_loops": {
+            "default": 0,
+            "title": "Build Loops",
+            "type": "integer"
+          },
+          "challenge_rounds": {
+            "default": 0,
+            "title": "Challenge Rounds",
+            "type": "integer"
+          },
+          "remediation_rounds": {
+            "default": 0,
+            "title": "Remediation Rounds",
+            "type": "integer"
+          }
+        },
+        "title": "Counters",
+        "type": "object"
+      },
+      "DatasetRef": {
+        "additionalProperties": false,
+        "description": "A dataset adapter name plus the seed it is loaded with, written `adapter[@seed]`.",
+        "properties": {
+          "adapter": {
+            "title": "Adapter",
+            "type": "string"
+          },
+          "seed": {
+            "default": 42,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "adapter"
+        ],
+        "title": "DatasetRef",
+        "type": "object"
+      },
+      "Directories": {
+        "properties": {
+          "artifacts": {
+            "title": "Artifacts",
+            "type": "string"
+          },
+          "briefs": {
+            "title": "Briefs",
+            "type": "string"
+          },
+          "console": {
+            "title": "Console",
+            "type": "string"
+          },
+          "data": {
+            "title": "Data",
+            "type": "string"
+          },
+          "knowledge": {
+            "title": "Knowledge",
+            "type": "string"
+          },
+          "profiles": {
+            "title": "Profiles",
+            "type": "string"
+          },
+          "prompts": {
+            "title": "Prompts",
+            "type": "string"
+          },
+          "templates": {
+            "title": "Templates",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifacts",
+          "data",
+          "templates",
+          "knowledge",
+          "prompts",
+          "profiles",
+          "briefs",
+          "console"
+        ],
+        "title": "Directories",
+        "type": "object"
+      },
+      "DocumentResponse": {
+        "properties": {
+          "document_id": {
+            "title": "Document Id",
+            "type": "string"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SectionView"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "template_id": {
+            "title": "Template Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "template_id",
+          "document_id",
+          "sections"
+        ],
+        "title": "DocumentResponse",
+        "type": "object"
+      },
+      "EventRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "title": "Hash",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "title": "Payload",
+            "type": "object"
+          },
+          "prev_hash": {
+            "title": "Prev Hash",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "step_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Id"
+          },
+          "ts": {
+            "title": "Ts",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "step_id",
+          "ts",
+          "type",
+          "payload",
+          "prev_hash",
+          "hash"
+        ],
+        "title": "EventRecord",
+        "type": "object"
+      },
+      "EventsResponse": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventRecord"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "next_after": {
+            "title": "Next After",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "events",
+          "next_after"
+        ],
+        "title": "EventsResponse",
+        "type": "object"
+      },
+      "FeaturePolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "corr_max": {
+            "default": 0.7,
+            "title": "Corr Max",
+            "type": "number"
+          },
+          "exclusions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exclusions",
+            "type": "array"
+          },
+          "iv_max": {
+            "default": 0.5,
+            "title": "Iv Max",
+            "type": "number"
+          },
+          "iv_min": {
+            "default": 0.02,
+            "title": "Iv Min",
+            "type": "number"
+          },
+          "max_features": {
+            "default": 20,
+            "title": "Max Features",
+            "type": "integer"
+          }
+        },
+        "title": "FeaturePolicy",
+        "type": "object"
+      },
+      "FindingResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "decision": {
+            "enum": [
+              "accept",
+              "dispute"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "finding_id": {
+            "title": "Finding Id",
+            "type": "string"
+          },
+          "round": {
+            "default": 1,
+            "title": "Round",
+            "type": "integer"
+          },
+          "sections_regenerated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sections Regenerated",
+            "type": "array"
+          }
+        },
+        "required": [
+          "finding_id",
+          "decision",
+          "action"
+        ],
+        "title": "FindingResponse",
+        "type": "object"
+      },
+      "FindingRow": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "check_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Key"
+          },
+          "closed_round": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed Round"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "required_action": {
+            "title": "Required Action",
+            "type": "string"
+          },
+          "response": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response"
+          },
+          "response_evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Evidence"
+          },
+          "round": {
+            "title": "Round",
+            "type": "integer"
+          },
+          "row_id": {
+            "title": "Row Id",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "id",
+          "row_id",
+          "run_id",
+          "round",
+          "severity",
+          "category",
+          "title",
+          "description",
+          "evidence",
+          "required_action",
+          "status",
+          "response",
+          "response_evidence",
+          "source",
+          "check_key",
+          "verdict",
+          "closed_round"
+        ],
+        "title": "FindingRow",
+        "type": "object"
+      },
+      "FindingsCounts": {
+        "properties": {
+          "max_open_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Severity"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "n",
+          "max_open_severity"
+        ],
+        "title": "FindingsCounts",
+        "type": "object"
+      },
+      "FindingsResponse": {
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingRow"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/FindingResponse"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/FindingsSummary"
+          }
+        },
+        "required": [
+          "findings",
+          "responses",
+          "summary"
+        ],
+        "title": "FindingsResponse",
+        "type": "object"
+      },
+      "FindingsSummary": {
+        "properties": {
+          "by_severity": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Severity",
+            "type": "object"
+          },
+          "by_source": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Source",
+            "type": "object"
+          },
+          "by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "By Status",
+            "type": "object"
+          },
+          "challenge_rounds": {
+            "title": "Challenge Rounds",
+            "type": "integer"
+          },
+          "max_open_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Open Severity"
+          },
+          "max_severity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Severity"
+          },
+          "n_findings": {
+            "title": "N Findings",
+            "type": "integer"
+          },
+          "remediation_rounds": {
+            "title": "Remediation Rounds",
+            "type": "integer"
+          },
+          "sections_regenerated": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sections Regenerated",
+            "type": "array"
+          }
+        },
+        "required": [
+          "n_findings",
+          "by_severity",
+          "by_status",
+          "by_source",
+          "max_severity",
+          "max_open_severity",
+          "challenge_rounds",
+          "remediation_rounds",
+          "sections_regenerated"
+        ],
+        "title": "FindingsSummary",
+        "type": "object"
+      },
+      "GateDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "adjust_target": {
+            "anyOf": [
+              {
+                "enum": [
+                  "features",
+                  "build"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjust Target"
+          },
+          "approver": {
+            "title": "Approver",
+            "type": "string"
+          },
+          "comment": {
+            "default": "",
+            "title": "Comment",
+            "type": "string"
+          },
+          "conditions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Conditions",
+            "type": "array"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "gate": {
+            "enum": [
+              "scope",
+              "model",
+              "signoff"
+            ],
+            "title": "Gate",
+            "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelingPlan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "gate",
+          "decision",
+          "approver"
+        ],
+        "title": "GateDecision",
+        "type": "object"
+      },
+      "GateInfo": {
+        "properties": {
+          "decisions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "name": {
+            "enum": [
+              "scope",
+              "model",
+              "signoff"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "awaiting_scope",
+              "awaiting_model",
+              "awaiting_signoff",
+              "needs_attention",
+              "completed",
+              "rejected",
+              "aborted",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "decisions"
+        ],
+        "title": "GateInfo",
+        "type": "object"
+      },
+      "GateView": {
+        "properties": {
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": true,
+            "title": "Summary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "gate",
+          "summary"
+        ],
+        "title": "GateView",
+        "type": "object"
+      },
+      "GroundingReport": {
+        "additionalProperties": false,
+        "description": "What the grounding checks found in one section body; ``ok`` when every list is empty.",
+        "properties": {
+          "foreign_passages": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Foreign Passages",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "uncited_regulatory_sentences": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Uncited Regulatory Sentences",
+            "type": "array"
+          },
+          "ungrounded_numbers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Ungrounded Numbers",
+            "type": "array"
+          },
+          "unresolved_markers": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Markers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "GroundingReport",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "degraded"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "database",
+          "version"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "IdentityConfig": {
+        "properties": {
+          "mode": {
+            "enum": [
+              "open",
+              "roles"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "roles": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Roles",
+            "type": "object"
+          }
+        },
+        "required": [
+          "mode",
+          "roles"
+        ],
+        "title": "IdentityConfig",
+        "type": "object"
+      },
+      "InventoryEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approver": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver"
+          },
+          "champion_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Champion Ref"
+          },
+          "conditions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conditions"
+          },
+          "intended_use": {
+            "title": "Intended Use",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_review": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Review"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tier": {
+            "title": "Tier",
+            "type": "integer"
+          },
+          "validation_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Summary"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model_id",
+          "run_id",
+          "name",
+          "version",
+          "owner",
+          "intended_use",
+          "tier",
+          "status",
+          "champion_ref",
+          "validation_summary",
+          "approved_at",
+          "approver",
+          "conditions",
+          "next_review"
+        ],
+        "title": "InventoryEntry",
+        "type": "object"
+      },
+      "LlmCallRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "cache_read_tokens": {
+            "title": "Cache Read Tokens",
+            "type": "integer"
+          },
+          "cache_write_tokens": {
+            "title": "Cache Write Tokens",
+            "type": "integer"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_tokens": {
+            "title": "Input Tokens",
+            "type": "integer"
+          },
+          "latency_ms": {
+            "title": "Latency Ms",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "output_tokens": {
+            "title": "Output Tokens",
+            "type": "integer"
+          },
+          "prompt_hash": {
+            "title": "Prompt Hash",
+            "type": "string"
+          },
+          "prompt_name": {
+            "title": "Prompt Name",
+            "type": "string"
+          },
+          "prompt_version": {
+            "title": "Prompt Version",
+            "type": "integer"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "raw_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Ref"
+          },
+          "schema_valid": {
+            "title": "Schema Valid",
+            "type": "boolean"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          }
+        },
+        "required": [
+          "id",
+          "step_id",
+          "purpose",
+          "provider",
+          "model",
+          "prompt_name",
+          "prompt_version",
+          "prompt_hash",
+          "input_tokens",
+          "output_tokens",
+          "cache_read_tokens",
+          "cache_write_tokens",
+          "cost_usd",
+          "latency_ms",
+          "stop_reason",
+          "schema_valid",
+          "raw_ref"
+        ],
+        "title": "LlmCallRecord",
+        "type": "object"
+      },
+      "LlmCallsResponse": {
+        "properties": {
+          "calls": {
+            "items": {
+              "$ref": "#/components/schemas/LlmCallRecord"
+            },
+            "title": "Calls",
+            "type": "array"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/CostSummary"
+          }
+        },
+        "required": [
+          "calls",
+          "cost"
+        ],
+        "title": "LlmCallsResponse",
+        "type": "object"
+      },
+      "Manifest": {
+        "additionalProperties": false,
+        "properties": {
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalSummary"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "brief_hash": {
+            "title": "Brief Hash",
+            "type": "string"
+          },
+          "core_version": {
+            "title": "Core Version",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "dataset_ref": {
+            "$ref": "#/components/schemas/DatasetRef"
+          },
+          "events_head_hash": {
+            "title": "Events Head Hash",
+            "type": "string"
+          },
+          "initial_plan_ref": {
+            "title": "Initial Plan Ref",
+            "type": "string"
+          },
+          "orchestrator_version": {
+            "title": "Orchestrator Version",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "completed",
+              "rejected"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "plan_ref": {
+            "title": "Plan Ref",
+            "type": "string"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "refs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ArtifactRef"
+            },
+            "propertyNames": {
+              "enum": [
+                "dataset",
+                "dictionary",
+                "profile",
+                "leakage",
+                "psi",
+                "split",
+                "binning",
+                "selection",
+                "champion",
+                "challenger_model",
+                "calibration",
+                "champion_scores",
+                "challenger_scores",
+                "discrimination",
+                "calibration_tests",
+                "stability",
+                "sensitivity",
+                "benchmark",
+                "validation",
+                "document_sections",
+                "scope_notes",
+                "document_md",
+                "document_html",
+                "completeness",
+                "findings",
+                "responses",
+                "manifest",
+                "replay_report",
+                "knowledge_index"
+              ]
+            },
+            "title": "Refs",
+            "type": "object"
+          },
+          "replay_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay Of"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "tool_versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Tool Versions",
+            "type": "object"
+          }
+        },
+        "required": [
+          "run_id",
+          "replay_of",
+          "brief_hash",
+          "dataset_ref",
+          "dataset_id",
+          "seed",
+          "profile",
+          "initial_plan_ref",
+          "plan_ref",
+          "refs",
+          "tool_versions",
+          "approvals",
+          "outcome",
+          "core_version",
+          "orchestrator_version",
+          "events_head_hash"
+        ],
+        "title": "Manifest",
+        "type": "object"
+      },
+      "Methodology": {
+        "additionalProperties": false,
+        "properties": {
+          "challenger": {
+            "const": "lightgbm",
+            "default": "lightgbm",
+            "title": "Challenger",
+            "type": "string"
+          },
+          "champion": {
+            "const": "woe_logistic",
+            "default": "woe_logistic",
+            "title": "Champion",
+            "type": "string"
+          }
+        },
+        "title": "Methodology",
+        "type": "object"
+      },
+      "ModelingPlan": {
+        "additionalProperties": false,
+        "properties": {
+          "feature_policy": {
+            "$ref": "#/components/schemas/FeaturePolicy"
+          },
+          "intended_use": {
+            "title": "Intended Use",
+            "type": "string"
+          },
+          "methodology": {
+            "$ref": "#/components/schemas/Methodology"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "portfolio": {
+            "title": "Portfolio",
+            "type": "string"
+          },
+          "regulatory_scope": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Regulatory Scope",
+            "type": "array"
+          },
+          "target": {
+            "$ref": "#/components/schemas/TargetDefinition"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "tier": {
+            "enum": [
+              1,
+              2,
+              3
+            ],
+            "title": "Tier",
+            "type": "integer"
+          },
+          "vintage_policy": {
+            "$ref": "#/components/schemas/VintagePolicy"
+          }
+        },
+        "required": [
+          "model_name",
+          "portfolio",
+          "target",
+          "vintage_policy",
+          "feature_policy",
+          "methodology",
+          "thresholds",
+          "regulatory_scope",
+          "intended_use",
+          "tier"
+        ],
+        "title": "ModelingPlan",
+        "type": "object"
+      },
+      "PassageView": {
+        "properties": {
+          "citation_id": {
+            "title": "Citation Id",
+            "type": "string"
+          },
+          "doc_id": {
+            "title": "Doc Id",
+            "type": "string"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "citation_id",
+          "doc_id",
+          "title",
+          "section",
+          "text",
+          "url"
+        ],
+        "title": "PassageView",
+        "type": "object"
+      },
+      "PlanDiffEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "new": {
+            "title": "New"
+          },
+          "old": {
+            "title": "Old"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "old",
+          "new"
+        ],
+        "title": "PlanDiffEntry",
+        "type": "object"
+      },
+      "Price": {
+        "additionalProperties": false,
+        "description": "USD per million tokens.",
+        "properties": {
+          "cache_read": {
+            "default": 0.0,
+            "title": "Cache Read",
+            "type": "number"
+          },
+          "cache_write": {
+            "default": 0.0,
+            "title": "Cache Write",
+            "type": "number"
+          },
+          "input": {
+            "title": "Input",
+            "type": "number"
+          },
+          "output": {
+            "title": "Output",
+            "type": "number"
+          }
+        },
+        "required": [
+          "input",
+          "output"
+        ],
+        "title": "Price",
+        "type": "object"
+      },
+      "Producer": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server",
+          "tool",
+          "version"
+        ],
+        "title": "Producer",
+        "type": "object"
+      },
+      "ProfileView": {
+        "description": "A profile file of the profiles directory; ``error`` when it does not load.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "prices": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Price"
+            },
+            "title": "Prices",
+            "type": "object"
+          },
+          "routes": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RouteView"
+            },
+            "title": "Routes",
+            "type": "object"
+          }
+        },
+        "required": [
+          "name",
+          "routes",
+          "prices",
+          "error"
+        ],
+        "title": "ProfileView",
+        "type": "object"
+      },
+      "ReplayItem": {
+        "properties": {
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReplayReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRecord"
+          }
+        },
+        "required": [
+          "run",
+          "report"
+        ],
+        "title": "ReplayItem",
+        "type": "object"
+      },
+      "ReplayMismatch": {
+        "additionalProperties": false,
+        "properties": {
+          "original_id": {
+            "title": "Original Id",
+            "type": "string"
+          },
+          "ref": {
+            "enum": [
+              "dataset",
+              "dictionary",
+              "profile",
+              "leakage",
+              "psi",
+              "split",
+              "binning",
+              "selection",
+              "champion",
+              "challenger_model",
+              "calibration",
+              "champion_scores",
+              "challenger_scores",
+              "discrimination",
+              "calibration_tests",
+              "stability",
+              "sensitivity",
+              "benchmark",
+              "validation",
+              "document_sections",
+              "scope_notes",
+              "document_md",
+              "document_html",
+              "completeness",
+              "findings",
+              "responses",
+              "manifest",
+              "replay_report",
+              "knowledge_index"
+            ],
+            "title": "Ref",
+            "type": "string"
+          },
+          "replay_id": {
+            "title": "Replay Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref",
+          "original_id",
+          "replay_id"
+        ],
+        "title": "ReplayMismatch",
+        "type": "object"
+      },
+      "ReplayReport": {
+        "additionalProperties": false,
+        "properties": {
+          "matched": {
+            "items": {
+              "enum": [
+                "dataset",
+                "dictionary",
+                "profile",
+                "leakage",
+                "psi",
+                "split",
+                "binning",
+                "selection",
+                "champion",
+                "challenger_model",
+                "calibration",
+                "champion_scores",
+                "challenger_scores",
+                "discrimination",
+                "calibration_tests",
+                "stability",
+                "sensitivity",
+                "benchmark",
+                "validation",
+                "document_sections",
+                "scope_notes",
+                "document_md",
+                "document_html",
+                "completeness",
+                "findings",
+                "responses",
+                "manifest",
+                "replay_report",
+                "knowledge_index"
+              ],
+              "type": "string"
+            },
+            "title": "Matched",
+            "type": "array"
+          },
+          "mismatched": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayMismatch"
+            },
+            "title": "Mismatched",
+            "type": "array"
+          },
+          "missing": {
+            "items": {
+              "enum": [
+                "dataset",
+                "dictionary",
+                "profile",
+                "leakage",
+                "psi",
+                "split",
+                "binning",
+                "selection",
+                "champion",
+                "challenger_model",
+                "calibration",
+                "champion_scores",
+                "challenger_scores",
+                "discrimination",
+                "calibration_tests",
+                "stability",
+                "sensitivity",
+                "benchmark",
+                "validation",
+                "document_sections",
+                "scope_notes",
+                "document_md",
+                "document_html",
+                "completeness",
+                "findings",
+                "responses",
+                "manifest",
+                "replay_report",
+                "knowledge_index"
+              ],
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "original_run_id": {
+            "title": "Original Run Id",
+            "type": "string"
+          },
+          "regenerated": {
+            "items": {
+              "enum": [
+                "dataset",
+                "dictionary",
+                "profile",
+                "leakage",
+                "psi",
+                "split",
+                "binning",
+                "selection",
+                "champion",
+                "challenger_model",
+                "calibration",
+                "champion_scores",
+                "challenger_scores",
+                "discrimination",
+                "calibration_tests",
+                "stability",
+                "sensitivity",
+                "benchmark",
+                "validation",
+                "document_sections",
+                "scope_notes",
+                "document_md",
+                "document_html",
+                "completeness",
+                "findings",
+                "responses",
+                "manifest",
+                "replay_report",
+                "knowledge_index"
+              ],
+              "type": "string"
+            },
+            "title": "Regenerated",
+            "type": "array"
+          },
+          "replay_run_id": {
+            "title": "Replay Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "original_run_id",
+          "replay_run_id",
+          "matched",
+          "mismatched",
+          "missing",
+          "ok"
+        ],
+        "title": "ReplayReport",
+        "type": "object"
+      },
+      "ReplayRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "rerun_llm": {
+            "default": false,
+            "title": "Rerun Llm",
+            "type": "boolean"
+          }
+        },
+        "title": "ReplayRequest",
+        "type": "object"
+      },
+      "ResolvedCitation": {
+        "description": "A citation marker of a section body and what it points at (spec 3.3.2).",
+        "properties": {
+          "artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Id"
+          },
+          "artifact_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Kind"
+          },
+          "kind": {
+            "enum": [
+              "A",
+              "K"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "marker": {
+            "title": "Marker",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "passage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PassageView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "resolved": {
+            "title": "Resolved",
+            "type": "boolean"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value"
+          }
+        },
+        "required": [
+          "marker",
+          "kind",
+          "target",
+          "resolved"
+        ],
+        "title": "ResolvedCitation",
+        "type": "object"
+      },
+      "ResumeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "cost_cap_usd": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Cap Usd"
+          }
+        },
+        "title": "ResumeRequest",
+        "type": "object"
+      },
+      "RouteView": {
+        "properties": {
+          "effort": {
+            "title": "Effort",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "structured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Structured"
+          }
+        },
+        "required": [
+          "provider",
+          "model",
+          "effort",
+          "structured"
+        ],
+        "title": "RouteView",
+        "type": "object"
+      },
+      "RunDetail": {
+        "properties": {
+          "approvals": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalRecord"
+            },
+            "title": "Approvals",
+            "type": "array"
+          },
+          "cost": {
+            "$ref": "#/components/schemas/CostSummary"
+          },
+          "counters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Counters"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "findings_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Findings Summary"
+          },
+          "gate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GateView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "inventory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InventoryEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_remediation_rounds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Remediation Rounds"
+          },
+          "refs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ArtifactRef"
+            },
+            "title": "Refs",
+            "type": "object"
+          },
+          "replays": {
+            "items": {
+              "$ref": "#/components/schemas/ReplayItem"
+            },
+            "title": "Replays",
+            "type": "array"
+          },
+          "responses_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responses Summary"
+          },
+          "run": {
+            "$ref": "#/components/schemas/RunRecord"
+          },
+          "trace": {
+            "$ref": "#/components/schemas/TraceLinks"
+          }
+        },
+        "required": [
+          "run",
+          "refs",
+          "counters",
+          "max_remediation_rounds",
+          "gate",
+          "approvals",
+          "findings_summary",
+          "responses_summary",
+          "cost",
+          "inventory",
+          "trace",
+          "replays"
+        ],
+        "title": "RunDetail",
+        "type": "object"
+      },
+      "RunListItem": {
+        "additionalProperties": false,
+        "properties": {
+          "brief_hash": {
+            "title": "Brief Hash",
+            "type": "string"
+          },
+          "brief_ref": {
+            "title": "Brief Ref",
+            "type": "string"
+          },
+          "cost_cap_usd": {
+            "title": "Cost Cap Usd",
+            "type": "number"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "dataset_ref": {
+            "title": "Dataset Ref",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "findings": {
+            "$ref": "#/components/schemas/FindingsCounts"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manifest_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Hash"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "pause_requested": {
+            "default": false,
+            "title": "Pause Requested",
+            "type": "boolean"
+          },
+          "plan_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Ref"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "replay_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay Of"
+          },
+          "requester": {
+            "title": "Requester",
+            "type": "string"
+          },
+          "rerun_llm": {
+            "title": "Rerun Llm",
+            "type": "boolean"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "awaiting_scope",
+              "awaiting_model",
+              "awaiting_signoff",
+              "needs_attention",
+              "completed",
+              "rejected",
+              "aborted",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "updated_at",
+          "requester",
+          "status",
+          "profile",
+          "brief_hash",
+          "brief_ref",
+          "dataset_ref",
+          "dataset_id",
+          "plan_ref",
+          "seed",
+          "cost_usd",
+          "cost_cap_usd",
+          "trace_id",
+          "manifest_hash",
+          "replay_of",
+          "error",
+          "rerun_llm",
+          "model_name",
+          "findings"
+        ],
+        "title": "RunListItem",
+        "type": "object"
+      },
+      "RunListResponse": {
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/RunListItem"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "runs",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "RunListResponse",
+        "type": "object"
+      },
+      "RunRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "brief_hash": {
+            "title": "Brief Hash",
+            "type": "string"
+          },
+          "brief_ref": {
+            "title": "Brief Ref",
+            "type": "string"
+          },
+          "cost_cap_usd": {
+            "title": "Cost Cap Usd",
+            "type": "number"
+          },
+          "cost_usd": {
+            "title": "Cost Usd",
+            "type": "number"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dataset_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Id"
+          },
+          "dataset_ref": {
+            "title": "Dataset Ref",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "manifest_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Hash"
+          },
+          "pause_requested": {
+            "default": false,
+            "title": "Pause Requested",
+            "type": "boolean"
+          },
+          "plan_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Ref"
+          },
+          "profile": {
+            "title": "Profile",
+            "type": "string"
+          },
+          "replay_of": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replay Of"
+          },
+          "requester": {
+            "title": "Requester",
+            "type": "string"
+          },
+          "rerun_llm": {
+            "title": "Rerun Llm",
+            "type": "boolean"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "awaiting_scope",
+              "awaiting_model",
+              "awaiting_signoff",
+              "needs_attention",
+              "completed",
+              "rejected",
+              "aborted",
+              "paused"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "updated_at",
+          "requester",
+          "status",
+          "profile",
+          "brief_hash",
+          "brief_ref",
+          "dataset_ref",
+          "dataset_id",
+          "plan_ref",
+          "seed",
+          "cost_usd",
+          "cost_cap_usd",
+          "trace_id",
+          "manifest_hash",
+          "replay_of",
+          "error",
+          "rerun_llm"
+        ],
+        "title": "RunRecord",
+        "type": "object"
+      },
+      "SectionView": {
+        "properties": {
+          "body_md": {
+            "title": "Body Md",
+            "type": "string"
+          },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
+          "grounding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GroundingReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "section_id": {
+            "title": "Section Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "section_id",
+          "title",
+          "required",
+          "body_md",
+          "grounding",
+          "citations"
+        ],
+        "title": "SectionView",
+        "type": "object"
+      },
+      "SettingsAuditRow": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "new_value": {
+            "title": "New Value"
+          },
+          "old_value": {
+            "title": "Old Value"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          },
+          "updated_by": {
+            "title": "Updated By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "old_value",
+          "new_value",
+          "updated_by",
+          "ts"
+        ],
+        "title": "SettingsAuditRow",
+        "type": "object"
+      },
+      "SettingsEditable": {
+        "description": "The server-side settings an admin may change (spec 3.8).",
+        "properties": {
+          "auto_replay": {
+            "title": "Auto Replay",
+            "type": "boolean"
+          },
+          "default_cost_cap_usd": {
+            "title": "Default Cost Cap Usd",
+            "type": "number"
+          },
+          "default_profile": {
+            "title": "Default Profile",
+            "type": "string"
+          }
+        },
+        "required": [
+          "default_profile",
+          "default_cost_cap_usd",
+          "auto_replay"
+        ],
+        "title": "SettingsEditable",
+        "type": "object"
+      },
+      "SettingsPatch": {
+        "additionalProperties": false,
+        "description": "Any subset of the editable settings; a wrong type is a 422, never coerced.",
+        "properties": {
+          "auto_replay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Replay"
+          },
+          "default_cost_cap_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Cost Cap Usd"
+          },
+          "default_profile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Profile"
+          }
+        },
+        "title": "SettingsPatch",
+        "type": "object"
+      },
+      "SettingsResponse": {
+        "properties": {
+          "audit": {
+            "items": {
+              "$ref": "#/components/schemas/SettingsAuditRow"
+            },
+            "title": "Audit",
+            "type": "array"
+          },
+          "config": {
+            "$ref": "#/components/schemas/ConfigResponse"
+          },
+          "editable": {
+            "$ref": "#/components/schemas/SettingsEditable"
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileView"
+            },
+            "title": "Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "editable",
+          "audit",
+          "config",
+          "profiles"
+        ],
+        "title": "SettingsResponse",
+        "type": "object"
+      },
+      "StepDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_state_hash": {
+            "title": "Input State Hash",
+            "type": "string"
+          },
+          "llm_calls": {
+            "items": {
+              "$ref": "#/components/schemas/LlmCallRecord"
+            },
+            "title": "Llm Calls",
+            "type": "array"
+          },
+          "node": {
+            "title": "Node",
+            "type": "string"
+          },
+          "output_state_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output State Hash"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tool_calls": {
+            "items": {
+              "$ref": "#/components/schemas/ToolCallRecord"
+            },
+            "title": "Tool Calls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "run_id",
+          "node",
+          "attempt",
+          "started_at",
+          "finished_at",
+          "status",
+          "input_state_hash",
+          "output_state_hash",
+          "duration_ms",
+          "tool_calls",
+          "llm_calls"
+        ],
+        "title": "StepDetail",
+        "type": "object"
+      },
+      "TargetDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "event": {
+            "title": "Event",
+            "type": "string"
+          },
+          "horizon": {
+            "title": "Horizon",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event",
+          "horizon"
+        ],
+        "title": "TargetDefinition",
+        "type": "object"
+      },
+      "Thresholds": {
+        "additionalProperties": false,
+        "properties": {
+          "auc_min": {
+            "default": 0.7,
+            "title": "Auc Min",
+            "type": "number"
+          },
+          "auc_warn": {
+            "default": 0.65,
+            "title": "Auc Warn",
+            "type": "number"
+          },
+          "benchmark_gap": {
+            "default": 0.03,
+            "title": "Benchmark Gap",
+            "type": "number"
+          },
+          "calibration_alpha": {
+            "default": 0.05,
+            "title": "Calibration Alpha",
+            "type": "number"
+          },
+          "corr_max": {
+            "default": 0.7,
+            "title": "Corr Max",
+            "type": "number"
+          },
+          "eo_high": {
+            "default": 1.25,
+            "title": "Eo High",
+            "type": "number"
+          },
+          "eo_low": {
+            "default": 0.8,
+            "title": "Eo Low",
+            "type": "number"
+          },
+          "gap_fail": {
+            "default": 0.1,
+            "title": "Gap Fail",
+            "type": "number"
+          },
+          "gap_max": {
+            "default": 0.05,
+            "title": "Gap Max",
+            "type": "number"
+          },
+          "grade_fail_share_warn": {
+            "default": 0.2,
+            "title": "Grade Fail Share Warn",
+            "type": "number"
+          },
+          "hl_p_min": {
+            "default": 0.05,
+            "title": "Hl P Min",
+            "type": "number"
+          },
+          "iv_max": {
+            "default": 0.5,
+            "title": "Iv Max",
+            "type": "number"
+          },
+          "iv_min": {
+            "default": 0.02,
+            "title": "Iv Min",
+            "type": "number"
+          },
+          "ks_min": {
+            "default": 0.25,
+            "title": "Ks Min",
+            "type": "number"
+          },
+          "psi_fail": {
+            "default": 0.25,
+            "title": "Psi Fail",
+            "type": "number"
+          },
+          "psi_warn": {
+            "default": 0.1,
+            "title": "Psi Warn",
+            "type": "number"
+          }
+        },
+        "title": "Thresholds",
+        "type": "object"
+      },
+      "ToolCallRecord": {
+        "additionalProperties": false,
+        "properties": {
+          "artifact_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifact Ids",
+            "type": "array"
+          },
+          "duration_ms": {
+            "title": "Duration Ms",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_hash": {
+            "title": "Input Hash",
+            "type": "string"
+          },
+          "output_hash": {
+            "title": "Output Hash",
+            "type": "string"
+          },
+          "server": {
+            "title": "Server",
+            "type": "string"
+          },
+          "step_id": {
+            "title": "Step Id",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "step_id",
+          "server",
+          "tool",
+          "version",
+          "input_hash",
+          "output_hash",
+          "duration_ms",
+          "artifact_ids"
+        ],
+        "title": "ToolCallRecord",
+        "type": "object"
+      },
+      "TraceLinks": {
+        "properties": {
+          "jaeger_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jaeger Url"
+          },
+          "phoenix_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phoenix Url"
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          }
+        },
+        "required": [
+          "trace_id",
+          "jaeger_url",
+          "phoenix_url"
+        ],
+        "title": "TraceLinks",
+        "type": "object"
+      },
+      "TraceUrls": {
+        "properties": {
+          "jaeger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jaeger"
+          },
+          "phoenix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phoenix"
+          }
+        },
+        "required": [
+          "jaeger",
+          "phoenix"
+        ],
+        "title": "TraceUrls",
+        "type": "object"
+      },
+      "TracingConfig": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "boolean"
+          },
+          "endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Endpoints",
+            "type": "array"
+          }
+        },
+        "required": [
+          "endpoints",
+          "content"
+        ],
+        "title": "TracingConfig",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "ValidationReport": {
+        "additionalProperties": false,
+        "properties": {
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "overall": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail"
+            ],
+            "title": "Overall",
+            "type": "string"
+          },
+          "tests": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationTest"
+            },
+            "title": "Tests",
+            "type": "array"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          }
+        },
+        "required": [
+          "model_name",
+          "thresholds",
+          "tests",
+          "overall"
+        ],
+        "title": "ValidationReport",
+        "type": "object"
+      },
+      "ValidationTest": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence": {
+            "additionalProperties": true,
+            "title": "Evidence",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "warn",
+              "fail",
+              "not_applicable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "test_id": {
+            "title": "Test Id",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "test_id",
+          "name",
+          "status",
+          "value",
+          "threshold",
+          "message"
+        ],
+        "title": "ValidationTest",
+        "type": "object"
+      },
+      "VerifyReport": {
+        "additionalProperties": false,
+        "properties": {
+          "artifacts_checked": {
+            "title": "Artifacts Checked",
+            "type": "integer"
+          },
+          "artifacts_corrupt": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifacts Corrupt",
+            "type": "array"
+          },
+          "artifacts_missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Artifacts Missing",
+            "type": "array"
+          },
+          "chain": {
+            "$ref": "#/components/schemas/ChainReport"
+          },
+          "events_head_anchored": {
+            "title": "Events Head Anchored",
+            "type": "boolean"
+          },
+          "manifest_ok": {
+            "title": "Manifest Ok",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "chain",
+          "artifacts_checked",
+          "artifacts_missing",
+          "artifacts_corrupt",
+          "manifest_ok",
+          "events_head_anchored",
+          "ok"
+        ],
+        "title": "VerifyReport",
+        "type": "object"
+      },
+      "Versions": {
+        "properties": {
+          "api": {
+            "title": "Api",
+            "type": "string"
+          },
+          "core": {
+            "title": "Core",
+            "type": "string"
+          },
+          "orchestrator": {
+            "title": "Orchestrator",
+            "type": "string"
+          }
+        },
+        "required": [
+          "core",
+          "orchestrator",
+          "api"
+        ],
+        "title": "Versions",
+        "type": "object"
+      },
+      "VintagePolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "oot_vintages": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Oot Vintages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "oot_vintages"
+        ],
+        "title": "VintagePolicy",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "ModelForge API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v1/briefs": {
+      "get": {
+        "description": "Every ``*.yaml`` of the briefs directory by name; empty when the directory is missing.",
+        "operationId": "list_briefs_api_v1_briefs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BriefItem"
+                  },
+                  "title": "Response List Briefs Api V1 Briefs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Briefs",
+        "tags": [
+          "briefs"
+        ]
+      }
+    },
+    "/api/v1/config": {
+      "get": {
+        "operationId": "config_api_v1_config_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Config",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/costs": {
+      "get": {
+        "operationId": "costs_api_v1_costs_get",
+        "parameters": [
+          {
+            "description": "ISO timestamp; default 30 days before until.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO timestamp; default 30 days before until.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "ISO timestamp; default now.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO timestamp; default now.",
+              "title": "Until"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CostsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "since is after until."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Costs",
+        "tags": [
+          "costs"
+        ]
+      }
+    },
+    "/api/v1/events/stream": {
+      "get": {
+        "description": "Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says.\n\nA resume (``after`` or ``Last-Event-ID``) starts `sse.WINDOW` ids behind the client's id,\nand every poll re-reads that window, for commits that land out of id order (see `sse`).",
+        "operationId": "global_stream_api_v1_events_stream_get",
+        "parameters": [
+          {
+            "description": "An event id; stream the events above it.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An event id; stream the events above it.",
+              "title": "After"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Stream",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "The database query failed."
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/v1/inventory": {
+      "get": {
+        "operationId": "list_inventory_api_v1_inventory_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InventoryEntry"
+                  },
+                  "title": "Response List Inventory Api V1 Inventory Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Inventory",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/inventory/{model_id}": {
+      "get": {
+        "operationId": "inventory_entry_api_v1_inventory__model_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "title": "Model Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InventoryEntry"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Inventory Entry",
+        "tags": [
+          "inventory"
+        ]
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "operationId": "list_runs_api_v1_runs_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "queued",
+                    "running",
+                    "awaiting_scope",
+                    "awaiting_model",
+                    "awaiting_signoff",
+                    "needs_attention",
+                    "completed",
+                    "rejected",
+                    "aborted",
+                    "paused"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Profile"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requester",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Requester"
+            }
+          },
+          {
+            "in": "query",
+            "name": "replays",
+            "required": false,
+            "schema": {
+              "default": "include",
+              "enum": [
+                "include",
+                "exclude"
+              ],
+              "title": "Replays",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "runs"
+        ]
+      },
+      "post": {
+        "description": "Submit a brief: create the run and enqueue its start.\n\nThe body is JSON (`SubmitRequest`), or the brief YAML itself with a YAML ``Content-Type``\nand ``profile`` and ``cost_cap_usd`` as query parameters. Unset values default to the\n``default_profile`` and ``default_cost_cap_usd`` settings.",
+        "operationId": "submit_run_api_v1_runs_post",
+        "parameters": [
+          {
+            "description": "The profile of a YAML body; JSON sends it in the body.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The profile of a YAML body; JSON sends it in the body.",
+              "title": "Profile"
+            }
+          },
+          {
+            "description": "The cost cap of a YAML body; JSON sends it in the body.",
+            "in": "query",
+            "name": "cost_cap_usd",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMinimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The cost cap of a YAML body; JSON sends it in the body.",
+              "title": "Cost Cap Usd"
+            }
+          },
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "description": "The JSON form of ``POST /runs``; the YAML form sends the brief as the raw body.",
+                "properties": {
+                  "brief": {
+                    "title": "Brief",
+                    "type": "string"
+                  },
+                  "cost_cap_usd": {
+                    "anyOf": [
+                      {
+                        "exclusiveMinimum": 0,
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Cost Cap Usd"
+                  },
+                  "profile": {
+                    "anyOf": [
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ],
+                    "title": "Profile"
+                  }
+                },
+                "required": [
+                  "brief"
+                ],
+                "title": "SubmitRequest",
+                "type": "object"
+              }
+            },
+            "application/x-yaml": {
+              "schema": {
+                "description": "The brief YAML.",
+                "type": "string"
+              }
+            },
+            "application/yaml": {
+              "schema": {
+                "description": "The brief YAML.",
+                "type": "string"
+              }
+            },
+            "text/yaml": {
+              "schema": {
+                "description": "The brief YAML.",
+                "type": "string"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Run",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "operationId": "run_detail_api_v1_runs__run_id__get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Detail",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/abort": {
+      "post": {
+        "description": "Mark a run aborted; a running run must be paused first.",
+        "operationId": "abort_api_v1_runs__run_id__abort_post",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Abort",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/approvals": {
+      "get": {
+        "operationId": "approvals_api_v1_runs__run_id__approvals_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalRecord"
+                  },
+                  "title": "Response Approvals Api V1 Runs  Run Id  Approvals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approvals",
+        "tags": [
+          "runs"
+        ]
+      },
+      "post": {
+        "description": "Record a gate decision as the request's identity and enqueue the resume.",
+        "operationId": "approve_api_v1_runs__run_id__approvals_post",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/artifacts": {
+      "get": {
+        "operationId": "artifacts_api_v1_runs__run_id__artifacts_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ArtifactItem"
+                  },
+                  "title": "Response Artifacts Api V1 Runs  Run Id  Artifacts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifacts",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/artifacts/{artifact_id}": {
+      "get": {
+        "operationId": "artifact_content_api_v1_runs__run_id__artifacts__artifact_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "JSON for JSON artifacts, text for YAML, Markdown and HTML, a download for everything else."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifact Content",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/document": {
+      "get": {
+        "operationId": "document_api_v1_runs__run_id__document_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "sections",
+              "enum": [
+                "sections",
+                "html",
+                "md"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentResponse"
+                }
+              }
+            },
+            "description": "The sections as JSON, or the stored Markdown or HTML."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Document",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/events": {
+      "get": {
+        "operationId": "events_api_v1_runs__run_id__events_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "An event id; events above it.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "description": "An event id; events above it.",
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EventsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/events/stream": {
+      "get": {
+        "description": "The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says.",
+        "operationId": "run_stream_api_v1_runs__run_id__events_stream_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "An event id; stream the events above it.",
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An event id; stream the events above it.",
+              "title": "After"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Last-Event-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Last-Event-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Stream",
+        "tags": [
+          "events"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/findings": {
+      "get": {
+        "operationId": "findings_api_v1_runs__run_id__findings_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Findings",
+        "tags": [
+          "findings"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/llm-calls": {
+      "get": {
+        "operationId": "llm_calls_api_v1_runs__run_id__llm_calls_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmCallsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Llm Calls",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/manifest": {
+      "get": {
+        "operationId": "manifest_api_v1_runs__run_id__manifest_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Manifest"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Manifest",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/pause": {
+      "post": {
+        "description": "Ask a running run to pause at its next node boundary.",
+        "operationId": "pause_api_v1_runs__run_id__pause_post",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pause",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/replay": {
+      "post": {
+        "description": "Create and enqueue a replay of a sealed run; the replay's `RunRecord`.",
+        "operationId": "replay_api_v1_runs__run_id__replay_post",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ReplayRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replay",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/replays": {
+      "get": {
+        "operationId": "replays_api_v1_runs__run_id__replays_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ReplayItem"
+                  },
+                  "title": "Response Replays Api V1 Runs  Run Id  Replays Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Replays",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/resume": {
+      "post": {
+        "description": "Continue a ``needs_attention`` or ``paused`` run from its last checkpoint.",
+        "operationId": "resume_api_v1_runs__run_id__resume_post",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ResumeRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resume",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/steps": {
+      "get": {
+        "operationId": "steps_api_v1_runs__run_id__steps_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/StepDetail"
+                  },
+                  "title": "Response Steps Api V1 Runs  Run Id  Steps Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Steps",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/validation": {
+      "get": {
+        "operationId": "validation_api_v1_runs__run_id__validation_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Validation",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/runs/{run_id}/verify": {
+      "get": {
+        "operationId": "verify_api_v1_runs__run_id__verify_get",
+        "parameters": [
+          {
+            "description": "The run id.",
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "description": "The run id.",
+              "title": "Run Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Verify",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "operationId": "read_settings_api_v1_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Read Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Change any subset of the editable settings; each changed key writes an audit row.",
+        "operationId": "patch_settings_api_v1_settings_patch",
+        "parameters": [
+          {
+            "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+            "in": "header",
+            "name": "X-ModelForge-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The acting identity: 1 to 64 characters of [A-Za-z0-9._@-].",
+              "title": "X-Modelforge-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "An unknown profile or a cap that is not positive."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    }
+  }
+}

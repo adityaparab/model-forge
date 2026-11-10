@@ -1,0 +1,35 @@
+[
+  {
+    "model_id": "synthetic_pd@v1",
+    "run_id": "run_f3541e630110",
+    "name": "synthetic_pd",
+    "version": 1,
+    "owner": "alice",
+    "intended_use": "offline demonstration of the ModelForge pipeline; not for credit decisions",
+    "tier": 3,
+    "status": "approved",
+    "champion_ref": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715",
+    "validation_summary": {
+      "overall": "pass",
+      "statuses": {
+        "cal.eo": "pass",
+        "cal.hl": "pass",
+        "bench.gap": "pass",
+        "sens.signs": "pass",
+        "disc.ks.oot": "pass",
+        "cal.binomial": "pass",
+        "disc.auc.oot": "pass",
+        "disc.auc.val": "pass",
+        "stab.csi.max": "pass",
+        "feat.iv_range": "pass",
+        "sens.monotonic": "pass",
+        "stab.psi.score": "pass",
+        "disc.gap.train_oot": "pass"
+      }
+    },
+    "approved_at": "2026-11-10T22:38:08.769913Z",
+    "approver": "bob",
+    "conditions": null,
+    "next_review": null
+  }
+]

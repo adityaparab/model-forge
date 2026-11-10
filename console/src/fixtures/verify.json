@@ -1,0 +1,15 @@
+{
+  "run_id": "run_f3541e630110",
+  "chain": {
+    "run_id": "run_f3541e630110",
+    "events": 170,
+    "ok": true,
+    "first_bad_id": null
+  },
+  "artifacts_checked": 71,
+  "artifacts_missing": [],
+  "artifacts_corrupt": [],
+  "manifest_ok": true,
+  "events_head_anchored": true,
+  "ok": true
+}

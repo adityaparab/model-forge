@@ -1,0 +1,297 @@
+{
+  "editable": {
+    "default_profile": "fake",
+    "default_cost_cap_usd": 10.0,
+    "auto_replay": false
+  },
+  "audit": [],
+  "config": {
+    "profile_default": "fake",
+    "console": "missing",
+    "identity": {
+      "mode": "open",
+      "roles": {}
+    },
+    "trace_urls": {
+      "jaeger": "http://localhost:16686",
+      "phoenix": "http://localhost:6006"
+    },
+    "tracing": {
+      "endpoints": [],
+      "content": false
+    },
+    "directories": {
+      "artifacts": "<dir>",
+      "data": "<dir>",
+      "templates": "<dir>",
+      "knowledge": "<dir>",
+      "prompts": "<dir>",
+      "profiles": "<dir>",
+      "briefs": "<dir>",
+      "console": "<dir>"
+    },
+    "versions": {
+      "core": "0.1.0",
+      "orchestrator": "0.1.0",
+      "api": "0.1.0"
+    },
+    "nodes": [
+      "intake",
+      "scope",
+      "gate_scope",
+      "profile",
+      "split",
+      "features",
+      "build",
+      "validate",
+      "gate_model",
+      "document",
+      "challenge",
+      "remediate",
+      "gate_signoff",
+      "seal"
+    ],
+    "gates": [
+      {
+        "name": "scope",
+        "status": "awaiting_scope",
+        "decisions": [
+          "approve",
+          "edit",
+          "reject"
+        ]
+      },
+      {
+        "name": "model",
+        "status": "awaiting_model",
+        "decisions": [
+          "accept",
+          "adjust",
+          "reject"
+        ]
+      },
+      {
+        "name": "signoff",
+        "status": "awaiting_signoff",
+        "decisions": [
+          "approve",
+          "approve_with_conditions",
+          "reject"
+        ]
+      }
+    ]
+  },
+  "profiles": [
+    {
+      "name": "ci-cheap",
+      "routes": {
+        "challenge": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "structured": null
+        },
+        "document": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "medium",
+          "structured": null
+        },
+        "judge": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "low",
+          "structured": null
+        },
+        "remediate": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "low",
+          "structured": null
+        },
+        "scope": {
+          "provider": "anthropic",
+          "model": "claude-sonnet-5-5",
+          "effort": "low",
+          "structured": "function_calling"
+        }
+      },
+      "prices": {
+        "claude-opus-5-5": {
+          "input": 4.0,
+          "output": 20.0,
+          "cache_read": 0.2,
+          "cache_write": 5.0
+        },
+        "claude-sonnet-5-5": {
+          "input": 2.0,
+          "output": 10.0,
+          "cache_read": 0.2,
+          "cache_write": 2.5
+        }
+      },
+      "error": null
+    },
+    {
+      "name": "default",
+      "routes": {
+        "challenge": {
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "structured": null
+        },
+        "document": {
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "high",
+          "structured": null
+        },
+        "judge": {
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "structured": null
+        },
+        "remediate": {
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "medium",
+          "structured": null
+        },
+        "scope": {
+          "provider": "anthropic",
+          "model": "claude-opus-5-5",
+          "effort": "low",
+          "structured": "function_calling"
+        }
+      },
+      "prices": {
+        "claude-opus-5-5": {
+          "input": 4.0,
+          "output": 20.0,
+          "cache_read": 0.2,
+          "cache_write": 5.0
+        },
+        "claude-sonnet-5-5": {
+          "input": 2.0,
+          "output": 10.0,
+          "cache_read": 0.2,
+          "cache_write": 2.5
+        }
+      },
+      "error": null
+    },
+    {
+      "name": "fake",
+      "routes": {
+        "challenge": {
+          "provider": "fake",
+          "model": "scripted-v1",
+          "effort": "low",
+          "structured": null
+        },
+        "document": {
+          "provider": "fake",
+          "model": "scripted-v1",
+          "effort": "low",
+          "structured": null
+        },
+        "judge": {
+          "provider": "fake",
+          "model": "scripted-v1",
+          "effort": "low",
+          "structured": null
+        },
+        "remediate": {
+          "provider": "fake",
+          "model": "scripted-v1",
+          "effort": "low",
+          "structured": null
+        },
+        "scope": {
+          "provider": "fake",
+          "model": "scripted-v1",
+          "effort": "low",
+          "structured": null
+        }
+      },
+      "prices": {},
+      "error": null
+    },
+    {
+      "name": "local-lmstudio",
+      "routes": {
+        "challenge": {
+          "provider": "lmstudio",
+          "model": "google/gemma-4-26b-a4b-qat",
+          "effort": "medium",
+          "structured": null
+        },
+        "document": {
+          "provider": "lmstudio",
+          "model": "google/gemma-4-26b-a4b-qat",
+          "effort": "medium",
+          "structured": null
+        },
+        "judge": {
+          "provider": "lmstudio",
+          "model": "google/gemma-4-26b-a4b-qat",
+          "effort": "medium",
+          "structured": null
+        },
+        "remediate": {
+          "provider": "lmstudio",
+          "model": "google/gemma-4-26b-a4b-qat",
+          "effort": "medium",
+          "structured": null
+        },
+        "scope": {
+          "provider": "lmstudio",
+          "model": "google/gemma-4-26b-a4b-qat",
+          "effort": "medium",
+          "structured": null
+        }
+      },
+      "prices": {},
+      "error": null
+    },
+    {
+      "name": "local-ollama",
+      "routes": {
+        "challenge": {
+          "provider": "ollama",
+          "model": "gpt-oss:20b",
+          "effort": "medium",
+          "structured": null
+        },
+        "document": {
+          "provider": "ollama",
+          "model": "gpt-oss:20b",
+          "effort": "medium",
+          "structured": null
+        },
+        "judge": {
+          "provider": "ollama",
+          "model": "gpt-oss:20b",
+          "effort": "medium",
+          "structured": null
+        },
+        "remediate": {
+          "provider": "ollama",
+          "model": "gpt-oss:20b",
+          "effort": "medium",
+          "structured": null
+        },
+        "scope": {
+          "provider": "ollama",
+          "model": "gpt-oss:20b",
+          "effort": "medium",
+          "structured": null
+        }
+      },
+      "prices": {},
+      "error": null
+    }
+  ]
+}

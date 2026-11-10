@@ -1,0 +1,208 @@
+{
+  "model_name": "synthetic_pd",
+  "thresholds": {
+    "auc_min": 0.7,
+    "auc_warn": 0.65,
+    "ks_min": 0.25,
+    "gap_max": 0.05,
+    "gap_fail": 0.1,
+    "psi_warn": 0.1,
+    "psi_fail": 0.25,
+    "calibration_alpha": 0.05,
+    "grade_fail_share_warn": 0.2,
+    "hl_p_min": 0.05,
+    "eo_low": 0.8,
+    "eo_high": 1.25,
+    "iv_min": 0.02,
+    "iv_max": 0.5,
+    "corr_max": 0.7,
+    "benchmark_gap": 0.03
+  },
+  "tests": [
+    {
+      "test_id": "disc.auc.oot",
+      "name": "Out-of-time AUC",
+      "status": "pass",
+      "value": 0.7372533333333334,
+      "threshold": ">= 0.70 pass, >= 0.65 warn",
+      "message": "Out-of-time AUC is 0.7373, which is pass.",
+      "evidence": {
+        "auc": 0.7372533333333334,
+        "auc_ci_low": 0.68242225999307,
+        "auc_ci_high": 0.7880100765520294,
+        "n": 825,
+        "events": 75
+      }
+    },
+    {
+      "test_id": "disc.auc.val",
+      "name": "Validation AUC",
+      "status": "pass",
+      "value": 0.7391014492753624,
+      "threshold": ">= 0.70 pass, >= 0.65 warn",
+      "message": "Validation AUC is 0.7391, which is pass.",
+      "evidence": {
+        "auc": 0.7391014492753624,
+        "auc_ci_low": 0.6817141738200313,
+        "auc_ci_high": 0.8035593399868186,
+        "n": 635,
+        "events": 60
+      }
+    },
+    {
+      "test_id": "disc.ks.oot",
+      "name": "Out-of-time KS",
+      "status": "pass",
+      "value": 0.3653333333333334,
+      "threshold": ">= 0.25 pass, else fail",
+      "message": "Out-of-time KS is 0.3653, which is pass.",
+      "evidence": {
+        "ks": 0.3653333333333334,
+        "ks_ci_low": 0.284346135526068,
+        "ks_ci_high": 0.49033411693004225
+      }
+    },
+    {
+      "test_id": "disc.gap.train_oot",
+      "name": "Train to out-of-time AUC gap",
+      "status": "pass",
+      "value": 0.01643662137073376,
+      "threshold": "<= 0.05 pass, <= 0.10 warn",
+      "message": "Train AUC exceeds out-of-time AUC by 0.0164, which is pass.",
+      "evidence": {
+        "train_auc": 0.7536899547040672,
+        "oot_auc": 0.7372533333333334,
+        "gap": 0.01643662137073376
+      }
+    },
+    {
+      "test_id": "cal.binomial",
+      "name": "Per-grade binomial test",
+      "status": "pass",
+      "value": 0.0,
+      "threshold": "share of grades with p < 0.05: 0 pass, <= 0.20 warn",
+      "message": "0 of 10 grades on the oot split reject the binomial test (share 0.0000), which is pass.",
+      "evidence": {
+        "failed": 0,
+        "n_grades": 10,
+        "share": 0.0,
+        "artifact_alpha": 0.05,
+        "threshold_alpha": 0.05,
+        "split": "oot"
+      }
+    },
+    {
+      "test_id": "cal.hl",
+      "name": "Hosmer-Lemeshow test",
+      "status": "pass",
+      "value": 0.35736193534570754,
+      "threshold": "p >= 0.05 pass, else warn",
+      "message": "Hosmer-Lemeshow p-value is 0.3574, which is pass.",
+      "evidence": {
+        "hl_statistic": 8.823978892456157,
+        "hl_p_value": 0.35736193534570754,
+        "n_grades": 10,
+        "split": "oot"
+      }
+    },
+    {
+      "test_id": "cal.eo",
+      "name": "Expected to observed ratio",
+      "status": "pass",
+      "value": 0.9500591072262877,
+      "threshold": "0.80 <= E/O <= 1.25 pass, else warn",
+      "message": "Expected to observed ratio is 0.9501, which is pass.",
+      "evidence": {
+        "eo_ratio": 0.9500591072262877,
+        "expected_total": 71.25443304197158,
+        "observed_total": 75,
+        "split": "oot"
+      }
+    },
+    {
+      "test_id": "stab.psi.score",
+      "name": "Score PSI",
+      "status": "pass",
+      "value": 0.015575747175346398,
+      "threshold": "< 0.10 pass, < 0.25 warn",
+      "message": "Score PSI of oot against train is 0.0156, which is pass.",
+      "evidence": {
+        "score_psi": 0.015575747175346398,
+        "base_split": "train",
+        "compare_split": "oot",
+        "n_bins": 10
+      }
+    },
+    {
+      "test_id": "stab.csi.max",
+      "name": "Maximum feature CSI",
+      "status": "pass",
+      "value": 0.020021181070018067,
+      "threshold": "< 0.10 pass, < 0.25 warn",
+      "message": "Worst feature CSI is 0.0200 on f_2, which is pass.",
+      "evidence": {
+        "worst_feature": "f_2",
+        "max_csi": 0.020021181070018067,
+        "n_features": 4,
+        "compare_split": "oot"
+      }
+    },
+    {
+      "test_id": "sens.signs",
+      "name": "Coefficient signs",
+      "status": "pass",
+      "value": 0.0,
+      "threshold": "0 wrong signs pass, else fail",
+      "message": "0 of 4 coefficients have the wrong sign, which is pass.",
+      "evidence": {
+        "failed": 0,
+        "n_checks": 4,
+        "features": []
+      }
+    },
+    {
+      "test_id": "sens.monotonic",
+      "name": "WoE monotonicity",
+      "status": "pass",
+      "value": 0.0,
+      "threshold": "0 non-monotone pass, else warn",
+      "message": "0 of 4 features are not monotone, which is pass.",
+      "evidence": {
+        "failed": 0,
+        "n_checks": 4,
+        "features": []
+      }
+    },
+    {
+      "test_id": "bench.gap",
+      "name": "Champion versus challenger AUC gap",
+      "status": "pass",
+      "value": -0.021448888888889073,
+      "threshold": "challenger - champion AUC <= 0.03 pass, else warn",
+      "message": "Challenger synthetic_pd_gbm minus champion synthetic_pd AUC on oot is -0.0214, which is pass.",
+      "evidence": {
+        "decided_on": "oot",
+        "auc_delta": -0.021448888888889073,
+        "champion_auc": 0.7372533333333334,
+        "challenger_auc": 0.7158044444444444,
+        "auc_delta_ci_low": -0.053981297914619676,
+        "auc_delta_ci_high": 0.008372155513893828,
+        "champion_within_gap": true
+      }
+    },
+    {
+      "test_id": "feat.iv_range",
+      "name": "Maximum selected-feature IV",
+      "status": "pass",
+      "value": 0.40862529577821166,
+      "threshold": "<= 0.50 pass, else fail",
+      "message": "Highest selected-feature IV is 0.4086 on f_2, which is pass.",
+      "evidence": {
+        "max_iv": 0.40862529577821166,
+        "feature": "f_2",
+        "n_selected": 4
+      }
+    }
+  ],
+  "overall": "pass"
+}

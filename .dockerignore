@@ -1,11 +1,14 @@
 .git
 .venv
+console/node_modules
+console/dist
 data
 artifacts
+evals/reports
 out
+notes
 node_modules
 .superpowers
-notes
 **/__pycache__
 .pytest_cache
 .ruff_cache

@@ -1,0 +1,59 @@
+[
+  {
+    "run": {
+      "id": "run_298284169cbb",
+      "created_at": "2026-11-10T22:38:08.779987Z",
+      "updated_at": "2026-11-10T22:38:10.113319Z",
+      "requester": "replay",
+      "status": "completed",
+      "profile": "fake",
+      "brief_hash": "c4f58b3bfc97da25856b148fa5ddbcf0c3b93f2da92d9027fa3640bd41b942c6",
+      "brief_ref": "c4f58b3bfc97da25856b148fa5ddbcf0c3b93f2da92d9027fa3640bd41b942c6",
+      "dataset_ref": "synthetic_credit",
+      "dataset_id": "a9a93d338dfee1bd64bdb9e0bd6599b0963428cde744077e59ad54f974e4b88e",
+      "plan_ref": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+      "seed": 42,
+      "cost_usd": 0.0,
+      "cost_cap_usd": 10.0,
+      "trace_id": "46812af257c34b2099929e2ca48795eb",
+      "manifest_hash": "aa28706d5ecc072ebb61eec5169af211665f2d7477bcf4eb1d490c97f562a75d",
+      "replay_of": "run_f3541e630110",
+      "error": null,
+      "rerun_llm": false,
+      "pause_requested": false
+    },
+    "report": {
+      "original_run_id": "run_f3541e630110",
+      "replay_run_id": "run_298284169cbb",
+      "matched": [
+        "dataset",
+        "dictionary",
+        "profile",
+        "leakage",
+        "psi",
+        "split",
+        "binning",
+        "selection",
+        "champion",
+        "challenger_model",
+        "calibration",
+        "champion_scores",
+        "challenger_scores",
+        "discrimination",
+        "calibration_tests",
+        "stability",
+        "sensitivity",
+        "benchmark",
+        "validation",
+        "document_md",
+        "document_html",
+        "completeness",
+        "knowledge_index"
+      ],
+      "mismatched": [],
+      "missing": [],
+      "ok": true,
+      "regenerated": []
+    }
+  }
+]

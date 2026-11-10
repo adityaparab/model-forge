@@ -1,0 +1,65 @@
+[
+  {
+    "id": "appr_47bd625e2b26",
+    "run_id": "run_f3541e630110",
+    "gate": "scope",
+    "decision": "approve",
+    "approver": "alice",
+    "comment": "",
+    "payload": {
+      "gate": "scope",
+      "decision": "approve",
+      "approver": "alice",
+      "comment": "",
+      "plan": null,
+      "adjust_target": null,
+      "conditions": []
+    },
+    "plan_diff": null,
+    "conditions": null,
+    "adjust_target": null,
+    "ts": "2026-11-10T22:38:07.088684Z"
+  },
+  {
+    "id": "appr_6ae4a69902c5",
+    "run_id": "run_f3541e630110",
+    "gate": "model",
+    "decision": "accept",
+    "approver": "bob",
+    "comment": "",
+    "payload": {
+      "gate": "model",
+      "decision": "accept",
+      "approver": "bob",
+      "comment": "",
+      "plan": null,
+      "adjust_target": null,
+      "conditions": []
+    },
+    "plan_diff": null,
+    "conditions": null,
+    "adjust_target": null,
+    "ts": "2026-11-10T22:38:08.410842Z"
+  },
+  {
+    "id": "appr_588776ea8a66",
+    "run_id": "run_f3541e630110",
+    "gate": "signoff",
+    "decision": "approve",
+    "approver": "bob",
+    "comment": "",
+    "payload": {
+      "gate": "signoff",
+      "decision": "approve",
+      "approver": "bob",
+      "comment": "",
+      "plan": null,
+      "adjust_target": null,
+      "conditions": []
+    },
+    "plan_diff": null,
+    "conditions": null,
+    "adjust_target": null,
+    "ts": "2026-11-10T22:38:08.713889Z"
+  }
+]

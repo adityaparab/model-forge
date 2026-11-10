@@ -1,0 +1,749 @@
+{
+  "run": {
+    "id": "run_f3541e630110",
+    "created_at": "2026-11-10T22:38:06.961080Z",
+    "updated_at": "2026-11-10T22:38:08.777120Z",
+    "requester": "alice",
+    "status": "completed",
+    "profile": "fake",
+    "brief_hash": "c4f58b3bfc97da25856b148fa5ddbcf0c3b93f2da92d9027fa3640bd41b942c6",
+    "brief_ref": "c4f58b3bfc97da25856b148fa5ddbcf0c3b93f2da92d9027fa3640bd41b942c6",
+    "dataset_ref": "synthetic_credit",
+    "dataset_id": "a9a93d338dfee1bd64bdb9e0bd6599b0963428cde744077e59ad54f974e4b88e",
+    "plan_ref": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+    "seed": 42,
+    "cost_usd": 0.0,
+    "cost_cap_usd": 10.0,
+    "trace_id": "7bccad62685f4df7ac242b0a032f0044",
+    "manifest_hash": "ae718f3359cdcb6063baac9425389d94cdc36810fae1399795ab728dadf31e47",
+    "replay_of": null,
+    "error": null,
+    "rerun_llm": false,
+    "pause_requested": false
+  },
+  "refs": {
+    "knowledge_index": {
+      "id": "086a218391dd6deefe11eaad724e0ed1e1dbfc38a90ee02139c8c2f6dc95c0d0",
+      "kind": "knowledge_index",
+      "media_type": "application/json",
+      "size_bytes": 150598,
+      "producer": {
+        "server": "knowledge",
+        "tool": "get_index",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "n_documents": 8,
+        "n_chunks": 90,
+        "index_version": "1"
+      }
+    },
+    "scope_notes": {
+      "id": "0879bb6f9b972727ea2008b76351db0a14f475fac2e2fe45399435b8632f2cbf",
+      "kind": "scope_notes",
+      "media_type": "application/json",
+      "size_bytes": 456,
+      "producer": null,
+      "summary": {
+        "rationale": "The plan follows the brief for synthetic_pd and the default standards for a weight-of-evidence PD scorecard [K:k_447cd6a755bc].",
+        "assumptions": [
+          "The bankruptcy label stands in for the default event.",
+          "The dataset's horizon files stand in for origination vintages."
+        ]
+      }
+    },
+    "dataset": {
+      "id": "a9a93d338dfee1bd64bdb9e0bd6599b0963428cde744077e59ad54f974e4b88e",
+      "kind": "dataset",
+      "media_type": "application/vnd.apache.parquet",
+      "size_bytes": 234583,
+      "producer": {
+        "server": "data-profiler",
+        "tool": "load_dataset",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "adapter": "synthetic_credit",
+        "seed": 42,
+        "n_rows": 4000,
+        "oot_capable": true
+      }
+    },
+    "dictionary": {
+      "id": "f6690f0056f472f9a9bc4bdb599496bc23ecc8d8fa4551feaeb788554224c0bf",
+      "kind": "column_dictionary",
+      "media_type": "application/json",
+      "size_bytes": 654,
+      "producer": {
+        "server": "data-profiler",
+        "tool": "load_dataset",
+        "version": "1.0.0"
+      },
+      "summary": {}
+    },
+    "profile": {
+      "id": "86104f67a1733d3983f9824c7f1bdf9a4cc8bc519d3025f6e40dd115bc978bb1",
+      "kind": "profile",
+      "media_type": "application/json",
+      "size_bytes": 2491,
+      "producer": {
+        "server": "data-profiler",
+        "tool": "profile_dataset",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "n_rows": 4000,
+        "n_features": 6,
+        "target_rate": 0.0935
+      }
+    },
+    "leakage": {
+      "id": "15532ea355125d38ca97899014fd256fa0061998b70fa6c5957f08af0823b717",
+      "kind": "leakage",
+      "media_type": "application/json",
+      "size_bytes": 97,
+      "producer": {
+        "server": "data-profiler",
+        "tool": "check_leakage",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "flagged": [],
+        "duplicate_rows": 0
+      }
+    },
+    "psi": {
+      "id": "720f9b83554996c8672c036b40f4a0802834a381a5c7a601d6e911b5c631afd7",
+      "kind": "psi",
+      "media_type": "application/json",
+      "size_bytes": 683,
+      "producer": {
+        "server": "data-profiler",
+        "tool": "compute_psi",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "max_psi": 0.032022276758619676,
+        "worst_feature": "f_4"
+      }
+    },
+    "split": {
+      "id": "56b00c4a6b7a793ab016a68c1284e959dd7156ef2e18ee76cc04630b75e9aa3b",
+      "kind": "split_manifest",
+      "media_type": "application/json",
+      "size_bytes": 68453,
+      "producer": {
+        "server": "data-profiler",
+        "tool": "make_splits",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "rows": {
+          "train": 2540,
+          "val": 635,
+          "oot": 825
+        },
+        "oot_available": true
+      }
+    },
+    "binning": {
+      "id": "55dd02403ae10bc9e440da8bb41b5f2b6bbb5bc3341f911ba3025a543c6359a6",
+      "kind": "binning_tables",
+      "media_type": "application/json",
+      "size_bytes": 12932,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "bin_features_woe",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "n_features": 6,
+        "iv": {
+          "f_1": 0.382686044532221,
+          "f_2": 0.40862529577821166,
+          "f_3": 0.08301621829344094,
+          "f_4": 0.02059572053141149,
+          "f_5": 0.01981262343678852,
+          "f_6": 0.008556781880710457
+        }
+      }
+    },
+    "selection": {
+      "id": "c7134ef888cbb778b4cfce879ecda894d06e1b416500a33be3015ffc308ef21c",
+      "kind": "feature_selection",
+      "media_type": "application/json",
+      "size_bytes": 375,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "fit_logistic_pd",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "selected": [
+          "f_2",
+          "f_1",
+          "f_3",
+          "f_4"
+        ],
+        "n_dropped": 2
+      }
+    },
+    "champion": {
+      "id": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715",
+      "kind": "scorecard",
+      "media_type": "application/json",
+      "size_bytes": 5390,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "fit_logistic_pd",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "features": [
+          "f_2",
+          "f_1",
+          "f_3",
+          "f_4"
+        ],
+        "intercept": -2.262641579038016,
+        "fit_method": "stepwise_wrong_sign",
+        "n_wrong_sign_drops": 0
+      }
+    },
+    "challenger_model": {
+      "id": "0b50d18229dc1954a1f8ece3bd89d06af91a3a9e8b879d51c8feca216fca68b4",
+      "kind": "gbm_model",
+      "media_type": "application/json",
+      "size_bytes": 107233,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "fit_gbm_challenger",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "num_trees": 35,
+        "features": [
+          "f_2",
+          "f_1",
+          "f_3",
+          "f_4"
+        ]
+      }
+    },
+    "calibration": {
+      "id": "77acd2d7f2f7e25554ae71c25d65c29388632f72433e7c71ce163e7d47788814",
+      "kind": "calibration_map",
+      "media_type": "application/json",
+      "size_bytes": 156,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "calibrate",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "method": "platt",
+        "platt_a": 0.8825241820095504,
+        "platt_b": -0.3192229836161573
+      }
+    },
+    "champion_scores": {
+      "id": "400e5f068f196cfb4b0552d7fbb0c427963b98c87635ba3a39fd2d7fdd8f5714",
+      "kind": "scores",
+      "media_type": "application/vnd.apache.parquet",
+      "size_bytes": 41679,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "score",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "rows": {
+          "train": 2540,
+          "val": 635,
+          "oot": 825
+        },
+        "model_name": "synthetic_pd"
+      }
+    },
+    "challenger_scores": {
+      "id": "2d0c144e205d97267d7ca5223c96574cae73e840d2b9a53701857166e2f01bd3",
+      "kind": "scores",
+      "media_type": "application/vnd.apache.parquet",
+      "size_bytes": 90804,
+      "producer": {
+        "server": "credit-modeling",
+        "tool": "score",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "rows": {
+          "train": 2540,
+          "val": 635,
+          "oot": 825
+        },
+        "model_name": "synthetic_pd_gbm"
+      }
+    },
+    "discrimination": {
+      "id": "60b86a70e28738d8209e5f3ef8ff80817f9476b1b9f6fbde57fca555d4bfb966",
+      "kind": "discrimination",
+      "media_type": "application/json",
+      "size_bytes": 1111,
+      "producer": {
+        "server": "validation",
+        "tool": "discrimination_metrics",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "auc": {
+          "train": 0.7536899547040672,
+          "val": 0.7391014492753624,
+          "oot": 0.7372533333333334
+        }
+      }
+    },
+    "calibration_tests": {
+      "id": "25460466e948d3502580ab082284a194644760b53b29d3c88053d459ad15e192",
+      "kind": "calibration_tests",
+      "media_type": "application/json",
+      "size_bytes": 2840,
+      "producer": {
+        "server": "validation",
+        "tool": "calibration_tests",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "n_grades": 10,
+        "grades_failed": 0,
+        "hl_p_value": 0.35736193534570754,
+        "eo_ratio": 0.9500591072262877
+      }
+    },
+    "stability": {
+      "id": "b3cc8a807028ab71b02ccef435bcbf6bc6d7df2d47b6cf813043d21120517fc3",
+      "kind": "stability",
+      "media_type": "application/json",
+      "size_bytes": 528,
+      "producer": {
+        "server": "validation",
+        "tool": "stability_tests",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "score_psi": 0.015575747175346398,
+        "max_csi": 0.020021181070018067
+      }
+    },
+    "sensitivity": {
+      "id": "39acc5f5675c8df91c9567176844b09287d946151caa803ff438e62e8afd4cd3",
+      "kind": "sensitivity",
+      "media_type": "application/json",
+      "size_bytes": 2196,
+      "producer": {
+        "server": "validation",
+        "tool": "sensitivity_analysis",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "all_signs_ok": true,
+        "all_monotone": true
+      }
+    },
+    "benchmark": {
+      "id": "da6161fb21537cafd36f2755c508ffb5ace057d3394f740d6524920c294103b4",
+      "kind": "benchmark",
+      "media_type": "application/json",
+      "size_bytes": 1318,
+      "producer": {
+        "server": "validation",
+        "tool": "benchmark_models",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "decided_on": "oot",
+        "auc_delta": -0.021448888888889073,
+        "champion_within_gap": true
+      }
+    },
+    "validation": {
+      "id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+      "kind": "validation_report",
+      "media_type": "application/json",
+      "size_bytes": 6084,
+      "producer": {
+        "server": "validation",
+        "tool": "evaluate_thresholds",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "overall": "pass",
+        "statuses": {
+          "disc.auc.oot": "pass",
+          "disc.auc.val": "pass",
+          "disc.ks.oot": "pass",
+          "disc.gap.train_oot": "pass",
+          "cal.binomial": "pass",
+          "cal.hl": "pass",
+          "cal.eo": "pass",
+          "stab.psi.score": "pass",
+          "stab.csi.max": "pass",
+          "sens.signs": "pass",
+          "sens.monotonic": "pass",
+          "bench.gap": "pass",
+          "feat.iv_range": "pass"
+        }
+      }
+    },
+    "document_sections": {
+      "id": "e79d783cf5c2c197a59eaa3ea200e7e4d3373977d0da080fbf5a487137ba841f",
+      "kind": "document_sections",
+      "media_type": "application/json",
+      "size_bytes": 24920,
+      "producer": null,
+      "summary": {
+        "n_sections": 11,
+        "n_flagged_sections": 0,
+        "n_ungrounded_numbers": 0,
+        "n_sections_regenerated": 2
+      }
+    },
+    "document_md": {
+      "id": "c47a18eb4d49fc81691ee7298008ffeb3b15924a68cbfc87e801e8ffe15ada36",
+      "kind": "document_md",
+      "media_type": "text/markdown",
+      "size_bytes": 9807,
+      "producer": {
+        "server": "doc-renderer",
+        "tool": "render_document",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "sections_rendered": 11,
+        "sections_missing": 0
+      }
+    },
+    "document_html": {
+      "id": "3c51df3b56b4d64dce88e95c3a82dc5cf7453cbe3c52547c8ba3d794793a4f77",
+      "kind": "document_html",
+      "media_type": "text/html",
+      "size_bytes": 10584,
+      "producer": {
+        "server": "doc-renderer",
+        "tool": "render_document",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "sections_rendered": 11,
+        "sections_missing": 0
+      }
+    },
+    "completeness": {
+      "id": "d2b9fe9c7575537b627857fb0c05f4d009db2c2070b0329fed79e936fad8f68c",
+      "kind": "completeness",
+      "media_type": "application/json",
+      "size_bytes": 234,
+      "producer": {
+        "server": "doc-renderer",
+        "tool": "check_completeness",
+        "version": "1.0.0"
+      },
+      "summary": {
+        "complete": true,
+        "missing_sections": [],
+        "n_unresolved_markers": 0,
+        "n_uncited": 0
+      }
+    },
+    "findings": {
+      "id": "221bc1a38fe3cda5de591db0fbe6b052bc4c662aa671ea159aca7f12eb7c8b9a",
+      "kind": "findings",
+      "media_type": "application/json",
+      "size_bytes": 4544,
+      "producer": null,
+      "summary": {
+        "n_findings": 5,
+        "max_severity": "medium",
+        "max_open_severity": "low",
+        "by_severity": {
+          "medium": 4,
+          "low": 1
+        },
+        "by_status": {
+          "disputed": 1,
+          "closed": 4
+        },
+        "by_source": {
+          "precheck": 3,
+          "review": 2
+        },
+        "round": 2
+      }
+    },
+    "responses": {
+      "id": "b20198d243edab01f3a79be4d05bf2c63f57031e29e8f5ffe5f437d20093b8ea",
+      "kind": "responses",
+      "media_type": "application/json",
+      "size_bytes": 1390,
+      "producer": null,
+      "summary": {
+        "n_responses": 5,
+        "n_accepted": 4,
+        "n_disputed": 1,
+        "n_sections_regenerated": 2,
+        "round": 1
+      }
+    },
+    "manifest": {
+      "id": "ae718f3359cdcb6063baac9425389d94cdc36810fae1399795ab728dadf31e47",
+      "kind": "manifest",
+      "media_type": "application/json",
+      "size_bytes": 15048,
+      "producer": null,
+      "summary": {}
+    }
+  },
+  "counters": {
+    "build_loops": 0,
+    "remediation_rounds": 1,
+    "challenge_rounds": 2
+  },
+  "max_remediation_rounds": 2,
+  "gate": null,
+  "approvals": [
+    {
+      "id": "appr_47bd625e2b26",
+      "run_id": "run_f3541e630110",
+      "gate": "scope",
+      "decision": "approve",
+      "approver": "alice",
+      "comment": "",
+      "payload": {
+        "gate": "scope",
+        "decision": "approve",
+        "approver": "alice",
+        "comment": "",
+        "plan": null,
+        "adjust_target": null,
+        "conditions": []
+      },
+      "plan_diff": null,
+      "conditions": null,
+      "adjust_target": null,
+      "ts": "2026-11-10T22:38:07.088684Z"
+    },
+    {
+      "id": "appr_6ae4a69902c5",
+      "run_id": "run_f3541e630110",
+      "gate": "model",
+      "decision": "accept",
+      "approver": "bob",
+      "comment": "",
+      "payload": {
+        "gate": "model",
+        "decision": "accept",
+        "approver": "bob",
+        "comment": "",
+        "plan": null,
+        "adjust_target": null,
+        "conditions": []
+      },
+      "plan_diff": null,
+      "conditions": null,
+      "adjust_target": null,
+      "ts": "2026-11-10T22:38:08.410842Z"
+    },
+    {
+      "id": "appr_588776ea8a66",
+      "run_id": "run_f3541e630110",
+      "gate": "signoff",
+      "decision": "approve",
+      "approver": "bob",
+      "comment": "",
+      "payload": {
+        "gate": "signoff",
+        "decision": "approve",
+        "approver": "bob",
+        "comment": "",
+        "plan": null,
+        "adjust_target": null,
+        "conditions": []
+      },
+      "plan_diff": null,
+      "conditions": null,
+      "adjust_target": null,
+      "ts": "2026-11-10T22:38:08.713889Z"
+    }
+  ],
+  "findings_summary": {
+    "n_findings": 5,
+    "max_severity": "medium",
+    "max_open_severity": "low",
+    "by_severity": {
+      "medium": 4,
+      "low": 1
+    },
+    "by_status": {
+      "disputed": 1,
+      "closed": 4
+    },
+    "by_source": {
+      "precheck": 3,
+      "review": 2
+    },
+    "round": 2
+  },
+  "responses_summary": {
+    "n_responses": 5,
+    "n_accepted": 4,
+    "n_disputed": 1,
+    "n_sections_regenerated": 2,
+    "round": 1
+  },
+  "cost": {
+    "spent_usd": 0.0,
+    "cap_usd": 10.0,
+    "n_calls": 35,
+    "n_schema_retries": 0,
+    "by_purpose": {
+      "challenge": {
+        "n_calls": 3,
+        "input_tokens": 12157,
+        "output_tokens": 257,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "document": {
+        "n_calls": 22,
+        "input_tokens": 34253,
+        "output_tokens": 2117,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "remediate": {
+        "n_calls": 9,
+        "input_tokens": 26279,
+        "output_tokens": 775,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost_usd": 0.0
+      },
+      "scope": {
+        "n_calls": 1,
+        "input_tokens": 1875,
+        "output_tokens": 275,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost_usd": 0.0
+      }
+    },
+    "by_model": {
+      "scripted-v1": {
+        "n_calls": 35,
+        "input_tokens": 74564,
+        "output_tokens": 3424,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "cost_usd": 0.0
+      }
+    }
+  },
+  "inventory": {
+    "model_id": "synthetic_pd@v1",
+    "run_id": "run_f3541e630110",
+    "name": "synthetic_pd",
+    "version": 1,
+    "owner": "alice",
+    "intended_use": "offline demonstration of the ModelForge pipeline; not for credit decisions",
+    "tier": 3,
+    "status": "approved",
+    "champion_ref": "0126114affe7ff4e83d118d167aa01d0331ad9d7b98dd658048bb26ca1d54715",
+    "validation_summary": {
+      "overall": "pass",
+      "statuses": {
+        "cal.eo": "pass",
+        "cal.hl": "pass",
+        "bench.gap": "pass",
+        "sens.signs": "pass",
+        "disc.ks.oot": "pass",
+        "cal.binomial": "pass",
+        "disc.auc.oot": "pass",
+        "disc.auc.val": "pass",
+        "stab.csi.max": "pass",
+        "feat.iv_range": "pass",
+        "sens.monotonic": "pass",
+        "stab.psi.score": "pass",
+        "disc.gap.train_oot": "pass"
+      }
+    },
+    "approved_at": "2026-11-10T22:38:08.769913Z",
+    "approver": "bob",
+    "conditions": null,
+    "next_review": null
+  },
+  "trace": {
+    "trace_id": "7bccad62685f4df7ac242b0a032f0044",
+    "jaeger_url": "http://localhost:16686/trace/7bccad62685f4df7ac242b0a032f0044",
+    "phoenix_url": "http://localhost:6006"
+  },
+  "replays": [
+    {
+      "run": {
+        "id": "run_298284169cbb",
+        "created_at": "2026-11-10T22:38:08.779987Z",
+        "updated_at": "2026-11-10T22:38:10.113319Z",
+        "requester": "replay",
+        "status": "completed",
+        "profile": "fake",
+        "brief_hash": "c4f58b3bfc97da25856b148fa5ddbcf0c3b93f2da92d9027fa3640bd41b942c6",
+        "brief_ref": "c4f58b3bfc97da25856b148fa5ddbcf0c3b93f2da92d9027fa3640bd41b942c6",
+        "dataset_ref": "synthetic_credit",
+        "dataset_id": "a9a93d338dfee1bd64bdb9e0bd6599b0963428cde744077e59ad54f974e4b88e",
+        "plan_ref": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+        "seed": 42,
+        "cost_usd": 0.0,
+        "cost_cap_usd": 10.0,
+        "trace_id": "46812af257c34b2099929e2ca48795eb",
+        "manifest_hash": "aa28706d5ecc072ebb61eec5169af211665f2d7477bcf4eb1d490c97f562a75d",
+        "replay_of": "run_f3541e630110",
+        "error": null,
+        "rerun_llm": false,
+        "pause_requested": false
+      },
+      "report": {
+        "original_run_id": "run_f3541e630110",
+        "replay_run_id": "run_298284169cbb",
+        "matched": [
+          "dataset",
+          "dictionary",
+          "profile",
+          "leakage",
+          "psi",
+          "split",
+          "binning",
+          "selection",
+          "champion",
+          "challenger_model",
+          "calibration",
+          "champion_scores",
+          "challenger_scores",
+          "discrimination",
+          "calibration_tests",
+          "stability",
+          "sensitivity",
+          "benchmark",
+          "validation",
+          "document_md",
+          "document_html",
+          "completeness",
+          "knowledge_index"
+        ],
+        "mismatched": [],
+        "missing": [],
+        "ok": true,
+        "regenerated": []
+      }
+    }
+  ]
+}

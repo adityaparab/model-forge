@@ -9,8 +9,10 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 KNOWLEDGE_BASE = REPO_ROOT / "knowledge-base"
 PROMPTS = REPO_ROOT / "prompts"
+CONSOLE_SRC = REPO_ROOT / "console" / "src"
 
 FORBIDDEN = (
+    "extends SR 11-7",
     "extends SR 11-7 to LLMs",
     "extend SR 11-7 to",
     "LLM-as-judge",
@@ -42,7 +44,7 @@ def _front_matter(path: Path) -> dict[str, object]:
 
 def test_no_forbidden_wording() -> None:
     hits: list[str] = []
-    for path in _files_under(KNOWLEDGE_BASE) + _files_under(PROMPTS):
+    for path in _files_under(KNOWLEDGE_BASE) + _files_under(PROMPTS) + _files_under(CONSOLE_SRC):
         text = path.read_text(encoding="utf-8").lower()
         hits.extend(
             f"{path.relative_to(REPO_ROOT)}: {phrase!r}"

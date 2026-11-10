@@ -1,0 +1,190 @@
+{
+  "findings": [
+    {
+      "id": "F-1",
+      "row_id": "run_f3541e630110/F-1",
+      "run_id": "run_f3541e630110",
+      "round": 1,
+      "severity": "medium",
+      "category": "performance",
+      "title": "Out-of-time or sensitivity result not reported",
+      "description": "The validation test `disc.ks.oot` (Out-of-time KS) passed, but the document neither cites nor names it, so the out-of-time or sensitivity evidence is missing.",
+      "evidence": [
+        "performance",
+        "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.ks.oot].status]"
+      ],
+      "required_action": "Report the result of `disc.ks.oot` in the performance section, citing the validation report.",
+      "status": "closed",
+      "response": "Revised the performance section(s) to address the finding.",
+      "response_evidence": [],
+      "source": "precheck",
+      "check_key": "unreported_test:disc.ks.oot",
+      "verdict": "check passes after remediation",
+      "closed_round": 2
+    },
+    {
+      "id": "F-2",
+      "row_id": "run_f3541e630110/F-2",
+      "run_id": "run_f3541e630110",
+      "round": 1,
+      "severity": "medium",
+      "category": "performance",
+      "title": "Out-of-time or sensitivity result not reported",
+      "description": "The validation test `sens.signs` (Coefficient signs) passed, but the document neither cites nor names it, so the out-of-time or sensitivity evidence is missing.",
+      "evidence": [
+        "performance",
+        "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.signs].status]"
+      ],
+      "required_action": "Report the result of `sens.signs` in the performance section, citing the validation report.",
+      "status": "closed",
+      "response": "Revised the performance section(s) to address the finding.",
+      "response_evidence": [],
+      "source": "precheck",
+      "check_key": "unreported_test:sens.signs",
+      "verdict": "check passes after remediation",
+      "closed_round": 2
+    },
+    {
+      "id": "F-3",
+      "row_id": "run_f3541e630110/F-3",
+      "run_id": "run_f3541e630110",
+      "round": 1,
+      "severity": "medium",
+      "category": "performance",
+      "title": "Out-of-time or sensitivity result not reported",
+      "description": "The validation test `sens.monotonic` (WoE monotonicity) passed, but the document neither cites nor names it, so the out-of-time or sensitivity evidence is missing.",
+      "evidence": [
+        "performance",
+        "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.monotonic].status]"
+      ],
+      "required_action": "Report the result of `sens.monotonic` in the performance section, citing the validation report.",
+      "status": "closed",
+      "response": "Revised the performance section(s) to address the finding.",
+      "response_evidence": [],
+      "source": "precheck",
+      "check_key": "unreported_test:sens.monotonic",
+      "verdict": "check passes after remediation",
+      "closed_round": 2
+    },
+    {
+      "id": "F-4",
+      "row_id": "run_f3541e630110/F-4",
+      "run_id": "run_f3541e630110",
+      "round": 1,
+      "severity": "medium",
+      "category": "monitoring",
+      "title": "Monitoring thresholds are not quantified",
+      "description": "The monitoring section names the metrics but states no numeric thresholds or escalation triggers.",
+      "evidence": [
+        "monitoring",
+        "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#thresholds.psi_warn]"
+      ],
+      "required_action": "State the numeric thresholds and the escalation path for each monitored metric.",
+      "status": "closed",
+      "response": "Revised the monitoring section(s) to address the finding.",
+      "response_evidence": [],
+      "source": "review",
+      "check_key": null,
+      "verdict": "the regenerated section addresses the finding",
+      "closed_round": 2
+    },
+    {
+      "id": "F-5",
+      "row_id": "run_f3541e630110/F-5",
+      "run_id": "run_f3541e630110",
+      "round": 1,
+      "severity": "low",
+      "category": "governance",
+      "title": "Approver identities are not named in the governance section",
+      "description": "The governance section describes the approval gates but does not name the role or identity that approves at each gate.",
+      "evidence": [
+        "governance"
+      ],
+      "required_action": "Name the approver role or identity for each approval gate.",
+      "status": "disputed",
+      "response": "Approvals are recorded in the lineage approvals table and the sealed manifest, not in the document body.",
+      "response_evidence": [
+        "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]"
+      ],
+      "source": "review",
+      "check_key": null,
+      "verdict": "dispute noted; remains visible at sign-off",
+      "closed_round": null
+    }
+  ],
+  "responses": [
+    {
+      "finding_id": "F-1",
+      "decision": "accept",
+      "action": "Revised the performance section(s) to address the finding.",
+      "evidence": [],
+      "round": 1,
+      "sections_regenerated": [
+        "performance"
+      ]
+    },
+    {
+      "finding_id": "F-2",
+      "decision": "accept",
+      "action": "Revised the performance section(s) to address the finding.",
+      "evidence": [],
+      "round": 1,
+      "sections_regenerated": [
+        "performance"
+      ]
+    },
+    {
+      "finding_id": "F-3",
+      "decision": "accept",
+      "action": "Revised the performance section(s) to address the finding.",
+      "evidence": [],
+      "round": 1,
+      "sections_regenerated": [
+        "performance"
+      ]
+    },
+    {
+      "finding_id": "F-4",
+      "decision": "accept",
+      "action": "Revised the monitoring section(s) to address the finding.",
+      "evidence": [],
+      "round": 1,
+      "sections_regenerated": [
+        "monitoring"
+      ]
+    },
+    {
+      "finding_id": "F-5",
+      "decision": "dispute",
+      "action": "Approvals are recorded in the lineage approvals table and the sealed manifest, not in the document body.",
+      "evidence": [
+        "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]"
+      ],
+      "round": 1,
+      "sections_regenerated": []
+    }
+  ],
+  "summary": {
+    "n_findings": 5,
+    "by_severity": {
+      "medium": 4,
+      "low": 1
+    },
+    "by_status": {
+      "disputed": 1,
+      "closed": 4
+    },
+    "by_source": {
+      "precheck": 3,
+      "review": 2
+    },
+    "max_severity": "medium",
+    "max_open_severity": "low",
+    "challenge_rounds": 2,
+    "remediation_rounds": 1,
+    "sections_regenerated": [
+      "performance",
+      "monitoring"
+    ]
+  }
+}
