@@ -1,0 +1,38 @@
+# Eval profiles: which brief each profile runs, the layers it measures, and how its
+# report is compared with the committed baseline (evals/baselines/<profile>.json).
+# Brief paths are relative to the repository root.
+briefs: {synthetic: examples/briefs/synthetic.yaml, polish: examples/briefs/polish-pd.yaml}
+approvals:            # the harness approves in this order; approve falls back to
+  - {gate: scope, decision: approve, approver: alice}        # approve_with_conditions
+  - {gate: model, decision: accept, approver: bob}           # naming the blocking findings
+  - {gate: signoff, decision: approve, approver: bob}        # when record_approval refuses
+profiles:
+  # Offline and deterministic: every metric must equal the baseline except timing.
+  # `ignore` entries are fnmatch globs over the flattened metric names.
+  fake:
+    brief: synthetic
+    layers: [retrieval, pipeline, challenger, cost]
+    compare: exact
+    ignore: [latency_ms_p50, latency_ms_p95, wall_time_s, "wall_time_by_node_s.*"]
+  # Live profiles: a negative tolerance is the largest allowed fall from the baseline,
+  # a positive one the largest allowed rise; budgets are absolute upper bounds.
+  default:
+    brief: polish
+    layers: [retrieval, pipeline, challenger, cost]
+    tolerances:
+      grounding_pass_rate: -0.10
+      retrieval_recall_at_5: -0.05
+      defect_recall: -0.17
+      defect_precision: -0.20
+      cost_usd: 1.50
+    budgets: {cost_usd: 8.0, wall_time_s: 2700}
+  ci-cheap:
+    brief: polish
+    layers: [retrieval, pipeline, challenger, cost]
+    tolerances:
+      grounding_pass_rate: -0.15
+      retrieval_recall_at_5: -0.05
+      defect_recall: -0.34
+      defect_precision: -0.25
+      cost_usd: 1.00
+    budgets: {cost_usd: 5.0, wall_time_s: 2700}

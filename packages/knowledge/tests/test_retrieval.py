@@ -9,7 +9,8 @@ from modelforge_knowledge.corpus import load_corpus
 from modelforge_knowledge.index import DocumentMeta, KnowledgeIndex, build_index
 from modelforge_knowledge.retrieval import STOPWORDS, Retriever, tokenize
 
-GOLDEN = Path(__file__).resolve().parent / "golden_questions.yaml"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+GOLDEN = REPO_ROOT / "evals/goldens/retrieval.yaml"
 
 
 def _chunk(doc_id: str, section: str, text: str, position: int) -> Chunk:
@@ -94,7 +95,7 @@ def test_ties_break_by_citation_id() -> None:
 def test_golden_questions_recall_at_5(knowledge_dir: Path) -> None:
     retriever = Retriever(build_index(load_corpus(knowledge_dir)))
     entries = yaml.safe_load(GOLDEN.read_text(encoding="utf-8"))
-    assert isinstance(entries, list) and len(entries) == 8
+    assert isinstance(entries, list) and len(entries) >= 8
     misses: list[str] = []
     for entry in entries:
         hits = retriever.search(entry["question"], k=5)

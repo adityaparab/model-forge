@@ -1,0 +1,81 @@
+# Recall@5 goldens: for each question some top-5 hit must come from doc_id and
+# contain must_contain (case-insensitive). Written against the shipped corpus.
+# Read by the knowledge unit test and by the evals retrieval layer.
+- question: "What does effective challenge require?"
+  doc_id: sr11-7
+  must_contain: "effective challenge"
+- question: "Does SR 26-2 cover generative AI?"
+  doc_id: sr26-2
+  must_contain: "generative"
+- question: "default AUC threshold out of time"
+  doc_id: modeling-standards
+  must_contain: "0.70"
+- question: "What is a four-eyes approval?"
+  doc_id: modelforge-governance
+  must_contain: "requester"
+- question: "Which IFRS 9 stage uses twelve-month expected credit losses?"
+  doc_id: ifrs9-ecl
+  must_contain: "twelve months"
+- question: "Under CECL, over what horizon are expected credit losses measured?"
+  doc_id: cecl-asc-326
+  must_contain: "contractual life"
+- question: "What is the Basel III PD floor for corporate exposures?"
+  doc_id: basel-irb
+  must_contain: "0.05%"
+- question: "Which agency issued OCC Bulletin 2026-13 as the parallel issuance of SR 26-2?"
+  doc_id: occ-2026-13
+  must_contain: "parallel issuance"
+- question: "What is the third core element of validation, comparing model outputs to actual outcomes?"
+  doc_id: sr11-7
+  must_contain: "outcomes analysis"
+- question: "Who should maintain a firm-wide model inventory?"
+  doc_id: sr11-7
+  must_contain: "firm-wide inventory"
+- question: "Which SR letter on Bank Secrecy Act anti-money laundering systems does SR 26-2 supersede?"
+  doc_id: sr26-2
+  must_contain: "21-8"
+- question: "Revised guidance most relevant to banking organizations with over $30 billion in total assets"
+  doc_id: sr26-2
+  must_contain: "$30 billion"
+- question: "Which OCC bulletin issued the 2011 model risk guidance alongside SR 11-7?"
+  doc_id: occ-2026-13
+  must_contain: "2011-12"
+- question: "Does the OCC bulletin add OCC-specific requirements to the revised guidance?"
+  doc_id: occ-2026-13
+  must_contain: "single interagency document"
+- question: "What did CECL replace, the incurred loss approach?"
+  doc_id: cecl-asc-326
+  must_contain: "incurred loss"
+- question: "When did CECL become effective for SEC filers?"
+  doc_id: cecl-asc-326
+  must_contain: "December 15, 2019"
+- question: "What past-due presumption signals a significant increase in credit risk under IFRS 9?"
+  doc_id: ifrs9-ecl
+  must_contain: "30 days past due"
+- question: "When did IFRS 9 become mandatory, replacing IAS 39?"
+  doc_id: ifrs9-ecl
+  must_contain: "1 January 2018"
+- question: "Under foundation IRB, which parameters use supervisory values?"
+  doc_id: basel-irb
+  must_contain: "supervisory values"
+- question: "Basel default definition days past due unlikely to pay"
+  doc_id: basel-irb
+  must_contain: "90 days past due"
+- question: "Probability of default through-the-cycle long-run average"
+  doc_id: basel-irb
+  must_contain: "long-run average"
+- question: "How many validation tests does every model get?"
+  doc_id: modeling-standards
+  must_contain: "thirteen tests"
+- question: "What is the challenger model stored in LightGBM native text format?"
+  doc_id: modeling-standards
+  must_contain: "lightgbm"
+- question: "Horizon files treated as vintages for an out-of-time split"
+  doc_id: modeling-standards
+  must_contain: "vintage"
+- question: "How are events hash-chained in the append-only table?"
+  doc_id: modelforge-governance
+  must_contain: "previous event"
+- question: "What does the gateway do when an outbound prompt contains a restricted field name?"
+  doc_id: modelforge-governance
+  must_contain: "refuses to send"
