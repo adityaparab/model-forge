@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: modelforge
       POSTGRES_DB: modelforge
     ports:
-      - "5432:5432"
+      - "${MODELFORGE_POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -15,20 +15,66 @@ services:
       timeout: 3s
       retries: 20
 
-  worker:
+  jaeger:
+    image: jaegertracing/jaeger:2.23.0
+    ports:
+      - "16686:16686"
+
+  phoenix:
+    image: arizephoenix/phoenix:version-21.0.0
+    environment:
+      # Phoenix requires auth on non-loopback hosts by default; the local demo stack runs without it.
+      PHOENIX_ENABLE_AUTH: "false"
+    ports:
+      - "6006:6006"
+
+  api:
     build: .
+    command: ["modelforge-api"]
     depends_on:
       postgres:
         condition: service_healthy
+    ports:
+      - "8000:8000"
     environment:
       MODELFORGE_DATABASE_URL: postgresql://modelforge:modelforge@postgres:5432/modelforge
       MODELFORGE_LOG_LEVEL: INFO
       MODELFORGE_PROFILE: ${MODELFORGE_PROFILE:-fake}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MODELFORGE_OTLP_ENDPOINTS: http://jaeger:4318/v1/traces,http://phoenix:6006/v1/traces
+      MODELFORGE_JAEGER_URL: http://localhost:16686
+      MODELFORGE_PHOENIX_URL: http://localhost:6006
+      MODELFORGE_AUTO_REPLAY: "1"
     volumes:
       - ./artifacts:/data/artifacts
       - ./data:/data/datasets
-    command: ["worker"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  worker:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+      phoenix:
+        condition: service_started
+    environment:
+      MODELFORGE_DATABASE_URL: postgresql://modelforge:modelforge@postgres:5432/modelforge
+      MODELFORGE_LOG_LEVEL: INFO
+      MODELFORGE_PROFILE: ${MODELFORGE_PROFILE:-fake}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      MODELFORGE_OTLP_ENDPOINTS: http://jaeger:4318/v1/traces,http://phoenix:6006/v1/traces
+      MODELFORGE_AUTO_REPLAY: "1"
+    volumes:
+      - ./artifacts:/data/artifacts
+      - ./data:/data/datasets
+    command: ["modelforge", "worker"]
     restart: unless-stopped
 
 volumes:

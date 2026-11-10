@@ -32,6 +32,12 @@ jobs:
           enable-cache: true
       - run: uv python install 3.12
       - run: uv sync --all-groups
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: console/package-lock.json
+      - run: npm ci --prefix console
       - uses: actions/cache@v4
         with:
           path: data/
@@ -40,6 +46,7 @@ jobs:
       - run: make test
       - run: make migrate
       - run: make evals
+      - run: make console-types && git diff --exit-code -- console/openapi.json console/src/api/types.gen.ts
       - run: uv run modelforge-mcp goldens --artifact-dir /tmp/goldens-artifacts
       - uses: actions/upload-artifact@v4
         with:

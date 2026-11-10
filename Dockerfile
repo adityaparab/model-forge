@@ -1,3 +1,11 @@
+FROM node:22.23.4-alpine AS console
+
+WORKDIR /console
+COPY console/package.json console/package-lock.json ./
+RUN npm ci
+COPY console/ ./
+RUN npm run build
+
 FROM python:3.12-slim
 
 RUN apt-get update \
@@ -30,6 +38,7 @@ COPY profiles/ profiles/
 COPY knowledge-base/ knowledge-base/
 COPY examples/ examples/
 RUN uv sync --frozen --no-dev
+COPY --from=console /console/dist /app/console/dist
 
 ENV MODELFORGE_ARTIFACT_DIR=/data/artifacts \
     MODELFORGE_DATA_DIR=/data/datasets \
@@ -37,7 +46,9 @@ ENV MODELFORGE_ARTIFACT_DIR=/data/artifacts \
     MODELFORGE_PROMPTS_DIR=/app/prompts \
     MODELFORGE_PROFILES_DIR=/app/profiles \
     MODELFORGE_KNOWLEDGE_DIR=/app/knowledge-base \
+    MODELFORGE_CONSOLE_DIR=/app/console/dist \
+    MODELFORGE_BRIEFS_DIR=/app/examples/briefs \
     MODELFORGE_PROFILE=fake
 
-ENTRYPOINT ["uv", "run", "--no-sync", "modelforge"]
-CMD ["worker"]
+ENTRYPOINT ["uv", "run", "--no-sync"]
+CMD ["modelforge", "worker"]
