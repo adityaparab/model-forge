@@ -14,10 +14,8 @@ from typing import Any, Literal
 
 from langgraph.runtime import Runtime
 from langgraph.types import Command
-from modelforge_gateway.schemas import CompletionRequest, Message, RedactionContext
+from modelforge_gateway.schemas import CompletionRequest
 from modelforge_lineage.findings import insert_findings, set_verdict
-from modelforge_mcp.schemas import Passage, Passages
-from modelforge_mcp.servers.knowledge import SearchRegulationInput
 from pydantic import BaseModel
 
 from modelforge_orchestrator.agent_schemas import (
@@ -39,8 +37,11 @@ from modelforge_orchestrator.challenger import (
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.nodes import original_manifest
 from modelforge_orchestrator.nodes.document import (
+    agent_request,
     excerpt_floats_to_four_sig_figs,
+    passages_json,
     restricted_terms,
+    retrieve_passages,
 )
 from modelforge_orchestrator.prechecks import PrecheckFinding, run_prechecks
 from modelforge_orchestrator.schemas import (
@@ -76,7 +77,6 @@ RE_REVIEW_PROMPT = "challenge/re_review"
 PLAN_MAX_OUTPUT_TOKENS = 1024
 REVIEW_MAX_OUTPUT_TOKENS = 8192
 RE_REVIEW_MAX_OUTPUT_TOKENS = 4096
-QUERY_K = 3
 CHECK_PASSES = "check passes after remediation"
 CHECK_STILL_FIRES = "check still fires after remediation"
 SEVERITY_ORDER = ("critical", "high", "medium", "low")
@@ -106,22 +106,16 @@ def _request(
     max_output_tokens: int,
     **values: Any,
 ) -> CompletionRequest:
-    registry = step.deps.gateway.registry
-    return CompletionRequest(
+    return agent_request(
+        step,
         purpose="challenge",
+        system=SYSTEM_PROMPT,
         prompt_name=prompt_name,
-        prompt_version=PROMPT_VERSION,
-        system=registry.render(registry.get(SYSTEM_PROMPT, PROMPT_VERSION)),
-        messages=[
-            Message(
-                role="user",
-                content=registry.render(registry.get(prompt_name, PROMPT_VERSION), **values),
-            )
-        ],
+        version=PROMPT_VERSION,
         output_schema=output_schema,
+        restricted_terms=restricted,
         max_output_tokens=max_output_tokens,
-        redaction=RedactionContext(restricted_terms=restricted),
-        metadata=step.call_metadata(),
+        **values,
     )
 
 
@@ -131,18 +125,6 @@ def _validation_json(ctx: ChallengerContext) -> str:
 
 def _plan_json(ctx: ChallengerContext) -> str:
     return json.dumps(ctx.plan.model_dump(mode="json"), indent=2)
-
-
-def _retrieve(step: Step, queries: list[str]) -> list[Passage]:
-    """The hits of every query, deduplicated by citation id in score order."""
-    seen: dict[str, Passage] = {}
-    for query in queries:
-        found: Passages = step.tool(
-            "knowledge", "search_regulation", SearchRegulationInput(query=query, k=QUERY_K)
-        ).output
-        for hit in found.hits:
-            seen.setdefault(hit.citation_id, hit)
-    return sorted(seen.values(), key=lambda p: p.score, reverse=True)
 
 
 def review(
@@ -168,12 +150,8 @@ def review(
     plan = step.llm(plan_request).parsed
     if not isinstance(plan, ChallengeQueryPlan):
         raise RuntimeError(f"the query-planning call returned {type(plan).__name__}")
-    passages = _retrieve(step, plan.queries)
+    passages = retrieve_passages(step, plan.queries)
     retrieved = {p.citation_id for p in passages}
-    passages_json = [
-        {"citation_id": p.citation_id, "title": p.title, "section": p.section, "text": p.text}
-        for p in passages
-    ]
     review_request = _request(
         step,
         REVIEW_PROMPT,
@@ -183,7 +161,7 @@ def review(
         document_md=ctx.document_md,
         validation_json=_validation_json(ctx),
         plan_json=_plan_json(ctx),
-        passages_json=json.dumps(passages_json, indent=2),
+        passages_json=passages_json(passages),
         prechecks_json=prechecks_json,
     )
     draft = step.llm(

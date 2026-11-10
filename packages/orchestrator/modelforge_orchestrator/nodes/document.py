@@ -61,10 +61,13 @@ __all__ = [
     "TEMPLATE_ID",
     "SectionOutcome",
     "SectionPrompts",
+    "agent_request",
     "document",
     "excerpt_floats_to_four_sig_figs",
+    "passages_json",
     "render_and_check",
     "restricted_terms",
+    "retrieve_passages",
     "write_section",
 ]
 
@@ -142,13 +145,46 @@ def excerpt_floats_to_four_sig_figs(value: Any) -> Any:
     return value
 
 
-def _passages_json(passages: list[Passage]) -> str:
+def passages_json(passages: list[Passage]) -> str:
+    """The ``passages`` block the agents' prompts render."""
     return json.dumps(
         [
             {"citation_id": p.citation_id, "title": p.title, "section": p.section, "text": p.text}
             for p in passages
         ],
         indent=2,
+    )
+
+
+def agent_request(
+    step: Step,
+    *,
+    purpose: Purpose,
+    system: str,
+    prompt_name: str,
+    version: int,
+    output_schema: type[BaseModel],
+    restricted_terms: list[str],
+    max_output_tokens: int,
+    section_id: str | None = None,
+    **values: Any,
+) -> CompletionRequest:
+    """A gateway request: the ``system`` prompt and ``prompt_name`` rendered with ``values``."""
+    registry = step.deps.gateway.registry
+    return CompletionRequest(
+        purpose=purpose,
+        prompt_name=prompt_name,
+        prompt_version=version,
+        system=registry.render(registry.get(system, version)),
+        messages=[
+            Message(
+                role="user", content=registry.render(registry.get(prompt_name, version), **values)
+            )
+        ],
+        output_schema=output_schema,
+        max_output_tokens=max_output_tokens,
+        redaction=RedactionContext(restricted_terms=restricted_terms),
+        metadata=step.call_metadata(section_id=section_id),
     )
 
 
@@ -162,23 +198,21 @@ def _request(
     max_output_tokens: int,
     **values: Any,
 ) -> CompletionRequest:
-    registry = step.deps.gateway.registry
-    system = registry.render(registry.get(prompts.system, prompts.version))
-    user = registry.render(registry.get(prompt_name, prompts.version), **values)
-    return CompletionRequest(
+    return agent_request(
+        step,
         purpose=prompts.purpose,
+        system=prompts.system,
         prompt_name=prompt_name,
-        prompt_version=prompts.version,
-        system=system,
-        messages=[Message(role="user", content=user)],
+        version=prompts.version,
         output_schema=output_schema,
+        restricted_terms=restricted_terms,
         max_output_tokens=max_output_tokens,
-        redaction=RedactionContext(restricted_terms=restricted_terms),
-        metadata=step.call_metadata(section_id=spec.id),
+        section_id=spec.id,
+        **values,
     )
 
 
-def _retrieve(step: Step, queries: list[str]) -> list[Passage]:
+def retrieve_passages(step: Step, queries: list[str]) -> list[Passage]:
     """The hits of every query, deduplicated by citation id in score order."""
     seen: dict[str, Passage] = {}
     for query in queries:
@@ -274,7 +308,7 @@ def write_section(
         plan = step.llm(plan_request).parsed
         if not isinstance(plan, QueryPlan):
             raise RuntimeError(f"the query-planning call returned {type(plan).__name__}")
-        passages = _retrieve(step, plan.queries)
+        passages = retrieve_passages(step, plan.queries)
         write_request = _request(
             step,
             spec,
@@ -285,7 +319,7 @@ def write_section(
             WRITE_MAX_OUTPUT_TOKENS,
             section_json=section,
             excerpts_json=excerpts,
-            passages_json=_passages_json(passages),
+            passages_json=passages_json(passages),
             failures_json=failures_json,
             findings_json=findings_json,
         )

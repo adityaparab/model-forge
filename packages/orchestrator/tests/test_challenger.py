@@ -10,10 +10,11 @@ from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatResult
 from langchain_core.runnables import Runnable, RunnableLambda
 from langgraph.runtime import Runtime
+from modelforge_gateway.providers.fake import VERDICT_CLOSED, VERDICT_DISPUTED
 from modelforge_gateway.schemas import GatewayError
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
-from modelforge_lineage.findings import list_findings
+from modelforge_lineage.findings import list_findings, set_response
 from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.store import MEDIA_MARKDOWN, ArtifactStore
 from modelforge_mcp.schemas import CompletenessReport, SectionSpec, TemplateSections
@@ -29,6 +30,7 @@ from modelforge_orchestrator.briefs import parse_brief, plan_from_brief
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.nodes import invoke_node, original_manifest
 from modelforge_orchestrator.nodes.challenge import (
+    CHECK_PASSES,
     ChallengerContext,
     challenge,
     reconcile,
@@ -38,7 +40,14 @@ from modelforge_orchestrator.nodes.challenge import (
 from modelforge_orchestrator.nodes.document import document
 from modelforge_orchestrator.nodes.intake import intake
 from modelforge_orchestrator.prechecks import PrecheckFinding
-from modelforge_orchestrator.schemas import Counters, Finding, FindingsList, RunState
+from modelforge_orchestrator.schemas import (
+    Counters,
+    Finding,
+    FindingResponse,
+    FindingsList,
+    ResponsesList,
+    RunState,
+)
 from modelforge_orchestrator.sections import split_sections
 from pydantic import BaseModel
 
@@ -211,6 +220,147 @@ def test_challenge_round_one_raises_prechecks_then_review_findings(
     assert all(r["status"] == "open" for r in rows)
     assert {r["source"] for r in rows} == set(sources)
     assert [c.prompt_name for c in calls] == ["challenge/plan_queries", "challenge/review"]
+
+
+Status = Literal["open", "accepted", "disputed", "closed"]
+
+
+def _after_remediation(
+    documented: RunState,
+    runtime: Runtime[Deps],
+    db: Database,
+    statuses: dict[str, Status],
+) -> tuple[RunState, dict[str, Finding]]:
+    """Round 1 over the bannered document, then what a remediation round would leave behind.
+
+    ``statuses`` maps ``precheck``, ``monitoring`` and ``governance`` to the status each round-1
+    finding has after remediation. The monitoring section is reported regenerated, unchanged in
+    content, and the clean document (without the banner) is current again.
+    """
+    store = runtime.context.store
+    bannered = _bannered_limitations(documented, store)
+    state = apply_node(bannered, challenge(bannered, runtime))
+    round_one = store.get_model(state.refs["findings"].id, FindingsList).findings
+    keys = {
+        "precheck": next(f.id for f in round_one if f.source == "precheck"),
+        "monitoring": next(f.id for f in round_one if f.title.startswith("Monitoring")),
+        "governance": next(f.id for f in round_one if f.title.startswith("Approver")),
+    }
+    assert len(round_one) == 3
+    status_of = {keys[name]: status for name, status in statuses.items()}
+    remediated = [
+        f.model_copy(update={"status": status_of[f.id], "response": f"response to {f.id}"})
+        for f in round_one
+    ]
+    responses = ResponsesList(
+        round=1,
+        responses=[
+            FindingResponse(
+                finding_id=f.id,
+                decision="dispute" if f.status == "disputed" else "accept",
+                action=f"response to {f.id}",
+                round=1,
+                sections_regenerated=["monitoring"] if f.id == keys["monitoring"] else [],
+            )
+            for f in remediated
+            if f.status in ("accepted", "disputed")
+        ],
+    )
+    with db.transaction() as conn:
+        for f in remediated:
+            set_response(
+                conn,
+                state.run_id,
+                f"{state.run_id}/{f.id}",
+                status=f.status,
+                response=f.response or "",
+                response_evidence=[],
+            )
+    refs = {
+        **state.refs,
+        "findings": store.put_model(FindingsList(round=1, findings=remediated), kind="findings"),
+        "responses": store.put_model(responses, kind="responses"),
+        "document_md": documented.refs["document_md"],
+    }
+    state = state.model_copy(
+        update={"refs": refs, "counters": Counters(challenge_rounds=1, remediation_rounds=1)}
+    )
+    return state, {name: next(f for f in remediated if f.id == i) for name, i in keys.items()}
+
+
+def _re_review_calls(db: Database, run_id: str) -> int:
+    with db.connection() as conn:
+        calls = list_llm_calls(conn, run_id)
+    return sum(c.prompt_name == "challenge/re_review" for c in calls)
+
+
+@pytest.mark.db
+def test_challenge_round_two_re_reviews_and_closes(
+    documented_state: RunState, runtime: Runtime[Deps], db: Database
+) -> None:
+    statuses: dict[str, Status] = {
+        "precheck": "accepted",
+        "monitoring": "accepted",
+        "governance": "disputed",
+    }
+    state, before = _after_remediation(documented_state, runtime, db, statuses)
+    command = challenge(state, runtime)
+    update = command.update
+    assert update is not None
+    assert command.goto == "gate_signoff" and update["counters"].challenge_rounds == 2
+    assert _re_review_calls(db, state.run_id) == 1
+    stored = runtime.context.store.get_model(update["refs"]["findings"].id, FindingsList)
+    assert stored.round == 2
+    after = {f.id: f for f in stored.findings}
+    assert len(after) == 3
+    precheck = after[before["precheck"].id]
+    monitoring = after[before["monitoring"].id]
+    governance = after[before["governance"].id]
+    assert (precheck.status, precheck.closed_round, precheck.verdict) == (
+        "closed",
+        2,
+        CHECK_PASSES,
+    )
+    assert (monitoring.status, monitoring.closed_round, monitoring.verdict) == (
+        "closed",
+        2,
+        VERDICT_CLOSED,
+    )
+    assert (governance.status, governance.closed_round, governance.verdict) == (
+        "disputed",
+        None,
+        VERDICT_DISPUTED,
+    )
+    assert update["refs"]["findings"].summary["by_status"] == {"disputed": 1, "closed": 2}
+    with db.connection() as conn:
+        rows = {r["id"]: r for r in list_findings(conn, state.run_id)}
+    assert len(rows) == 3
+    for finding in (precheck, monitoring, governance):
+        row = rows[f"{state.run_id}/{finding.id}"]
+        assert (row["status"], row["verdict"], row["closed_round"]) == (
+            finding.status,
+            finding.verdict,
+            finding.closed_round,
+        )
+
+
+@pytest.mark.db
+def test_challenge_round_two_skips_re_review_without_findings_under_review(
+    documented_state: RunState, runtime: Runtime[Deps], db: Database
+) -> None:
+    statuses: dict[str, Status] = {
+        "precheck": "accepted",
+        "monitoring": "closed",
+        "governance": "closed",
+    }
+    state, before = _after_remediation(documented_state, runtime, db, statuses)
+    command = challenge(state, runtime)
+    assert command.goto == "gate_signoff" and command.update is not None
+    assert _re_review_calls(db, state.run_id) == 0
+    stored = runtime.context.store.get_model(command.update["refs"]["findings"].id, FindingsList)
+    assert all(f.status == "closed" for f in stored.findings)
+    precheck = next(f for f in stored.findings if f.id == before["precheck"].id)
+    assert precheck.closed_round == 2
 
 
 @pytest.mark.db
