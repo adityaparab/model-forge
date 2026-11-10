@@ -10,6 +10,7 @@ import re
 from collections.abc import Collection
 from typing import Any
 
+import yaml
 from langgraph.runtime import Runtime
 from modelforge_core.schemas import FeaturePolicy, Methodology, ModelingPlan, Thresholds
 from modelforge_gateway.schemas import CompletionRequest, Message, RedactionContext
@@ -27,7 +28,14 @@ from modelforge_orchestrator.nodes import brief_of, original_manifest
 from modelforge_orchestrator.schemas import Manifest, RefName, RunState
 from modelforge_orchestrator.steps import Step
 
-__all__ = ["SCOPE_QUERIES", "SCOPE_SOURCES", "scope", "scope_invariants", "scope_request"]
+__all__ = [
+    "SCOPE_QUERIES",
+    "SCOPE_SOURCES",
+    "brief_block",
+    "scope",
+    "scope_invariants",
+    "scope_request",
+]
 
 SCOPE_QUERIES: tuple[str, str] = (
     "required validation tests and thresholds for a PD scorecard",
@@ -118,6 +126,19 @@ def _defaults(step: Step) -> dict[str, Any]:
     }
 
 
+def brief_block(brief_yaml: str) -> str:
+    """The brief as the scope prompt shows it: ``brief_yaml`` without its ``restricted_terms``.
+
+    The terms are the redaction scan's own list, so a prompt that carried them would always
+    trip the scan. The mapping is re-dumped in its original key order; comments are dropped.
+    """
+    loaded = yaml.safe_load(brief_yaml)
+    if not isinstance(loaded, dict):
+        raise ValueError("the brief is not a YAML mapping")
+    shown = {key: value for key, value in loaded.items() if key != "restricted_terms"}
+    return yaml.safe_dump(shown, sort_keys=False, allow_unicode=True)
+
+
 def scope_request(
     step: Step,
     brief: Brief,
@@ -125,7 +146,7 @@ def scope_request(
     defaults: dict[str, Any],
     passages: list[Passage],
 ) -> CompletionRequest:
-    """The `ScopeProposal` request rendered from the scope prompts."""
+    """The `ScopeProposal` request rendered from the scope prompts and `brief_block`."""
     registry = step.deps.gateway.registry
     system = registry.render(registry.get(SYSTEM_PROMPT_NAME, PROMPT_VERSION))
     passages_json = [
@@ -134,7 +155,7 @@ def scope_request(
     ]
     user = registry.render(
         registry.get(PROMPT_NAME, PROMPT_VERSION),
-        brief_yaml=brief_yaml.rstrip("\n"),
+        brief_yaml=brief_block(brief_yaml).rstrip("\n"),
         defaults_json=json.dumps(defaults, indent=2),
         passages_json=json.dumps(passages_json, indent=2),
     )

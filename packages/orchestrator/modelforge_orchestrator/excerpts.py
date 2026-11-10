@@ -1,8 +1,8 @@
 """Excerpt policy: which artifacts a document section sees, and the projection it sees them through.
 
 The documentation agent never reads an artifact whole. Each kind is projected (spec 3.6): row
-level and bulky fields become ``{"count": n}`` or are dropped, so every citation path the agent
-can write still resolves against the full artifact.
+level and bulky fields become ``{"count": n}`` or are dropped. Grounding resolves citation paths
+against the same projection, so a bulk list the agent never saw cannot ground a number.
 """
 
 import copy
@@ -104,11 +104,28 @@ def excerpt(kind: str, data: Any) -> Any:
         _count_feature_bins(projected)
     elif kind == "column_dictionary":
         projected["columns"] = [
-            {"name": column.get("name"), "description": column.get("description")}
+            _dictionary_column(column)
             for column in projected.get("columns") or []
             if isinstance(column, dict)
         ]
     return projected
+
+
+def _dictionary_column(column: dict[str, Any]) -> dict[str, Any]:
+    """``name`` and ``description``, dropping a description that only repeats ``original``.
+
+    Original column names are restricted terms in the documentation calls, so a dataset whose
+    descriptions echo them (the Taiwan adapter's) would otherwise trip the redaction scan.
+    """
+    description = column.get("description")
+    original = column.get("original")
+    if (
+        isinstance(description, str)
+        and isinstance(original, str)
+        and description.strip().casefold() == original.strip().casefold()
+    ):
+        return {"name": column.get("name")}
+    return {"name": column.get("name"), "description": description}
 
 
 def for_section(

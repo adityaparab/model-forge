@@ -156,3 +156,32 @@ def test_scope_replay_copies_plan_and_notes_but_records_index(
     assert update["refs"]["knowledge_index"].kind == "knowledge_index"
     with db.connection() as conn:
         assert list_llm_calls(conn, state.run_id) == []
+
+
+def _restricted_brief(term: str) -> bytes:
+    text = SYNTHETIC_BRIEF.read_text()
+    return (text.rstrip("\n") + f"\nrestricted_terms: [{term}]\n").encode()
+
+
+@pytest.mark.db
+def test_scope_refuses_restricted_term_in_brief_body(
+    db: Database, store: ArtifactStore, runtime: Runtime[Deps]
+) -> None:
+    # The term also appears in the brief's `portfolio`, which the scope prompt carries.
+    state = make_run(db, store, brief_bytes=_restricted_brief("offline demonstration"))
+    state = apply_update(state, intake(state, runtime))
+    with pytest.raises(GatewayError) as exc:
+        scope(state, runtime)
+    assert exc.value.kind == "redaction" and "restricted_term" in str(exc.value)
+
+
+@pytest.mark.db
+def test_scope_runs_when_the_term_appears_only_in_restricted_terms(
+    db: Database, store: ArtifactStore, runtime: Runtime[Deps]
+) -> None:
+    state = make_run(db, store, brief_bytes=_restricted_brief("platt"))
+    state = apply_update(state, intake(state, runtime))
+    update = scope(state, runtime)
+    assert update["plan"].model_name == "synthetic_pd"
+    # The `brief` artifact keeps the raw bytes, `restricted_terms` included.
+    assert b"restricted_terms: [platt]" in store.get(state.brief_ref)

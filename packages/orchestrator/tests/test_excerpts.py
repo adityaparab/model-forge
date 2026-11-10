@@ -1,7 +1,12 @@
+import json
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 import yaml
+from modelforge_core.datasets.polish import POLISH_ATTRIBUTE_DESCRIPTIONS
+from modelforge_core.schemas import ColumnDictionary, ColumnEntry
+from modelforge_gateway.redaction import scan
 from modelforge_lineage.citations import resolve_path
 from modelforge_lineage.models import ArtifactRef
 from modelforge_mcp.schemas import SectionSpec
@@ -34,6 +39,47 @@ def test_excerpt_projections() -> None:
         "calibration_map", {"method": "isotonic", "isotonic_x": [0.1, 0.2], "isotonic_y": [0, 1]}
     )["isotonic_x"] == {"count": 2}
     assert excerpt("profile", {"n_rows": 5}) == {"n_rows": 5}
+
+
+TAIWAN_ORIGINALS = (
+    "ROA(C) before interest and depreciation before interest",
+    "Operating Gross Margin",
+    "Debt ratio %",
+)
+
+
+@pytest.mark.parametrize(
+    ("originals", "describe"),
+    [
+        # Each adapter's description rule: synthetic and Polish describe, Taiwan echoes.
+        ([f"x_{k}" for k in range(1, 6)], lambda i, original: f"synthetic ratio {i}"),
+        (
+            [f"Attr{i}" for i in range(1, 65)],
+            lambda i, original: POLISH_ATTRIBUTE_DESCRIPTIONS[i - 1],
+        ),
+        (list(TAIWAN_ORIGINALS), lambda i, original: original),
+    ],
+    ids=["synthetic_credit", "polish_bankruptcy", "taiwan_bankruptcy"],
+)
+def test_column_dictionary_excerpt_never_carries_an_original(
+    originals: list[str], describe: Callable[[int, str], str]
+) -> None:
+    columns = [
+        ColumnEntry(name=f"f_{i}", original=original, description=describe(i, original))
+        for i, original in enumerate(originals, start=1)
+    ]
+    dictionary = ColumnDictionary(dataset="d", columns=columns).model_dump(mode="json")
+    projected = excerpt("column_dictionary", dictionary)
+    assert scan(json.dumps(projected), originals) is None
+    assert [c["name"] for c in projected["columns"]] == [c.name for c in columns]
+
+
+def test_column_dictionary_excerpt_drops_description_equal_to_original() -> None:
+    projected = excerpt(
+        "column_dictionary",
+        {"columns": [{"name": "f_1", "original": " Debt Ratio ", "description": "debt ratio"}]},
+    )
+    assert projected["columns"] == [{"name": "f_1"}]
 
 
 def test_excerpt_does_not_mutate_its_input() -> None:
