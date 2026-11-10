@@ -16,7 +16,13 @@ from modelforge_orchestrator.schemas import (
 
 __all__ = ["LLM_DERIVED_REFS", "ReplayError", "compare_refs", "create_replay"]
 
-LLM_DERIVED_REFS: tuple[RefName, ...] = ("document_md", "document_html", "completeness")
+LLM_DERIVED_REFS: tuple[RefName, ...] = (
+    "document_md",
+    "document_html",
+    "completeness",
+    "findings",
+    "responses",
+)
 """The refs a ``--rerun-llm`` replay regenerates rather than reproduces."""
 
 
@@ -29,12 +35,12 @@ def compare_refs(original: Manifest, replay: Manifest, *, rerun_llm: bool = Fals
     matched: list[RefName] = []
     mismatched: list[ReplayMismatch] = []
     missing: list[RefName] = []
-    regenerated: list[RefName] = []
+    # not every LLM-derived ref is a deterministic one, so collect them from their own list
+    regenerated: list[RefName] = (
+        [n for n in LLM_DERIVED_REFS if n in original.refs] if rerun_llm else []
+    )
     for name in DETERMINISTIC_REFS:
-        if name not in original.refs:
-            continue
-        if rerun_llm and name in LLM_DERIVED_REFS:
-            regenerated.append(name)
+        if name not in original.refs or name in regenerated:
             continue
         if name not in replay.refs:
             missing.append(name)

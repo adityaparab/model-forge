@@ -151,8 +151,24 @@ def run_id_from(text: str) -> str:
 
 def assert_llm_outputs(status: Mapping[str, Any]) -> None:
     """The gateway-backed agents ran under the fake profile and left grounded outputs."""
-    assert {c["purpose"] for c in status["llm_calls"]} >= {"scope", "document", "challenge"}
+    assert {c["purpose"] for c in status["llm_calls"]} == {
+        "scope",
+        "document",
+        "challenge",
+        "remediate",
+    }
     refs = status["refs"]
+    findings_summary = refs["findings"]["summary"]
+    assert findings_summary["n_findings"] >= 1
+    assert refs["responses"]["summary"]["n_responses"] >= 1
+    assert len(status["findings"]) == findings_summary["n_findings"]
+    # the sign-off policy's own condition: nothing critical or high is left open or disputed
+    blocking = [
+        f
+        for f in status["findings"]
+        if f["status"] in ("open", "disputed") and f["severity"] in ("critical", "high")
+    ]
+    assert blocking == []
     assert refs["document_sections"]["summary"]["n_flagged_sections"] == 0
     assert refs["completeness"]["summary"]["complete"] is True
     assert "scope_notes" in refs

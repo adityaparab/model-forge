@@ -21,6 +21,7 @@ from modelforge_lineage import runs
 from modelforge_lineage.approvals import ApprovalError, record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
+from modelforge_lineage.findings import list_findings
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.models import ArtifactRef, GateDecision, GateName, RunRecord
@@ -92,6 +93,17 @@ def _gate_prompt(db: Database, run_id: str) -> dict[str, Any] | None:
         events = list_events(conn, run_id)
     requested = [e for e in events if e.type == "gate.requested"]
     return requested[-1].payload if requested else None
+
+
+_SEVERITIES = ("critical", "high", "medium", "low")
+_FINDING_STATUSES = ("open", "accepted", "disputed", "closed")
+
+
+def _findings_line(findings: list[dict[str, Any]]) -> str:
+    """``findings: <n> (open <a>, ...; max severity <s>)`` over a run's findings rows."""
+    counts = ", ".join(f"{s} {sum(f['status'] == s for f in findings)}" for s in _FINDING_STATUSES)
+    worst = min((f["severity"] for f in findings), key=_SEVERITIES.index)
+    return f"findings: {len(findings)} ({counts}; max severity {worst})"
 
 
 def _run_lines(db: Database, run: RunRecord) -> list[str]:
@@ -292,6 +304,7 @@ def status(
         record = _get_run(db, run_id)
         with db.connection() as conn:
             steps = list_steps(conn, run_id)
+            findings = list_findings(conn, run_id)
         refs = _refs(db, run_id)
         if as_json:
             with db.connection() as conn:
@@ -302,10 +315,13 @@ def status(
                 "refs": {name: ref.model_dump(mode="json") for name, ref in refs.items()},
                 "gate_prompt": _gate_prompt(db, run_id),
                 "llm_calls": [c.model_dump(mode="json") for c in llm_calls],
+                "findings": findings,
             }
             typer.echo(json.dumps(document))
             return
         lines = _run_lines(db, record)
+        if findings:
+            lines.insert(2, _findings_line(findings))  # after the `cost:` line
         lines.append(f"gate prompt: {json.dumps(_gate_prompt(db, run_id))}")
         lines += [f"step {s.node} {s.attempt} {s.status}" for s in steps]
         lines += [
@@ -361,8 +377,9 @@ def replay(
         bool,
         typer.Option(
             "--rerun-llm",
-            help="Call the LLM again for scope and the document instead of copying the"
-            " original's outputs; the document refs are then reported as regenerated.",
+            help="Call the LLM again for scope, the document, the challenger and remediation"
+            " instead of copying the original's outputs; the LLM-derived refs are then reported"
+            " as regenerated.",
         ),
     ] = False,
     detach: DetachOption = False,

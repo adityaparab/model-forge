@@ -27,6 +27,7 @@ def test_polish_brief_runs_to_completion_and_replays(cli: Cli) -> None:
     assert status["refs"]["discrimination"]["summary"]["auc"]["oot"] > 0.65
     assert status["refs"]["validation"]["summary"]["overall"] == "fail"
     assert_llm_outputs(status)
+    assert status["refs"]["findings"]["summary"]["by_status"].get("disputed", 0) >= 1
     plain = cli("status", run_id)
     assert plain.returncode == 0 and any(
         line.startswith("cost:") for line in plain.stdout.splitlines()

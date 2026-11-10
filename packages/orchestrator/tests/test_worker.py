@@ -158,6 +158,59 @@ def test_failure_in_first_node_after_a_gate_resumes(
 
 
 @pytest.mark.db
+def test_failure_in_challenge_after_document_resumes(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`challenge` follows `document`, the first node after `gate_model`; a failure must resume."""
+    run_id = queued_run(database, store, SYNTHETIC)
+    seen = {"documented": False, "failed": False}
+    real_call = InProcessToolClient.call
+
+    def flaky(self: InProcessToolClient, server: Any, tool: str, request: Any, **kw: Any) -> Any:
+        # `check_completeness` is `document`'s last tool call; the next one is `challenge`'s.
+        if seen["documented"] and not seen["failed"]:
+            seen["failed"] = True
+            raise ToolError(
+                server=server, tool=tool, version="1.0.0", code="transport", message="server died"
+            )
+        if tool == "check_completeness":
+            seen["documented"] = True
+        return real_call(self, server, tool, request, **kw)
+
+    monkeypatch.setattr(InProcessToolClient, "call", flaky)
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    for decision in (
+        GateDecision(gate="scope", decision="approve", approver="bob"),
+        GateDecision(gate="model", decision="accept", approver="bob"),
+    ):
+        with database.transaction() as conn:
+            record_approval(conn, run_id, decision, current_plan=None)
+            enqueue(conn, run_id, "resume")
+        run = run_once(
+            settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+        )
+    assert run is not None and run.status == "needs_attention" and run.error is not None
+    assert run.error["node"] == "challenge" and run.error["error"]["code"] == "transport"
+    with database.connection() as conn:
+        challenge_steps = [s for s in list_steps(conn, run_id) if s.node == "challenge"]
+    assert [s.status for s in challenge_steps] == ["failed"]
+    with database.transaction() as conn:
+        set_error(conn, run_id, None)
+        enqueue(conn, run_id, "resume")
+    run = run_once(
+        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "awaiting_signoff"
+    with database.connection() as conn:
+        nodes = [s.node for s in list_steps(conn, run_id) if s.status == "succeeded"]
+    assert "remediate" in nodes and nodes.count("challenge") >= 2
+
+
+@pytest.mark.db
 def test_replay_reproduces_every_deterministic_ref(
     settings: Settings,
     database: Database,

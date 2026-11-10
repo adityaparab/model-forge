@@ -7,12 +7,14 @@ import psycopg
 import pytest
 import yaml
 from modelforge_lineage.db import Database
+from modelforge_lineage.findings import insert_findings, list_findings
 from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_orchestrator.config import Settings
 
 from .conftest import REPO, Cli, run_id_from
 
 SYNTHETIC = REPO / "examples/briefs/synthetic.yaml"
+_FINDING_STATUSES = ("open", "accepted", "disputed", "closed")
 
 
 @pytest.mark.db
@@ -227,11 +229,97 @@ def test_cli_replay_rerun_llm_regenerates_and_records_calls(
     assert rerun_result.returncode == 0, rerun_result.stderr
     rerun = json.loads(rerun_result.stdout)
     assert rerun["ok"]
-    assert rerun["regenerated"] == ["document_md", "document_html", "completeness"]
+    assert rerun["regenerated"] == [
+        "document_md",
+        "document_html",
+        "completeness",
+        "findings",
+        "responses",
+    ]
     assert "knowledge_index" in rerun["matched"]
     with database.connection() as conn:
         assert list_llm_calls(conn, plain["replay_run_id"]) == []
-        assert len(list_llm_calls(conn, rerun["replay_run_id"])) >= 23
+        rerun_calls = list_llm_calls(conn, rerun["replay_run_id"])
+    assert len(rerun_calls) >= 23
+    assert {"challenge", "remediate"} <= {c.purpose for c in rerun_calls}
+
+
+@pytest.mark.db
+def test_cli_status_shows_findings_line_and_json_rows(
+    cli: Cli, completed_cli_run: str, database: Database
+) -> None:
+    with database.connection() as conn:
+        rows = list_findings(conn, completed_cli_run)
+    assert rows
+    plain = cli("status", completed_cli_run)
+    assert plain.returncode == 0, plain.stderr
+    lines = plain.stdout.splitlines()
+    cost = next(i for i, line in enumerate(lines) if line.startswith("cost:"))
+    counts = {s: sum(r["status"] == s for r in rows) for s in _FINDING_STATUSES}
+    order = ["critical", "high", "medium", "low"]
+    worst = min((r["severity"] for r in rows), key=order.index)
+    assert lines[cost + 1] == (
+        f"findings: {len(rows)} (open {counts['open']}, accepted {counts['accepted']},"
+        f" disputed {counts['disputed']}, closed {counts['closed']}; max severity {worst})"
+    )
+    document = json.loads(cli("status", completed_cli_run, "--json").stdout)
+    assert document["findings"] == rows
+    assert [f["id"] for f in document["findings"]][0].startswith(f"{completed_cli_run}/F-")
+    queued = run_id_from(cli("run", str(SYNTHETIC), "--requester", "alice", "--detach").stdout)
+    queued_lines = cli("status", queued).stdout.splitlines()
+    assert not any(line.startswith("findings:") for line in queued_lines)
+    assert json.loads(cli("status", queued, "--json").stdout)["findings"] == []
+
+
+@pytest.mark.db
+def test_cli_signoff_approve_blocked_by_open_high_finding(cli: Cli, database: Database) -> None:
+    result = cli("run", str(SYNTHETIC), "--requester", "alice")
+    assert result.returncode == 0, result.stderr
+    run_id = run_id_from(result.stdout)
+    for args in (
+        ("scope", "--decision", "approve", "--approver", "alice"),
+        ("model", "--decision", "accept", "--approver", "bob"),
+    ):
+        result = cli("approve", run_id, *args)
+        assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[0] == f"{run_id} awaiting_signoff"
+    with database.transaction() as conn:
+        insert_findings(
+            conn,
+            run_id,
+            [
+                {
+                    "id": f"{run_id}/F-9",
+                    "round": 1,
+                    "severity": "high",
+                    "category": "governance",
+                    "title": "Planted high finding",
+                    "description": "A finding planted by the test.",
+                    "evidence": [],
+                    "required_action": "Close it.",
+                    "status": "open",
+                    "response": None,
+                    "response_evidence": [],
+                }
+            ],
+        )
+    refused = cli("approve", run_id, "signoff", "--decision", "approve", "--approver", "bob")
+    assert refused.returncode == 2
+    assert "approve is refused" in refused.stderr and "Planted high finding" in refused.stderr
+    assert cli("status", run_id).stdout.splitlines()[0] == f"{run_id} awaiting_signoff"
+    conditional = cli(
+        "approve",
+        run_id,
+        "signoff",
+        "--decision",
+        "approve_with_conditions",
+        "--approver",
+        "bob",
+        "--condition",
+        "close F-9",
+    )
+    assert conditional.returncode == 0, conditional.stderr
+    assert conditional.stdout.splitlines()[0] == f"{run_id} completed"
 
 
 def _priced_profiles(tmp_path: Path) -> Path:

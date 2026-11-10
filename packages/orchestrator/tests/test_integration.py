@@ -54,7 +54,9 @@ def test_full_run_through_three_gates_then_replay_and_verify(cli: Cli) -> None:
     assert status.returncode == 0 and json.loads(status.stdout)["run"]["status"] == "completed"
     for result in (scope, model, signoff, status):
         assert UNREGISTERED not in result.stderr
-    assert_llm_outputs(json.loads(status.stdout))
+    document = json.loads(status.stdout)
+    assert_llm_outputs(document)
+    assert document["refs"]["findings"]["summary"]["by_status"].get("disputed", 0) >= 1
     plain = cli("status", run_id)
     assert plain.returncode == 0 and any(
         line.startswith("cost:") for line in plain.stdout.splitlines()

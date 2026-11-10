@@ -98,6 +98,8 @@ def test_compare_refs_rerun_llm_separates_regenerated() -> None:
             "document_md": _ref("c"),
             "document_html": _ref("d"),
             "completeness": _ref("e"),
+            "findings": _ref("f"),
+            "responses": _ref("0"),
         },
     )
     replay = Manifest(
@@ -109,11 +111,23 @@ def test_compare_refs_rerun_llm_separates_regenerated() -> None:
             "document_md": _ref("1"),
             "document_html": _ref("2"),
             "completeness": _ref("3"),
+            "findings": _ref("4"),
+            "responses": _ref("5"),
         },
     )
     default = compare_refs(original, replay)
     assert len(default.mismatched) == 3 and default.ok is False and default.regenerated == []
     rerun = compare_refs(original, replay, rerun_llm=True)
-    assert rerun.regenerated == list(LLM_DERIVED_REFS)
+    assert (
+        rerun.regenerated
+        == list(LLM_DERIVED_REFS)
+        == [
+            "document_md",
+            "document_html",
+            "completeness",
+            "findings",
+            "responses",
+        ]
+    )
     assert rerun.mismatched == [] and rerun.missing == [] and rerun.ok is True
     assert rerun.matched == ["profile", "knowledge_index"]
