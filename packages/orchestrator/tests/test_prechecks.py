@@ -134,11 +134,24 @@ def test_missing_and_bannered_sections() -> None:
     assert [f.evidence for f in missing] == [["data"], ["monitoring"], ["governance"]]
     bannered = _with_prefix(findings, "bannered_section:")
     assert [(f.check_key, f.severity, f.category, f.evidence) for f in bannered] == [
-        ("bannered_section:governance", "high", "documentation", ["governance"]),
         ("bannered_section:appendices", "high", "documentation", ["appendices"]),
     ]
     clean = run_prechecks(_ctx(_sections()))
     assert _with_prefix(clean, "missing_section:") == _with_prefix(clean, "bannered_section:") == []
+
+
+def test_quoted_failures_under_the_banner_are_not_claims() -> None:
+    quoted = (
+        f"{BANNER}\n\n- foreign_passages: `[K:k_zzz]`\n"
+        "- uncited_regulatory_sentences: `Basel III applies [K:k_bbb] at 0.875.`\n\n"
+        f"{REGULATORY}"
+    )
+    findings = run_prechecks(_ctx(_sections(regulatory_context=quoted)))
+    assert [f.check_key for f in findings] == ["bannered_section:regulatory_context"]
+    unquoted = quoted.replace("`", "")
+    keys = [f.check_key for f in run_prechecks(_ctx(_sections(regulatory_context=unquoted)))]
+    assert "reverify:regulatory_context" in keys
+    assert any(k.startswith("miscited_regulation:regulatory_context:") for k in keys)
 
 
 def test_undiscussed_tests_by_marker_name_or_id() -> None:
@@ -239,7 +252,6 @@ def test_prechecks_order_and_keys_are_stable() -> None:
     assert first == second
     assert [f.check_key for f in first] == [
         "missing_section:governance",
-        "bannered_section:governance",
         "undiscussed_test:stab.psi.score",
         "reverify:performance",
         "miscited_regulation:regulatory_context:1",

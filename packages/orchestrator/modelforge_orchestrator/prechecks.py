@@ -8,6 +8,7 @@ the gateway or a tool.
 """
 
 import json
+import re
 from collections.abc import Callable, Iterator
 from typing import Any, Literal
 
@@ -55,6 +56,7 @@ REGULATION_DOCS: dict[str, str] = {
 VALIDATION_ALIAS = "validation"
 """The alias evidence markers use; the challenger node expands it to the validation id."""
 _NOT_APPLICABLE = ("not applicable", "not_applicable", "not available")
+_CODE_SPAN = re.compile(r"`[^`]*`")
 
 Severity = Literal["critical", "high", "medium", "low"]
 
@@ -91,6 +93,13 @@ def _ordered_bodies(ctx: PrecheckContext) -> Iterator[tuple[str, str]]:
     for spec in ctx.template.sections:
         if spec.id in ctx.sections:
             yield spec.id, ctx.sections[spec.id]
+
+
+def _claims(body: str) -> str:
+    """``body`` without the banner line and with inline code spans blanked: the document agent
+    quotes a section's failures in code spans under the banner, and a quote is not a claim."""
+    lines = [line for line in body.splitlines() if line.strip() != BANNER]
+    return _CODE_SPAN.sub(" ", "\n".join(lines))
 
 
 def _tests(ctx: PrecheckContext) -> list[ValidationTest]:
@@ -136,7 +145,9 @@ def check_missing_sections(ctx: PrecheckContext) -> list[PrecheckFinding]:
 
 
 def check_bannered_sections(ctx: PrecheckContext) -> list[PrecheckFinding]:
-    """Check 2: no section starts with the author-attention banner."""
+    """Check 2: no section starts with the author-attention banner above further content.
+
+    A body that is only the banner is a missing section (check 1), reported once there."""
     return [
         PrecheckFinding(
             check_key=f"{BANNERED_SECTION}:{section_id}",
@@ -148,7 +159,7 @@ def check_bannered_sections(ctx: PrecheckContext) -> list[PrecheckFinding]:
             required_action=f"Supply the `{section_id}` section and remove the banner.",
         )
         for section_id, body in _ordered_bodies(ctx)
-        if body.strip().startswith(BANNER)
+        if body.strip().startswith(BANNER) and body.strip() != BANNER
     ]
 
 
@@ -233,7 +244,7 @@ def check_reverify(ctx: PrecheckContext) -> list[PrecheckFinding]:
 
     findings: list[PrecheckFinding] = []
     for section_id, body in _ordered_bodies(ctx):
-        report = check_section(body, load_artifact=load, retrieved=set(ctx.passages))
+        report = check_section(_claims(body), load_artifact=load, retrieved=set(ctx.passages))
         if report.ok:
             continue
         failures = {
@@ -284,7 +295,7 @@ def check_miscited_regulations(ctx: PrecheckContext) -> list[PrecheckFinding]:
     """Check 6: a sentence naming a regulation cites passages of that regulation."""
     findings: list[PrecheckFinding] = []
     for section_id, body in _ordered_bodies(ctx):
-        for n, sentence in enumerate(section_sentences(body), start=1):
+        for n, sentence in enumerate(section_sentences(_claims(body)), start=1):
             names = [
                 " ".join(m.group(0).split())
                 for m in REGULATION_NAME.finditer(MARKER.sub(" ", sentence))
