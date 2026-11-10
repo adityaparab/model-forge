@@ -67,6 +67,7 @@ class RunRecord(StrictModel):
     manifest_hash: str | None
     replay_of: str | None
     error: dict[str, Any] | None
+    rerun_llm: bool
 
 
 class StepRecord(StrictModel):
@@ -91,6 +92,33 @@ class ToolCallRecord(StrictModel):
     output_hash: str
     duration_ms: int
     artifact_ids: list[str]
+
+
+class LlmCallRecord(StrictModel):
+    id: str
+    step_id: str
+    purpose: str
+    provider: str
+    model: str
+    prompt_name: str
+    prompt_version: int
+    prompt_hash: str
+    input_tokens: int
+    output_tokens: int
+    cache_read_tokens: int
+    cache_write_tokens: int
+    cost_usd: float
+    latency_ms: int
+    stop_reason: str | None
+    schema_valid: bool
+    raw_ref: str | None
+
+
+class PromptRow(StrictModel):
+    name: str
+    version: int
+    hash: str
+    path: str
 
 
 class ArtifactRow(StrictModel):

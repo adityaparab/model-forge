@@ -26,11 +26,12 @@ def create_run(
     seed: int,
     replay_of: str | None = None,
     cost_cap_usd: float = 10.0,
+    rerun_llm: bool = False,
 ) -> RunRecord:
     row = conn.execute(
         "insert into runs (id, requester, status, profile, brief_hash, brief_ref, dataset_ref,"
-        " seed, replay_of, cost_usd, cost_cap_usd)"
-        " values (%s, %s, 'queued', %s, %s, %s, %s, %s, %s, 0, %s) returning *",
+        " seed, replay_of, cost_usd, cost_cap_usd, rerun_llm)"
+        " values (%s, %s, 'queued', %s, %s, %s, %s, %s, %s, 0, %s, %s) returning *",
         (
             run_id,
             requester,
@@ -41,6 +42,7 @@ def create_run(
             seed,
             replay_of,
             cost_cap_usd,
+            rerun_llm,
         ),
     ).fetchone()
     assert row is not None
@@ -77,6 +79,22 @@ def _set_column(conn: Connection[DictRow], run_id: str, column: str, value: obje
     cur = conn.execute(query, (value, run_id))
     if cur.rowcount == 0:
         raise RunNotFound(run_id)
+
+
+def add_cost(conn: Connection[DictRow], run_id: str, usd: float) -> float:
+    """Add ``usd`` to the run's accumulated cost and return the new total."""
+    row = conn.execute(
+        "update runs set cost_usd = cost_usd + %s, updated_at = now() where id = %s"
+        " returning cost_usd",
+        (usd, run_id),
+    ).fetchone()
+    if row is None:
+        raise RunNotFound(run_id)
+    return float(row["cost_usd"])
+
+
+def set_cost_cap(conn: Connection[DictRow], run_id: str, usd: float) -> None:
+    _set_column(conn, run_id, "cost_cap_usd", usd)
 
 
 def set_dataset_id(conn: Connection[DictRow], run_id: str, value: str) -> None:
