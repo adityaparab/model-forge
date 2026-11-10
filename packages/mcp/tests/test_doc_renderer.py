@@ -302,3 +302,45 @@ def test_raw_html_in_sections_and_title_is_escaped(call: CallFn, store: Artifact
     assert "<script>" not in html and "<a href" not in html
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in html
     assert "&lt;script&gt;alert(2)&lt;/script&gt;" in html
+
+
+def _completeness(call: CallFn, store: ArtifactStore, body: str) -> CompletenessReport:
+    sid = store.put_model(
+        DocumentSections(
+            template_id=TEMPLATE,
+            sections=[DocumentSection(section_id="executive_summary", body_md=body)],
+        ),
+        kind="document_sections",
+    ).id
+    doc = RenderOutput.model_validate(
+        call(
+            "doc-renderer",
+            "render_document",
+            RenderDocumentInput(template_id=TEMPLATE, sections_id=sid, title="t"),
+        ).structured_content
+    )
+    ref = ArtifactRef.model_validate(
+        call(
+            "doc-renderer",
+            "check_completeness",
+            CheckCompletenessInput(document_id=doc.markdown.id, template_id=TEMPLATE),
+        ).structured_content
+    )
+    return store.get_model(ref.id, CompletenessReport)
+
+
+def test_inline_code_is_not_checked(call: CallFn, store: ArtifactStore) -> None:
+    body = (
+        "- unresolved_markers: `[A:not-a-hash]`\n"
+        "- uncited_regulatory_sentences: `SR 11-7 requires a review.`\n\n"
+        "The body follows. Outside code, CECL requires lifetime losses. Bad marker [A:x]."
+    )
+    report = _completeness(call, store, body)
+    assert report.unresolved_markers == ["[A:x]"]
+    assert report.uncited_regulatory_sentences == ["Outside code, CECL requires lifetime losses."]
+
+
+def test_regulation_names_match_whole_words(call: CallFn, store: ArtifactStore) -> None:
+    body = "The Baseline score is stable. Basel requires capital."
+    report = _completeness(call, store, body)
+    assert report.uncited_regulatory_sentences == ["Basel requires capital."]

@@ -38,6 +38,8 @@ INSTRUCTIONS = (
 
 MARKER = re.compile(r"\[(A|K):((?:[^\[\]\s]|\[[^\[\]\s]*\])*)\]")
 REGULATIONS = ("SR 11-7", "SR 26-2", "OCC Bulletin 2026-13", "CECL", "IFRS 9", "Basel")
+REGULATION_WORDS = re.compile(r"\b(?:" + "|".join(re.escape(n) for n in REGULATIONS) + r")\b")
+"""Any of `REGULATIONS` as a whole word: "Baseline" names no regulation."""
 BANNER = "> **REQUIRES AUTHOR ATTENTION**: this section was not supplied."
 
 _TEMPLATE_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -45,6 +47,7 @@ _ARTIFACT_ID = re.compile(r"^[0-9a-f]{64}$")
 _SECTION_HEADING = re.compile(r"^## \d+\. ", re.MULTILINE)
 _HEADING_LINE = re.compile(r"^#{1,6} ")
 _SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
+_CODE_SPAN = re.compile(r"`[^`]*`")
 _DOCUMENT_FILE = "document.md.j2"
 _STYLE = (
     "body{font-family:Georgia,'Times New Roman',serif;line-height:1.5;max-width:52rem;"
@@ -160,9 +163,14 @@ def _section_contents(markdown: str) -> dict[str, str]:
     return contents
 
 
+def _prose(text: str) -> str:
+    """``text`` without inline code spans, which quote rather than state (the banner's list)."""
+    return _CODE_SPAN.sub(" ", text)
+
+
 def _unresolved(markdown: str) -> list[str]:
     unresolved: list[str] = []
-    for match in MARKER.finditer(markdown):
+    for match in MARKER.finditer(_prose(markdown)):
         kind, target = match.group(1), match.group(2)
         if kind == "A":
             ok = _ARTIFACT_ID.match(target.partition("#")[0]) is not None
@@ -180,10 +188,11 @@ def _uncited(markdown: str) -> list[str]:
         if not _HEADING_LINE.match(line) and line.strip() != BANNER
     ]
     sentences = _SENTENCE_BREAK.split("\n".join(lines).strip())
+    prose = [(sentence, _prose(sentence)) for sentence in sentences]
     return [
         sentence
-        for sentence in sentences
-        if any(name in sentence for name in REGULATIONS) and "[K:" not in sentence
+        for sentence, text in prose
+        if REGULATION_WORDS.search(text) is not None and "[K:" not in text
     ]
 
 
