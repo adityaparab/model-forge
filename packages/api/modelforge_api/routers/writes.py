@@ -16,7 +16,7 @@ from modelforge_lineage.approvals import ApprovalError, BlockingFindingsError, r
 from modelforge_lineage.db import Database
 from modelforge_lineage.findings import blocking_findings
 from modelforge_lineage.models import ApprovalRecord, GateDecision, RunRecord, RunStatus
-from modelforge_lineage.queue import enqueue, enqueue_if_absent, release
+from modelforge_lineage.queue import enqueue_if_absent, release
 from modelforge_lineage.store import ArtifactStore
 from modelforge_orchestrator.briefs import BriefError
 from modelforge_orchestrator.replay import ReplayError, create_replay
@@ -42,6 +42,7 @@ YAML_MEDIA_TYPES: frozenset[str] = frozenset(
 _MAX_JSON_BYTES = 4 * MAX_BRIEF_BYTES
 """The JSON envelope escapes the brief text, so its body may exceed the brief's own limit."""
 _TOO_LARGE = "brief larger than 1 MiB"
+_ALREADY_DECIDED = "a decision at this gate is already queued"
 ABORTABLE: tuple[RunStatus, ...] = (
     "queued",
     "awaiting_scope",
@@ -195,7 +196,9 @@ def approve(
             record = record_approval(
                 conn, run.id, decision, current_plan=current_plan, loop_bound=3
             )
-            enqueue(conn, run.id, "resume")
+            if not enqueue_if_absent(conn, run.id, "resume"):
+                # a second decision must not reset a claimed row; roll this one back
+                raise ApiError(409, "approval", _ALREADY_DECIDED)
     except BlockingFindingsError as exc:
         with db.connection() as conn:
             rows = blocking_findings(conn, run.id)

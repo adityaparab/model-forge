@@ -179,6 +179,10 @@ def test_gates_through_the_api(db: Database, client: TestClient, drive: Drive) -
 
     response = _approve(client, run_id, "alice", "scope", "approve", comment="looks right")
     assert response.status_code == 202, response.text
+    # a second decision before the worker runs (a double click): refused and rolled back
+    twice = _approve(client, run_id, "carol", "scope", "approve")
+    assert _error(twice, 409, "approval")["message"] == "a decision at this gate is already queued"
+    assert len(client.get(f"{API}/runs/{run_id}/approvals").json()) == 1
     record = response.json()
     assert (record["gate"], record["decision"], record["approver"]) == ("scope", "approve", "alice")
     assert record["comment"] == "looks right"

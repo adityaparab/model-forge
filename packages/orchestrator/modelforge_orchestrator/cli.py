@@ -22,7 +22,7 @@ from modelforge_lineage.db import Database
 from modelforge_lineage.findings import list_findings
 from modelforge_lineage.models import GateDecision, GateName, RunRecord, RunStatus
 from modelforge_lineage.observability import configure_logging
-from modelforge_lineage.queue import enqueue, enqueue_if_absent, release
+from modelforge_lineage.queue import enqueue_if_absent, release
 from modelforge_lineage.steps import list_steps
 from modelforge_lineage.store import ArtifactStore
 from modelforge_lineage.tracing import configure_tracing, shutdown_tracing
@@ -216,7 +216,10 @@ def approve(
                 record_approval(
                     conn, run_id, gate_decision, current_plan=current_plan, loop_bound=3
                 )
-                enqueue(conn, run_id, "resume")
+                if not enqueue_if_absent(conn, run_id, "resume"):
+                    raise _RefusedError  # rolls the approval back
+        except _RefusedError:
+            _fail("a decision at this gate is already queued")
         except ApprovalError as exc:
             _fail(str(exc))
         except runs.RunNotFound:
