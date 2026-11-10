@@ -148,10 +148,15 @@ def test_quoted_failures_under_the_banner_are_not_claims() -> None:
     )
     findings = run_prechecks(_ctx(_sections(regulatory_context=quoted)))
     assert [f.check_key for f in findings] == ["bannered_section:regulatory_context"]
-    unquoted = quoted.replace("`", "")
-    keys = [f.check_key for f in run_prechecks(_ctx(_sections(regulatory_context=unquoted)))]
-    assert "reverify:regulatory_context" in keys
-    assert any(k.startswith("miscited_regulation:regulatory_context:") for k in keys)
+    miscited = "SR 11-7 requires effective challenge [K:k_bbb]. A quote `[K:k_zzz]` here."
+    plain = run_prechecks(_ctx(_sections(regulatory_context=miscited)))
+    under_banner = quoted.replace(REGULATORY, miscited)
+    findings = run_prechecks(_ctx(_sections(regulatory_context=under_banner)))
+    assert [f.check_key for f in plain] == ["miscited_regulation:regulatory_context:1"]
+    assert [f.check_key for f in findings] == [
+        "bannered_section:regulatory_context",
+        "miscited_regulation:regulatory_context:1",
+    ]
 
 
 def test_undiscussed_tests_by_marker_name_or_id() -> None:

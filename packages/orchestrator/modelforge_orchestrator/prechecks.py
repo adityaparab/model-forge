@@ -57,6 +57,10 @@ VALIDATION_ALIAS = "validation"
 """The alias evidence markers use; the challenger node expands it to the validation id."""
 _NOT_APPLICABLE = ("not applicable", "not_applicable", "not available")
 _CODE_SPAN = re.compile(r"`[^`]*`")
+_FAILURE_BULLET = re.compile(
+    r"^- (?:ungrounded_numbers|unresolved_markers|uncited_regulatory_sentences|foreign_passages): "
+)
+"""One failure bullet of the document agent's banner block (``nodes/document.py``)."""
 
 Severity = Literal["critical", "high", "medium", "low"]
 
@@ -96,9 +100,21 @@ def _ordered_bodies(ctx: PrecheckContext) -> Iterator[tuple[str, str]]:
 
 
 def _claims(body: str) -> str:
-    """``body`` without the banner line and with inline code spans blanked: the document agent
-    quotes a section's failures in code spans under the banner, and a quote is not a claim."""
-    lines = [line for line in body.splitlines() if line.strip() != BANNER]
+    """``body`` without the document agent's banner block, with inline code spans blanked.
+
+    The agent writes a failed section as the banner, a blank line, one ``- <list>: `<item>```
+    bullet per grounding failure, a blank line and the body. The banner and those bullets are
+    removed, not blanked, so sentence ordinals match the unbannered body; a code span elsewhere
+    quotes rather than states, so it is blanked too.
+    """
+    lines = body.strip().splitlines()
+    if lines and lines[0].strip() == BANNER:
+        i = 1
+        while i < len(lines) and not lines[i].strip():
+            i += 1
+        while i < len(lines) and _FAILURE_BULLET.match(lines[i]):
+            i += 1
+        lines = lines[i:]
     return _CODE_SPAN.sub(" ", "\n".join(lines))
 
 
