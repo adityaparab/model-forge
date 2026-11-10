@@ -104,11 +104,11 @@ ANTHROPIC_API_KEY=...
 MODELFORGE_PROFILE=default   # optional
 ```
 
-`MODELFORGE_ANTHROPIC_BASE_URL` redirects Anthropic traffic; the inherited `ANTHROPIC_BASE_URL` is never read. The local providers take `MODELFORGE_OLLAMA_BASE_URL` (default `http://localhost:11434`), `MODELFORGE_LMSTUDIO_BASE_URL` (default `http://localhost:1234/v1`), and `MODELFORGE_OLLAMA_MODEL` and `MODELFORGE_LMSTUDIO_MODEL` to override the profile's model.
+`MODELFORGE_ANTHROPIC_BASE_URL` redirects Anthropic traffic; the inherited `ANTHROPIC_BASE_URL` is never read. The local providers take `MODELFORGE_OLLAMA_BASE_URL` (default `http://localhost:11434`), `MODELFORGE_LMSTUDIO_BASE_URL` (default `http://localhost:1234/v1`), and `MODELFORGE_OLLAMA_MODEL` and `MODELFORGE_LMSTUDIO_MODEL` to override the profile's model. `MODELFORGE_OLLAMA_NUM_CTX` (default `32768`) sets Ollama's context window, whose server default is too small for the documentation prompts.
 
-**Cost accounting.** Every attempt writes an `llm_calls` row with the purpose, provider, model, input, output and cache tokens, cost in USD, latency, the prompt's name, version and hash, and a reference to an `llm_response` artifact holding the raw response with its request hash. The run's running total is kept in Postgres and checked before each call: when what has been spent plus the projected cost of the next call would exceed the run's cap (10 USD unless `MODELFORGE_COST_CAP_USD` sets another value for new runs), nothing is sent and the run parks in `needs_attention`. `resume --cost-cap <usd>` raises the cap and continues. `status` prints a `cost: <spent> USD / cap <cap> USD` line, and `status --json` includes the `llm_calls` rows.
+**Cost accounting.** Every attempt writes an `llm_calls` row with the purpose, provider, model, input, output and cache tokens, cost in USD, latency, the prompt's name, version and hash, and a reference to an `llm_response` artifact holding the raw response with its request hash. The run's running total is kept in Postgres and checked before each attempt, schema retries included: when what has been spent plus the projected cost of the next call would exceed the run's cap (10 USD unless `MODELFORGE_COST_CAP_USD` sets another value for new runs), nothing is sent and the run parks in `needs_attention`. `resume --cost-cap <usd>` raises the cap and continues. `status` prints a `cost: <spent> USD / cap <cap> USD` line, and `status --json` includes the `llm_calls` rows.
 
-**Redaction.** Agents never see dataset rows or artifacts, only excerpts: per-kind projections that keep aggregates and drop row ids, bins, model text and the dataset's original column names. Before any call, the gateway scans every outbound message for e-mail addresses, IBAN-like tokens, runs of nine or more digits, the dataset's original column names and the brief's optional `restricted_terms` list. A hit refuses the call (it never masks), records the pattern name and message role but not the matched text, and parks the run.
+**Redaction.** Agents never see dataset rows or artifacts, only excerpts: per-kind projections that keep aggregates and drop row ids, bins, model text and the dataset's original column names. Before any call, the gateway scans every outbound message, schema-retry messages included, for e-mail addresses, IBAN-like tokens and runs of nine or more digits (not the digits of a decimal fraction or a `k_` citation id), and for restricted terms: the brief's optional `restricted_terms` on every call, and the dataset's original column names once the dataset is loaded, so on every documentation call. The scope prompt shows the brief without its `restricted_terms` list, so a brief that lists a term can still pass `scope`; the term anywhere else in the brief refuses the call. A hit refuses the call (it never masks), records the pattern name and message role but not the matched text, and parks the run.
 
 **Prompts.** Prompts are versioned files under `prompts/<agent>/<name>.v<N>.md` (`MODELFORGE_PROMPTS_DIR`) with YAML front-matter and a Jinja2 body. The hash of each file is recorded in a `prompts` row and on every `llm_calls` row, so a document section traces to the exact prompt text. Editing a prompt without bumping its version is a configuration error.
 
@@ -153,7 +153,9 @@ MODELFORGE_PROFILE=local-ollama uv run modelforge run examples/briefs/polish-pd.
 MODELFORGE_PROFILE=local-lmstudio uv run modelforge run examples/briefs/polish-pd.yaml --requester alice
 ```
 
-Then approve the three gates as in "Run a governed model build". `MODELFORGE_OLLAMA_MODEL` and `MODELFORGE_LMSTUDIO_MODEL` run a different local model under the same profile, and the base URL variables point at another host.
+Then approve the three gates as in "Run a governed model build". `MODELFORGE_OLLAMA_MODEL` and `MODELFORGE_LMSTUDIO_MODEL` run a different local model under the same profile, and the base URL variables point at another host. Ollama runs with a 32768-token context window unless `MODELFORGE_OLLAMA_NUM_CTX` sets another; pick one the model and the machine's memory support.
+
+Every provider returns structured output through its integration's `json_schema` method, Anthropic included (forced tool calling is unsupported when thinking is enabled). A section-writing call may use up to 8192 output tokens and a query-planning call up to 1024; on a thinking model the thinking tokens count against that limit.
 
 Results on the Polish brief through the three gates:
 
@@ -193,6 +195,7 @@ The orchestrator reads these environment variables (a `.env` file fills any that
 | `MODELFORGE_ANTHROPIC_BASE_URL` | unset (the gateway never reads `ANTHROPIC_BASE_URL`) |
 | `MODELFORGE_OLLAMA_BASE_URL` | `http://localhost:11434` |
 | `MODELFORGE_OLLAMA_MODEL` | the profile's model |
+| `MODELFORGE_OLLAMA_NUM_CTX` | `32768` |
 | `MODELFORGE_LMSTUDIO_BASE_URL` | `http://localhost:1234/v1` |
 | `MODELFORGE_LMSTUDIO_MODEL` | the profile's model |
 | `MODELFORGE_COST_CAP_USD` | `10` |
