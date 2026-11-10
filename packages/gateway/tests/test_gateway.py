@@ -240,6 +240,31 @@ def test_complete_validate_hook_retries_like_schema(
     assert result.raw_ref.id == rows[1].raw_ref
 
 
+def test_validate_hook_exception_is_recorded_then_config_error(
+    gateway_for: GatewayFor, metadata: CallMetadata, db: Database, tmp_path: Path
+) -> None:
+    def explode(parsed: BaseModel) -> str | None:
+        raise RuntimeError("hook broke")
+
+    model = stub()
+    with pytest.raises(GatewayError) as exc:
+        gateway_for(model).complete(request(metadata), validate=explode)
+    assert exc.value.kind == "config"
+    assert exc.value.message == "validate hook raised RuntimeError: hook broke"
+    assert isinstance(exc.value.__cause__, RuntimeError)
+    assert len(model.calls) == 1
+    with db.connection() as conn:
+        rows = llm_calls.list_llm_calls(conn, metadata.run_id)
+        run = runs.get_run(conn, metadata.run_id)
+        artifacts = steps.list_artifacts(conn, metadata.run_id)
+    assert len(rows) == 1 and rows[0].schema_valid is False
+    assert run.cost_usd == pytest.approx((850 * 4.0 + 200 * 20.0) / 1e6)
+    assert rows[0].raw_ref is not None and [a.id for a in artifacts] == [rows[0].raw_ref]
+    assert ArtifactStore(tmp_path / "artifacts").exists(rows[0].raw_ref)
+    assert event_types(db, metadata.run_id).count("llm.called") == 1
+    assert failed_payload(db, metadata.run_id)["kind"] == "config"
+
+
 def test_complete_maps_refusal(
     gateway_for: GatewayFor, metadata: CallMetadata, db: Database
 ) -> None:

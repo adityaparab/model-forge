@@ -66,6 +66,7 @@ class _Attempt:
     usage: Usage
     stop_reason: str | None
     latency_ms: int
+    hook_error: Exception | None = None  # the caller's validate hook raised
 
 
 class Gateway:
@@ -171,6 +172,10 @@ class Gateway:
             ref = self._record(request, route, prompt, request_hash, attempt, attempt_cost)
             total_usage = _add_usage(total_usage, attempt.usage)
             total_cost += attempt_cost
+            if attempt.hook_error is not None:
+                raise GatewayError("config", attempt.error or "validate hook raised") from (
+                    attempt.hook_error
+                )
             if attempt.stop_reason == "refusal":
                 raise GatewayError("refusal", f"the model refused the {request.purpose} request")
             if attempt.error is None and attempt.parsed is not None:
@@ -258,8 +263,13 @@ class Gateway:
         if not isinstance(parsed, BaseModel):
             parsed = None
             error = error or "the model returned no structured object"
-        elif error is None and validate is not None:
-            error = validate(parsed)
+        hook_error: Exception | None = None
+        if parsed is not None and error is None and validate is not None:
+            try:
+                error = validate(parsed)
+            except Exception as exc:  # recorded as an invalid attempt, then raised
+                hook_error = exc
+                error = f"validate hook raised {type(exc).__name__}: {exc}"
         return _Attempt(
             number=number,
             text=str(raw.text) or None,
@@ -268,6 +278,7 @@ class Gateway:
             usage=usage or Usage(),
             stop_reason=stop_reason,
             latency_ms=latency_ms,
+            hook_error=hook_error,
         )
 
     def _record(
