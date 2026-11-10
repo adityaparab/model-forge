@@ -112,6 +112,52 @@ def test_tool_failure_parks_run_and_resume_continues(
 
 
 @pytest.mark.db
+def test_failure_in_first_node_after_a_gate_resumes(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`document` follows `gate_model`, which routes by `Command`; a failure there must resume."""
+    run_id = queued_run(database, store, SYNTHETIC)
+    calls = {"n": 0}
+    real_call = InProcessToolClient.call
+
+    def flaky(self: InProcessToolClient, server: Any, tool: str, request: Any, **kw: Any) -> Any:
+        # The first call is `scope`'s; the second is `document`'s first tool call.
+        if tool == "list_template_sections":
+            calls["n"] += 1
+        if tool == "list_template_sections" and calls["n"] == 2:
+            raise ToolError(
+                server=server, tool=tool, version="1.0.0", code="transport", message="server died"
+            )
+        return real_call(self, server, tool, request, **kw)
+
+    monkeypatch.setattr(InProcessToolClient, "call", flaky)
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    for decision in (
+        GateDecision(gate="scope", decision="approve", approver="bob"),
+        GateDecision(gate="model", decision="accept", approver="bob"),
+    ):
+        with database.transaction() as conn:
+            record_approval(conn, run_id, decision, current_plan=None)
+            enqueue(conn, run_id, "resume")
+        run = run_once(
+            settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+        )
+    assert run is not None and run.status == "needs_attention" and run.error is not None
+    assert run.error["node"] == "document" and run.error["error"]["code"] == "transport"
+    with database.transaction() as conn:
+        set_error(conn, run_id, None)
+        enqueue(conn, run_id, "resume")
+    run = run_once(
+        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "awaiting_signoff"
+
+
+@pytest.mark.db
 def test_replay_reproduces_every_deterministic_ref(
     settings: Settings,
     database: Database,

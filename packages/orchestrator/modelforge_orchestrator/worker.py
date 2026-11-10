@@ -1,7 +1,8 @@
 """The worker: claims queued runs, drives the graph, and parks runs at gates or for attention.
 
 One `execute` call runs a claimed run until the graph pauses at a gate, finishes, or raises.
-The run's status, `gate.requested` events and errors are written here; the nodes write the rest.
+The run's status, `gate.requested` events and `runs.error` are written here; the nodes write the
+rest. The checkpointed state is never edited here, so a resumed run continues where it failed.
 """
 
 import importlib
@@ -221,7 +222,9 @@ def execute(
         with db.transaction() as conn:
             runs.set_error(conn, run_id, payload)
             runs.set_status(conn, run_id, "needs_attention")
-        graph.update_state(config, {"errors": [record]})
+        # No `graph.update_state` here: LangGraph attributes it to the last completed node, and
+        # after a gate that routed by `Command` that drops the pending task, so `resume` ran
+        # nothing. The error lives in `runs.error` and the `error.recorded` event.
         log.error("run.needs_attention", error=payload)
     finally:
         with db.transaction() as conn:
