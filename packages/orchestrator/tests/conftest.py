@@ -7,9 +7,14 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
-from langchain_core.language_models import BaseChatModel
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models import BaseChatModel, LanguageModelInput
+from langchain_core.messages import BaseMessage
+from langchain_core.outputs import ChatResult
+from langchain_core.runnables import Runnable, RunnableLambda
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.runtime import Runtime
+from langgraph.types import Command
 from modelforge_gateway.gateway import Gateway
 from modelforge_gateway.profiles import Price, Profile, load_profile
 from modelforge_gateway.prompts import PromptRegistry
@@ -41,10 +46,13 @@ from modelforge_orchestrator.nodes.validate import validate
 from modelforge_orchestrator.schemas import RunState, apply_update
 from modelforge_orchestrator.tools import InProcessToolClient
 from modelforge_orchestrator.worker import run_once, setup_checkpointer
+from pydantic import BaseModel
 
 __all__ = [
     "REPO",
+    "SYNTHETIC_BRIEF",
     "Cli",
+    "apply_node",
     "assert_llm_outputs",
     "checkpointer",
     "cli",
@@ -59,6 +67,7 @@ __all__ = [
     "prepared_state",
     "prepared_state_no_oot",
     "queued_run",
+    "recording_runtime",
     "run_id_from",
     "runtime",
     "runtime_with_faults",
@@ -140,7 +149,7 @@ def run_id_from(text: str) -> str:
 
 def assert_llm_outputs(status: Mapping[str, Any]) -> None:
     """The gateway-backed agents ran under the fake profile and left grounded outputs."""
-    assert {c["purpose"] for c in status["llm_calls"]} == {"scope", "document"}
+    assert {c["purpose"] for c in status["llm_calls"]} >= {"scope", "document", "challenge"}
     refs = status["refs"]
     assert refs["document_sections"]["summary"]["n_flagged_sections"] == 0
     assert refs["completeness"]["summary"]["complete"] is True
@@ -307,6 +316,49 @@ def _deps_with_gateway(
     )
 
 
+class RecordingChatModel(ScriptedChatModel):
+    """The scripted model, appending every ``messages`` list it is asked to answer to
+    ``captured`` before answering."""
+
+    captured: list[list[BaseMessage]] = []
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: CallbackManagerForLLMRun | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        self.captured.append(messages)
+        return super()._generate(messages, stop, run_manager, **kwargs)
+
+    def with_structured_output(
+        self, schema: dict[str, Any] | type, *, include_raw: bool = False, **kwargs: Any
+    ) -> Runnable[LanguageModelInput, dict[str, Any] | BaseModel]:
+        inner = super().with_structured_output(schema, include_raw=include_raw, **kwargs)
+
+        def respond(model_input: LanguageModelInput) -> Any:
+            self.captured.append(self._convert_input(model_input).to_messages())
+            return inner.invoke(model_input)
+
+        return RunnableLambda(respond)
+
+
+def recording_runtime(deps: Deps) -> tuple["Runtime[Deps]", list[list[BaseMessage]]]:
+    """A `Runtime` over ``deps`` whose gateway answers with the scripted model under the
+    ``fake`` profile, and the list every message list sent to that model is appended to."""
+    model = RecordingChatModel(captured=[])
+    profile = load_profile(deps.settings.gateway.profiles_dir, "fake")
+    context = _deps_with_gateway(deps, profile, model)
+    return cast("Runtime[Deps]", SimpleNamespace(context=context)), model.captured
+
+
+def apply_node(state: RunState, result: dict[str, Any] | Command[Any]) -> RunState:
+    """``state`` after a node's result: a plain update or a `Command`'s update."""
+    update = result.update if isinstance(result, Command) else result
+    return apply_update(state, update or {})
+
+
 RuntimeWithModel = Callable[[BaseChatModel], "Runtime[Deps]"]
 RuntimeWithFaults = Callable[[dict[str, Fault]], "Runtime[Deps]"]
 
@@ -400,7 +452,7 @@ def signed_off_state(validated_state: RunState, runtime: Runtime[Deps]) -> RunSt
     """``validated_state`` after `document`, `challenge` and `remediate`, signed off."""
     state = validated_state
     for node in (document, challenge, remediate):
-        state = apply_update(state, node(state, runtime))
+        state = apply_node(state, node(state, runtime))
     signoff = GateDecision(
         gate="signoff",
         decision="approve_with_conditions",

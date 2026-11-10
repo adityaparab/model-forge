@@ -51,12 +51,11 @@ _EDGES: tuple[tuple[str, str], ...] = (
     ("build", "validate"),
     ("validate", "gate_model"),
     ("document", "challenge"),
-    ("challenge", "remediate"),
     ("remediate", "gate_signoff"),
     ("gate_signoff", "seal"),
     ("seal", END),
 )
-"""Fixed edges; `gate_scope` and `gate_model` route through `Command`."""
+"""Fixed edges; `gate_scope`, `gate_model` and `challenge` route through `Command`."""
 
 
 def build_graph(checkpointer: BaseCheckpointSaver[Any]) -> CompiledStateGraph[Any, Any, Any, Any]:

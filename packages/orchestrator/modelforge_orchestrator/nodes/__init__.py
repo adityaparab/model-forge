@@ -1,9 +1,10 @@
 """LangGraph nodes, one module each; every node runs inside a `Step`."""
 
-from importlib.resources import files
+from collections.abc import Callable
 from typing import Any
 
-import yaml
+from langgraph.runtime import Runtime
+from langgraph.types import Command
 from modelforge_core.schemas import ModelingPlan
 from modelforge_lineage import runs
 from modelforge_lineage.store import ArtifactStore
@@ -12,7 +13,7 @@ from modelforge_orchestrator.briefs import Brief, parse_brief
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.schemas import Manifest, RunState
 
-__all__ = ["brief_of", "load_fixture", "original_manifest", "plan_of"]
+__all__ = ["brief_of", "invoke_node", "original_manifest", "plan_of"]
 
 
 def brief_of(state: RunState, store: ArtifactStore) -> Brief:
@@ -37,10 +38,18 @@ def original_manifest(state: RunState, deps: Deps) -> Manifest:
     return deps.store.get_model(manifest_hash, Manifest)
 
 
-def load_fixture(name: str) -> dict[str, Any]:
-    """A YAML mapping from the package's ``fixtures`` directory."""
-    text = (files("modelforge_orchestrator") / "fixtures" / name).read_text(encoding="utf-8")
-    data = yaml.safe_load(text)
-    if not isinstance(data, dict):
-        raise RuntimeError(f"fixture {name} is not a mapping")
-    return data
+def invoke_node(
+    node: Callable[..., Any], state: RunState, deps: Deps
+) -> tuple[dict[str, Any], str | None]:
+    """Run ``node`` on ``state`` outside a graph; return its update and its `Command` goto.
+
+    ``goto`` is ``None`` for a node that returns a plain update. Callers outside the
+    orchestrator drive nodes through this without importing LangGraph types.
+    """
+    result = node(state, Runtime(context=deps))
+    if not isinstance(result, Command):
+        return dict(result), None
+    goto: Any = result.goto
+    if not isinstance(goto, str):
+        raise RuntimeError(f"node {node.__name__} routed to {goto!r}, not one node name")
+    return dict(result.update or {}), goto

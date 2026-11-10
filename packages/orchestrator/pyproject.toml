@@ -9,6 +9,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "modelforge-core",
     "modelforge-lineage",
+    "modelforge-knowledge",
     "modelforge-mcp",
     "modelforge-gateway",
     "langgraph>=1.2",
