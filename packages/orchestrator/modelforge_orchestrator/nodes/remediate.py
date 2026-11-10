@@ -24,7 +24,7 @@ def build_responses(findings: FindingsList) -> ResponsesList:
     return ResponsesList(
         round=1,
         responses=[
-            FindingResponse(finding_id=f.id, decision="accept", action=ACTION)
+            FindingResponse(finding_id=f.id, decision="accept", action=ACTION, round=1)
             for f in findings.findings
         ],
     )

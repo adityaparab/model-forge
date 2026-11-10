@@ -50,3 +50,12 @@ def test_unknown_threshold_key_is_rejected() -> None:
     )
     with pytest.raises(ValueError):
         plan_from_brief(parse_brief(text.encode()))
+
+
+def test_remediation_rounds_bound() -> None:
+    text = (REPO / "examples/briefs/synthetic.yaml").read_text()
+    assert parse_brief(text.encode()).remediation_rounds == 2
+    assert parse_brief((text + "remediation_rounds: 3\n").encode()).remediation_rounds == 3
+    for bad in ("4", "-1"):
+        with pytest.raises(BriefError):
+            parse_brief((text + f"remediation_rounds: {bad}\n").encode())

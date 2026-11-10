@@ -31,4 +31,4 @@ def intake(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
             "intake.validated",
             {"model_name": brief.model_name, "dataset_ref": state.dataset_ref.as_string()},
         )
-        return step.complete({})
+        return step.complete({"max_remediation_rounds": brief.remediation_rounds})

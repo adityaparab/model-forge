@@ -11,9 +11,9 @@ from modelforge_orchestrator.nodes.intake import intake
 from modelforge_orchestrator.nodes.profile import profile
 from modelforge_orchestrator.nodes.scope import scope
 from modelforge_orchestrator.nodes.split import split
-from modelforge_orchestrator.schemas import RunState
+from modelforge_orchestrator.schemas import RunState, apply_update
 
-from .conftest import make_run
+from .conftest import SYNTHETIC_BRIEF, make_run
 
 
 @pytest.mark.db
@@ -76,3 +76,13 @@ def test_intake_rejects_malformed_brief(
         intake(state, runtime)
     with deps.lineage.connection() as conn:
         assert list_steps(conn, state.run_id)[0].status == "failed"
+
+
+@pytest.mark.db
+def test_intake_copies_remediation_rounds(
+    runtime: Runtime[Deps], db: Database, store: ArtifactStore
+) -> None:
+    brief = SYNTHETIC_BRIEF.read_bytes() + b"remediation_rounds: 1\n"
+    state = make_run(db, store, brief_bytes=brief)
+    assert state.max_remediation_rounds == 2
+    assert apply_update(state, intake(state, runtime)).max_remediation_rounds == 1

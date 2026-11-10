@@ -1,16 +1,21 @@
 from typing import get_args
 
+import pytest
 from modelforge_lineage.models import ArtifactRef
 from modelforge_mcp.schemas import DatasetRef
 from modelforge_orchestrator.schemas import (
     DETERMINISTIC_REFS,
     ApprovalSummary,
+    Counters,
+    Finding,
+    FindingResponse,
     Manifest,
     RefName,
     ReplayReport,
     RunState,
     merge_dicts,
 )
+from pydantic import ValidationError
 
 
 def test_run_state_round_trips_and_merges() -> None:
@@ -85,3 +90,38 @@ def test_run_state_and_replay_report_new_fields() -> None:
     assert "knowledge_index" in DETERMINISTIC_REFS and DETERMINISTIC_REFS[-1] == "knowledge_index"
     assert {"scope_notes", "knowledge_index"} <= set(get_args(RefName))
     assert "scope_notes" not in DETERMINISTIC_REFS
+
+
+def test_finding_and_response_new_fields() -> None:
+    finding = Finding(
+        id="F-001",
+        round=1,
+        severity="medium",
+        category="data",
+        title="t",
+        description="d",
+        evidence=[],
+        required_action="a",
+    )
+    assert finding.source == "review"
+    assert finding.check_key is None and finding.verdict is None and finding.closed_round is None
+    precheck = Finding.model_validate(
+        finding.model_dump() | {"source": "precheck", "check_key": "k", "closed_round": 2}
+    )
+    assert precheck.source == "precheck" and precheck.closed_round == 2
+    with pytest.raises(ValidationError):
+        Finding.model_validate(finding.model_dump() | {"source": "llm"})
+    response = FindingResponse(finding_id="F-001", decision="accept", action="x", round=2)
+    assert response.round == 2 and response.sections_regenerated == []
+    with pytest.raises(ValidationError):
+        FindingResponse.model_validate({"finding_id": "F-001", "decision": "accept", "action": "x"})
+    state = RunState(
+        run_id="run_a",
+        requester="alice",
+        seed=42,
+        brief_hash="h",
+        brief_ref="b" * 64,
+        dataset_ref=DatasetRef(adapter="synthetic_credit"),
+    )
+    assert state.max_remediation_rounds == 2
+    assert Counters().challenge_rounds == 0

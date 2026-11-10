@@ -32,6 +32,7 @@ class Brief(StrictModel):
     thresholds: dict[str, float] = Field(default_factory=dict)
     constraints: str = ""
     restricted_terms: list[str] = Field(default_factory=list)
+    remediation_rounds: int = Field(default=2, ge=0, le=3)
 
 
 class BriefError(ValueError):

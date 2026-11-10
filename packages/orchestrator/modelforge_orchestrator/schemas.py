@@ -76,6 +76,7 @@ def merge_dicts[K, V](a: dict[K, V], b: dict[K, V]) -> dict[K, V]:
 class Counters(StrictModel):
     build_loops: int = 0
     remediation_rounds: int = 0
+    challenge_rounds: int = 0
 
 
 class ErrorRecord(StrictModel):
@@ -106,6 +107,8 @@ class RunState(StrictModel):
     refs: Annotated[dict[RefName, ArtifactRef], merge_dicts] = Field(default_factory=dict)
     gates: Annotated[dict[GateName, GateDecision], merge_dicts] = Field(default_factory=dict)
     counters: Counters = Field(default_factory=Counters)
+    max_remediation_rounds: int = 2
+    """The brief's ``remediation_rounds`` bound, copied by `intake`."""
     cost_usd: float = 0.0
     errors: Annotated[list[ErrorRecord], operator.add] = Field(default_factory=list)
     status: RunStatus = "running"
@@ -171,20 +174,23 @@ class ReplayReport(StrictModel):
     regenerated: list[RefName] = Field(default_factory=list)
 
 
+FindingCategory = Literal[
+    "conceptual_soundness",
+    "data",
+    "methodology",
+    "performance",
+    "documentation",
+    "governance",
+    "limitations",
+    "monitoring",
+]
+
+
 class Finding(StrictModel):
     id: str
     round: int
     severity: Literal["critical", "high", "medium", "low"]
-    category: Literal[
-        "conceptual_soundness",
-        "data",
-        "methodology",
-        "performance",
-        "documentation",
-        "governance",
-        "limitations",
-        "monitoring",
-    ]
+    category: FindingCategory
     title: str
     description: str
     evidence: list[str]
@@ -192,6 +198,12 @@ class Finding(StrictModel):
     status: Literal["open", "accepted", "disputed", "closed"] = "open"
     response: str | None = None
     response_evidence: list[str] = Field(default_factory=list)
+    source: Literal["precheck", "review"] = "review"
+    check_key: str | None = None
+    """The deterministic pre-check that raised a ``precheck`` finding."""
+    verdict: str | None = None
+    """The challenger's latest re-review note on this finding."""
+    closed_round: int | None = None
 
 
 class FindingsList(StrictModel):
@@ -204,6 +216,8 @@ class FindingResponse(StrictModel):
     decision: Literal["accept", "dispute"]
     action: str
     evidence: list[str] = Field(default_factory=list)
+    round: int
+    sections_regenerated: list[str] = Field(default_factory=list)
 
 
 class ResponsesList(StrictModel):
