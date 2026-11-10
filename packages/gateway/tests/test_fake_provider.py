@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from modelforge_core.schemas import FeaturePolicy, Methodology, ModelingPlan, Thresholds
 from modelforge_gateway.providers.fake import ScriptedChatModel
 from modelforge_gateway.schemas import GatewayError
+from modelforge_orchestrator.agent_schemas import ChallengeQueryPlan, ReReviewDraft, ReviewDraft
 from modelforge_orchestrator.briefs import parse_brief, plan_from_brief
 from pydantic import BaseModel
 
@@ -420,3 +421,223 @@ def test_unstructured_invoke_returns_scripted_json() -> None:
 
     assert isinstance(message, AIMessage)
     assert "[A:profile#n_rows]" in json.loads(str(message.content))["body_md"]
+
+
+def _document(limitations: str, performance: str) -> str:
+    return "\n\n".join(
+        [
+            "# Development document",
+            "## 7. Performance and validation results",
+            performance,
+            "## 8. Limitations and weaknesses",
+            limitations,
+            "## 9. Ongoing monitoring plan",
+            "Score drift is monitored quarterly.",
+            "## 10. Governance and lineage",
+            "Each approval gate is recorded.",
+        ]
+    )
+
+
+def _review_prompt(document: str, event: str) -> list[BaseMessage]:
+    plan = _plan_dict()
+    plan["target"]["event"] = event
+    validation = {
+        "overall": "warn",
+        "tests": [
+            {
+                "test_id": "cal.hl",
+                "name": "Hosmer-Lemeshow test",
+                "status": "warn",
+                "value": 0.03,
+                "threshold": 0.05,
+                "message": "m",
+            }
+        ],
+    }
+    return _prompt(
+        {
+            "document": ("markdown", document),
+            "validation": ("json", json.dumps(validation)),
+            "plan": ("json", json.dumps(plan)),
+            "passages": ("json", json.dumps(PASSAGES)),
+            "prechecks": ("json", "[]"),
+        }
+    )
+
+
+def _review(prompt: list[BaseMessage]) -> ReviewDraft:
+    out = ScriptedChatModel().with_structured_output(ReviewDraft, include_raw=True).invoke(prompt)
+    assert isinstance(out, dict)
+    assert out["parsing_error"] is None
+    parsed = out["parsed"]
+    assert isinstance(parsed, ReviewDraft)
+    return parsed
+
+
+MONITORING_FINDING = {
+    "severity": "medium",
+    "category": "monitoring",
+    "title": "Monitoring thresholds are not quantified",
+    "description": (
+        "The monitoring section names the metrics but states no numeric thresholds or "
+        "escalation triggers."
+    ),
+    "evidence": ["monitoring", "[A:plan#thresholds.psi_warn]"],
+    "required_action": (
+        "State the numeric thresholds and the escalation path for each monitored metric."
+    ),
+}
+PROXY_FINDING = {
+    "severity": "medium",
+    "category": "data",
+    "title": "Dataset proxies are not disclosed as limitations",
+    "description": (
+        "The target event is a proxy for default, but the limitations section does not "
+        "disclose the proxy or its effect on the estimates."
+    ),
+    "evidence": ["limitations", "[A:plan#target.event]"],
+    "required_action": (
+        "Disclose each dataset proxy in the limitations section with its effect on the use "
+        "of the model."
+    ),
+}
+GOVERNANCE_FINDING = {
+    "severity": "low",
+    "category": "governance",
+    "title": "Approver identities are not named in the governance section",
+    "description": (
+        "The governance section describes the approval gates but does not name the role "
+        "or identity that approves at each gate."
+    ),
+    "evidence": ["governance"],
+    "required_action": "Name the approver role or identity for each approval gate.",
+}
+
+
+def test_fake_scripts_challenge_query_plan() -> None:
+    prompt = _prompt(
+        {
+            "sections": ("json", json.dumps(["Executive summary", "Data"])),
+            "scope": ("json", json.dumps(["SR 11-7", "SR 26-2"])),
+            "statuses": ("json", json.dumps({"disc.auc.oot": "pass", "cal.hl": "warn"})),
+            "prechecks": ("json", "[]"),
+        }
+    )
+
+    out = ScriptedChatModel().with_structured_output(ChallengeQueryPlan).invoke(prompt)
+
+    assert isinstance(out, ChallengeQueryPlan)
+    assert out.queries == [
+        "effective challenge and independent validation",
+        "ongoing monitoring expectations",
+    ]
+
+
+def test_fake_review_raises_the_scripted_findings() -> None:
+    performance = (
+        "The AUC is 0.874 [A:validation#tests[disc.auc.oot].value]. "
+        "A bootstrap test was performed and passed. "
+        "A stress test was performed [A:validation#overall]."
+    )
+    document = _document("The sample covers five vintages.", performance)
+
+    draft = _review(_review_prompt(document, "bankruptcy, as a proxy for default"))
+
+    findings = [finding.model_dump() for finding in draft.findings]
+    assert len(findings) == 4
+    assert findings[0] == MONITORING_FINDING
+    assert findings[1] == PROXY_FINDING
+    assert findings[2] == {
+        "severity": "high",
+        "category": "performance",
+        "title": "Claimed test without artifact evidence",
+        "description": (
+            "The performance section claims a test without citing the artifact that "
+            "records it: A bootstrap test was performed and passed."
+        ),
+        "evidence": ["performance"],
+        "required_action": (
+            "Cite the validation result that records the test, or remove the claim."
+        ),
+    }
+    assert findings[3] == GOVERNANCE_FINDING
+
+
+def test_fake_review_omits_proxy_finding_when_limitations_mention_it() -> None:
+    document = _document(
+        "Bankruptcy is used as a Proxy for default.", "Discrimination is reported below."
+    )
+
+    proxied = _review(_review_prompt(document, "bankruptcy, as a proxy for default"))
+    unproxied = _review(_review_prompt(_document("None.", "None."), "default within a year"))
+
+    assert [f.model_dump() for f in proxied.findings] == [MONITORING_FINDING, GOVERNANCE_FINDING]
+    assert [f.model_dump() for f in unproxied.findings] == [
+        MONITORING_FINDING,
+        GOVERNANCE_FINDING,
+    ]
+
+
+def _finding(finding_id: str, status: str, evidence: list[str]) -> dict[str, Any]:
+    return {
+        "id": finding_id,
+        "severity": "medium",
+        "category": "monitoring",
+        "title": "t",
+        "description": "d",
+        "evidence": evidence,
+        "required_action": "a",
+        "status": status,
+        "response": "r",
+        "response_evidence": [],
+    }
+
+
+def test_fake_re_review_verdicts_by_status_and_changed_sections() -> None:
+    findings = [
+        _finding("F-1", "accepted", ["monitoring", "[A:plan#thresholds.psi_warn]"]),
+        _finding("F-2", "accepted", ["limitations"]),
+        _finding("F-3", "disputed", ["governance"]),
+    ]
+    prompt = _prompt(
+        {
+            "findings": ("json", json.dumps(findings)),
+            "changed_sections": ("json", json.dumps({"monitoring": "New body.", "data": "x"})),
+            "validation": ("json", json.dumps({"overall": "pass", "tests": []})),
+            "plan": ("json", json.dumps(_plan_dict())),
+        }
+    )
+
+    out = ScriptedChatModel().with_structured_output(ReReviewDraft).invoke(prompt)
+
+    assert isinstance(out, ReReviewDraft)
+    assert [v.model_dump() for v in out.verdicts] == [
+        {
+            "finding_id": "F-1",
+            "status": "closed",
+            "note": "the regenerated section addresses the finding",
+        },
+        {"finding_id": "F-2", "status": "open", "note": "accepted but not remediated"},
+        {
+            "finding_id": "F-3",
+            "status": "disputed",
+            "note": "dispute noted; remains visible at sign-off",
+        },
+    ]
+
+
+def test_unstructured_invoke_infers_the_challenger_schemas() -> None:
+    model = ScriptedChatModel()
+    plan_queries = _prompt({"statuses": ("json", "{}"), "prechecks": ("json", "[]")})
+    re_review = _prompt({"findings": ("json", "[]"), "changed_sections": ("json", "{}")})
+
+    review = model.invoke(_review_prompt(_document("None.", "None."), "default"))
+    queries = model.invoke(plan_queries)
+    verdicts = model.invoke(re_review)
+
+    assert ReviewDraft.model_validate_json(str(review.content)).findings[0].category == (
+        "monitoring"
+    )
+    assert ChallengeQueryPlan.model_validate_json(str(queries.content)).queries
+    assert ReReviewDraft.model_validate_json(str(verdicts.content)).verdicts == []

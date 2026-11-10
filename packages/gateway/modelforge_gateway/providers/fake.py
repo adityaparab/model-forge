@@ -28,6 +28,7 @@ PLACEHOLDER = re.compile(r"\{\{(.+?)\}\}")
 SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 UNGROUNDED_SENTENCE = "The portfolio default rate was 0.1234 in the development window."
 NON_FINITE = {"NaN", "Infinity", "-Infinity"}
+HEADING = re.compile(r"^## \d+\. (.+)$", re.M)
 
 ASSUMPTIONS = [
     "The bankruptcy label stands in for the default event.",
@@ -44,6 +45,53 @@ QUERIES: dict[str, list[str]] = {
     "governance": ["model documentation and effective challenge"],
     "executive_summary": ["model risk management expectations for model documentation"],
 }
+CHALLENGE_QUERIES = [
+    "effective challenge and independent validation",
+    "ongoing monitoring expectations",
+]
+MONITORING_FINDING: dict[str, Any] = {
+    "severity": "medium",
+    "category": "monitoring",
+    "title": "Monitoring thresholds are not quantified",
+    "description": (
+        "The monitoring section names the metrics but states no numeric thresholds or "
+        "escalation triggers."
+    ),
+    "evidence": ["monitoring", "[A:plan#thresholds.psi_warn]"],
+    "required_action": (
+        "State the numeric thresholds and the escalation path for each monitored metric."
+    ),
+}
+PROXY_FINDING: dict[str, Any] = {
+    "severity": "medium",
+    "category": "data",
+    "title": "Dataset proxies are not disclosed as limitations",
+    "description": (
+        "The target event is a proxy for default, but the limitations section does not "
+        "disclose the proxy or its effect on the estimates."
+    ),
+    "evidence": ["limitations", "[A:plan#target.event]"],
+    "required_action": (
+        "Disclose each dataset proxy in the limitations section with its effect on the use "
+        "of the model."
+    ),
+}
+GOVERNANCE_FINDING: dict[str, Any] = {
+    "severity": "low",
+    "category": "governance",
+    "title": "Approver identities are not named in the governance section",
+    "description": (
+        "The governance section describes the approval gates but does not name the role "
+        "or identity that approves at each gate."
+    ),
+    "evidence": ["governance"],
+    "required_action": "Name the approver role or identity for each approval gate.",
+}
+LIMITATIONS_TITLE = "Limitations and weaknesses"
+PERFORMANCE_TITLE = "Performance and validation results"
+VERDICT_CLOSED = "the regenerated section addresses the finding"
+VERDICT_OPEN = "accepted but not remediated"
+VERDICT_DISPUTED = "dispute noted; remains visible at sign-off"
 PLAN_FIELDS = (
     "model_name",
     "portfolio",
@@ -172,6 +220,57 @@ def _section_draft(blocks: dict[str, str], fault: Fault | None) -> dict[str, Any
     return {"body_md": body, "citations": citations}
 
 
+def _document_sections(markdown: str) -> dict[str, str]:
+    """Section bodies of a rendered document keyed by their ``## <n>. <title>`` titles."""
+    parts = HEADING.split(markdown)
+    # Splitting on the capturing heading puts the titles at the odd indices.
+    return {parts[i].strip(): parts[i + 1].strip() for i in range(1, len(parts), 2)}
+
+
+def _unevidenced_claim(sentence: str) -> dict[str, Any]:
+    return {
+        "severity": "high",
+        "category": "performance",
+        "title": "Claimed test without artifact evidence",
+        "description": (
+            "The performance section claims a test without citing the artifact that records "
+            f"it: {sentence}"
+        ),
+        "evidence": ["performance"],
+        "required_action": "Cite the validation result that records the test, or remove the claim.",
+    }
+
+
+def _review_draft(blocks: dict[str, str]) -> dict[str, Any]:
+    sections = _document_sections(blocks.get("document", ""))
+    plan = json.loads(blocks.get("plan", "{}"))
+    event = str(plan.get("target", {}).get("event", ""))
+    findings: list[dict[str, Any]] = [dict(MONITORING_FINDING)]
+    if "proxy" in event.lower() and "proxy" not in sections.get(LIMITATIONS_TITLE, "").lower():
+        findings.append(dict(PROXY_FINDING))
+    for sentence in SENTENCE_BREAK.split(sections.get(PERFORMANCE_TITLE, "")):
+        if "was performed" in sentence and "[A:" not in sentence:
+            findings.append(_unevidenced_claim(sentence))
+    findings.append(dict(GOVERNANCE_FINDING))
+    return {"findings": findings}
+
+
+def _verdict(finding: dict[str, Any], changed: dict[str, Any]) -> dict[str, str]:
+    if finding["status"] == "disputed":
+        status, note = "disputed", VERDICT_DISPUTED
+    elif finding["status"] == "accepted" and any(item in changed for item in finding["evidence"]):
+        status, note = "closed", VERDICT_CLOSED
+    else:
+        status, note = "open", VERDICT_OPEN
+    return {"finding_id": finding["id"], "status": status, "note": note}
+
+
+def _re_review_draft(blocks: dict[str, str]) -> dict[str, Any]:
+    findings = json.loads(blocks.get("findings", "[]"))
+    changed = json.loads(blocks.get("changed_sections", "{}"))
+    return {"verdicts": [_verdict(finding, changed) for finding in findings]}
+
+
 def script(name: str, blocks: dict[str, str], fault: Fault | None) -> dict[str, Any]:
     if name == "ScopeProposal":
         return _scope_proposal(blocks)
@@ -179,12 +278,24 @@ def script(name: str, blocks: dict[str, str], fault: Fault | None) -> dict[str, 
         return _query_plan(blocks)
     if name == "SectionDraft":
         return _section_draft(blocks, fault)
+    if name == "ChallengeQueryPlan":
+        return {"queries": list(CHALLENGE_QUERIES)}
+    if name == "ReviewDraft":
+        return _review_draft(blocks)
+    if name == "ReReviewDraft":
+        return _re_review_draft(blocks)
     raise GatewayError("config", f"the fake provider has no script for {name}")
 
 
 def _infer_schema_name(blocks: dict[str, str]) -> str:
     if "brief" in blocks:
         return "ScopeProposal"
+    if "changed_sections" in blocks:
+        return "ReReviewDraft"
+    if "prechecks" in blocks and "document" in blocks:
+        return "ReviewDraft"
+    if "statuses" in blocks:
+        return "ChallengeQueryPlan"
     if "excerpts" in blocks:
         return "SectionDraft"
     return "QueryPlan"
