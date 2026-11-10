@@ -12,7 +12,7 @@ def test_defaults_and_env_and_dotenv(tmp_path: Path) -> None:
         and s.mcp_command is None
     )
     assert s.artifact_dir == Path("./artifacts") and s.profile == "default"
-    assert s.log_level == "INFO"
+    assert s.log_level == "INFO" and s.knowledge_dir == Path("./knowledge-base")
     (tmp_path / ".env").write_text(
         "MODELFORGE_PROFILE=ci-cheap\nMODELFORGE_MCP_COMMAND=uv run modelforge-mcp\n"
     )
@@ -31,8 +31,16 @@ def test_dotenv_comments_quotes_and_missing_file(tmp_path: Path) -> None:
 
 def test_server_settings_maps_directories() -> None:
     s = load_settings(
-        {"MODELFORGE_ARTIFACT_DIR": "/a", "MODELFORGE_TEMPLATES_DIR": "/t"}, dotenv=None
+        {
+            "MODELFORGE_ARTIFACT_DIR": "/a",
+            "MODELFORGE_TEMPLATES_DIR": "/t",
+            "MODELFORGE_KNOWLEDGE_DIR": "/k",
+        },
+        dotenv=None,
     )
     assert server_settings(s) == ServerSettings(
-        artifact_dir=Path("/a"), data_dir=Path("./data"), templates_dir=Path("/t")
+        artifact_dir=Path("/a"),
+        data_dir=Path("./data"),
+        templates_dir=Path("/t"),
+        knowledge_dir=Path("/k"),
     )

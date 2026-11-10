@@ -19,7 +19,7 @@ from modelforge_lineage.store import ArtifactNotFound, ArtifactStore
 from pydantic import BaseModel, ConfigDict
 from structlog.typing import FilteringBoundLogger
 
-ServerName = Literal["data-profiler", "credit-modeling", "validation", "doc-renderer"]
+ServerName = Literal["data-profiler", "credit-modeling", "validation", "doc-renderer", "knowledge"]
 ToolErrorCode = Literal["invalid_input", "artifact_not_found", "dataset_unavailable", "internal"]
 
 
@@ -27,6 +27,7 @@ class ServerSettings(StrictModel):
     artifact_dir: Path
     data_dir: Path
     templates_dir: Path
+    knowledge_dir: Path
 
 
 def settings_from_env(env: Mapping[str, str] | None = None) -> ServerSettings:
@@ -35,6 +36,7 @@ def settings_from_env(env: Mapping[str, str] | None = None) -> ServerSettings:
         artifact_dir=Path(source.get("MODELFORGE_ARTIFACT_DIR", "./artifacts")),
         data_dir=Path(source.get("MODELFORGE_DATA_DIR", "./data")),
         templates_dir=Path(source.get("MODELFORGE_TEMPLATES_DIR", "./templates")),
+        knowledge_dir=Path(source.get("MODELFORGE_KNOWLEDGE_DIR", "./knowledge-base")),
     )
 
 

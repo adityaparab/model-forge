@@ -1,0 +1,111 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "k": {
+        "default": 5,
+        "maximum": 20,
+        "minimum": 1,
+        "title": "K",
+        "type": "integer"
+      },
+      "query": {
+        "minLength": 1,
+        "title": "Query",
+        "type": "string"
+      },
+      "sources": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Sources"
+      }
+    },
+    "required": [
+      "query"
+    ],
+    "title": "SearchRegulationInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "$defs": {
+      "Passage": {
+        "additionalProperties": false,
+        "description": "One knowledge-base passage, citable as ``[K:<citation_id>]``.",
+        "properties": {
+          "citation_id": {
+            "title": "Citation Id",
+            "type": "string"
+          },
+          "doc_id": {
+            "title": "Doc Id",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "citation_id",
+          "doc_id",
+          "title",
+          "section",
+          "text",
+          "score",
+          "url"
+        ],
+        "title": "Passage",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "hits": {
+        "items": {
+          "$ref": "#/$defs/Passage"
+        },
+        "title": "Hits",
+        "type": "array"
+      },
+      "index_id": {
+        "title": "Index Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "index_id",
+      "hits"
+    ],
+    "title": "Passages",
+    "type": "object"
+  },
+  "server": "knowledge",
+  "tool": "search_regulation",
+  "version": "1.0.0"
+}

@@ -21,6 +21,7 @@ class Settings:
     mcp_command: tuple[str, ...] | None
     tool_timeout_s: float
     log_level: str
+    knowledge_dir: Path = Path("./knowledge-base")
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
@@ -57,6 +58,7 @@ def load_settings(
         mcp_command=tuple(shlex.split(command)) if command is not None else None,
         tool_timeout_s=float(source.get("MODELFORGE_TOOL_TIMEOUT_S", "600")),
         log_level=source.get("MODELFORGE_LOG_LEVEL", "INFO"),
+        knowledge_dir=Path(source.get("MODELFORGE_KNOWLEDGE_DIR", "./knowledge-base")),
     )
 
 
@@ -66,4 +68,5 @@ def server_settings(settings: Settings) -> ServerSettings:
         artifact_dir=settings.artifact_dir,
         data_dir=settings.data_dir,
         templates_dir=settings.templates_dir,
+        knowledge_dir=settings.knowledge_dir,
     )

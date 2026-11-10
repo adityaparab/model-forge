@@ -77,6 +77,7 @@ def settings(tmp_path: Path, database: Database) -> Settings:
         mcp_command=None,
         tool_timeout_s=600.0,
         log_level="INFO",
+        knowledge_dir=REPO / "knowledge-base",
     )
 
 

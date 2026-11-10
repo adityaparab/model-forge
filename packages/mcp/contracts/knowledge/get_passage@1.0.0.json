@@ -1,0 +1,64 @@
+{
+  "input_schema": {
+    "additionalProperties": false,
+    "properties": {
+      "citation_id": {
+        "title": "Citation Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "citation_id"
+    ],
+    "title": "GetPassageInput",
+    "type": "object"
+  },
+  "output_schema": {
+    "additionalProperties": false,
+    "description": "One knowledge-base passage, citable as ``[K:<citation_id>]``.",
+    "properties": {
+      "citation_id": {
+        "title": "Citation Id",
+        "type": "string"
+      },
+      "doc_id": {
+        "title": "Doc Id",
+        "type": "string"
+      },
+      "score": {
+        "title": "Score",
+        "type": "number"
+      },
+      "section": {
+        "title": "Section",
+        "type": "string"
+      },
+      "text": {
+        "title": "Text",
+        "type": "string"
+      },
+      "title": {
+        "title": "Title",
+        "type": "string"
+      },
+      "url": {
+        "title": "Url",
+        "type": "string"
+      }
+    },
+    "required": [
+      "citation_id",
+      "doc_id",
+      "title",
+      "section",
+      "text",
+      "score",
+      "url"
+    ],
+    "title": "Passage",
+    "type": "object"
+  },
+  "server": "knowledge",
+  "tool": "get_passage",
+  "version": "1.0.0"
+}

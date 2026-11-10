@@ -24,6 +24,7 @@ def settings(tmp_path_factory: pytest.TempPathFactory) -> ServerSettings:
         artifact_dir=root / "artifacts",
         data_dir=root / "data",
         templates_dir=REPO_ROOT / "templates",
+        knowledge_dir=REPO_ROOT / "knowledge-base",
     )
 
 

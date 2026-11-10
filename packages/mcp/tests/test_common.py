@@ -32,7 +32,10 @@ def test_dataset_ref_string_forms() -> None:
 
 def test_settings_from_env_defaults_and_overrides(tmp_path: Path) -> None:
     assert settings_from_env({}) == ServerSettings(
-        artifact_dir=Path("artifacts"), data_dir=Path("data"), templates_dir=Path("templates")
+        artifact_dir=Path("artifacts"),
+        data_dir=Path("data"),
+        templates_dir=Path("templates"),
+        knowledge_dir=Path("knowledge-base"),
     )
     assert settings_from_env({"MODELFORGE_ARTIFACT_DIR": str(tmp_path)}).artifact_dir == tmp_path
 

@@ -153,6 +153,7 @@ def test_stdio_servers_get_an_allowlisted_environment(
     assert env["MODELFORGE_ARTIFACT_DIR"] == str(settings.artifact_dir)
     assert env["MODELFORGE_DATA_DIR"] == str(settings.data_dir)
     assert env["MODELFORGE_TEMPLATES_DIR"] == str(settings.templates_dir)
+    assert env["MODELFORGE_KNOWLEDGE_DIR"] == str(settings.knowledge_dir)
     assert env["MODELFORGE_LOG_LEVEL"] == "WARNING"
     assert (
         server_environment(settings, {"MODELFORGE_LOG_LEVEL": "DEBUG"})["MODELFORGE_LOG_LEVEL"]

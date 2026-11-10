@@ -71,3 +71,20 @@ class CompletenessReport(StrictModel):
     unresolved_markers: list[str]
     uncited_regulatory_sentences: list[str]
     complete: bool
+
+
+class Passage(StrictModel):
+    """One knowledge-base passage, citable as ``[K:<citation_id>]``."""
+
+    citation_id: str
+    doc_id: str
+    title: str
+    section: str
+    text: str
+    score: float
+    url: str
+
+
+class Passages(StrictModel):
+    index_id: str
+    hits: list[Passage]

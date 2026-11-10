@@ -20,6 +20,7 @@ from modelforge_mcp.schemas import DatasetRef, DocumentSection, DocumentSections
 from modelforge_mcp.servers import credit_modeling as cm
 from modelforge_mcp.servers import data_profiler as dp
 from modelforge_mcp.servers import doc_renderer as dr
+from modelforge_mcp.servers import knowledge as kn
 from modelforge_mcp.servers import validation as va
 
 CONTRACTS_DIR = Path(__file__).resolve().parents[1] / "contracts"
@@ -62,6 +63,7 @@ def run_golden_chain(settings: ServerSettings) -> dict[tuple[ServerName, str], l
     cmc = make_context("credit-modeling", settings)
     vac = make_context("validation", settings)
     drc = make_context("doc-renderer", settings)
+    knc = make_context("knowledge", settings)
 
     loaded = dp.load_dataset(
         dpc, dp.LoadDatasetInput(dataset_ref=DatasetRef(adapter="synthetic_credit", seed=42))
@@ -208,6 +210,8 @@ def run_golden_chain(settings: ServerSettings) -> dict[tuple[ServerName, str], l
         dr.CheckCompletenessInput(document_id=rendered.markdown.id, template_id=GOLDEN_TEMPLATE),
     )
 
+    index = kn.get_index(kn.load_index(knc), kn.GetIndexInput())
+
     return {
         ("data-profiler", "load_dataset"): [loaded.dataset, loaded.dictionary],
         ("data-profiler", "profile_dataset"): [profile],
@@ -228,6 +232,7 @@ def run_golden_chain(settings: ServerSettings) -> dict[tuple[ServerName, str], l
         ("validation", "evaluate_thresholds"): [report],
         ("doc-renderer", "render_document"): [rendered.markdown, rendered.html],
         ("doc-renderer", "check_completeness"): [completeness],
+        ("knowledge", "get_index"): [index],
     }
 
 

@@ -360,7 +360,7 @@ def server_environment(
     """The environment of a stdio server: an allowlist of ``parent``, never its secrets.
 
     Passes ``PATH``, ``HOME``, ``LANG``, ``LC_*``, ``VIRTUAL_ENV``, ``PYTHONPATH`` and ``TMPDIR``
-    when present, the three directory settings, and ``MODELFORGE_LOG_LEVEL`` (``WARNING`` unless
+    when present, the four directory settings, and ``MODELFORGE_LOG_LEVEL`` (``WARNING`` unless
     the parent sets it). ``MODELFORGE_DATABASE_URL`` and everything else stay behind.
     """
     source = os.environ if parent is None else parent
@@ -374,6 +374,7 @@ def server_environment(
             "MODELFORGE_ARTIFACT_DIR": str(settings.artifact_dir),
             "MODELFORGE_DATA_DIR": str(settings.data_dir),
             "MODELFORGE_TEMPLATES_DIR": str(settings.templates_dir),
+            "MODELFORGE_KNOWLEDGE_DIR": str(settings.knowledge_dir),
             "MODELFORGE_LOG_LEVEL": source.get("MODELFORGE_LOG_LEVEL", "WARNING"),
         }
     )
