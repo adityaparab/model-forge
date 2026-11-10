@@ -10,7 +10,13 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from modelforge_core.schemas import FeaturePolicy, Methodology, ModelingPlan, Thresholds
 from modelforge_gateway.providers.fake import ScriptedChatModel
 from modelforge_gateway.schemas import GatewayError
-from modelforge_orchestrator.agent_schemas import ChallengeQueryPlan, ReReviewDraft, ReviewDraft
+from modelforge_orchestrator import grounding
+from modelforge_orchestrator.agent_schemas import (
+    ChallengeQueryPlan,
+    FindingResponseDraft,
+    ReReviewDraft,
+    ReviewDraft,
+)
 from modelforge_orchestrator.briefs import parse_brief, plan_from_brief
 from pydantic import BaseModel
 
@@ -641,3 +647,137 @@ def test_unstructured_invoke_infers_the_challenger_schemas() -> None:
     )
     assert ChallengeQueryPlan.model_validate_json(str(queries.content)).queries
     assert ReReviewDraft.model_validate_json(str(verdicts.content)).verdicts == []
+
+
+def _open_finding(
+    finding_id: str, category: str, title: str, evidence: list[str], source: str = "review"
+) -> dict[str, Any]:
+    return {
+        "id": finding_id,
+        "round": 1,
+        "severity": "medium",
+        "category": category,
+        "title": title,
+        "description": "d",
+        "evidence": evidence,
+        "required_action": "a",
+        "status": "open",
+        "source": source,
+        "check_key": None,
+    }
+
+
+def _respond(finding: dict[str, Any]) -> FindingResponseDraft:
+    sections = {"monitoring": "Score drift is monitored.", "limitations": "None."}
+    prompt = _prompt(
+        {
+            "finding": ("json", json.dumps(finding)),
+            "sections": ("json", json.dumps(sections)),
+            "excerpts": ("json", json.dumps({"plan": _plan_dict()})),
+        }
+    )
+    out = ScriptedChatModel().with_structured_output(FindingResponseDraft).invoke(prompt)
+    assert isinstance(out, FindingResponseDraft)
+    return out
+
+
+def test_fake_responds_by_category() -> None:
+    governance = _respond(
+        _open_finding("F-4", "governance", "Approver identities are not named", ["governance"])
+    )
+    proxy = _respond(
+        _open_finding(
+            "F-2",
+            "data",
+            "Dataset proxies are not disclosed as limitations",
+            ["limitations", "[A:plan#target.event]"],
+        )
+    )
+    monitoring = _respond(
+        _open_finding(
+            "F-1", "monitoring", "Monitoring thresholds are not quantified", ["monitoring"]
+        )
+    )
+
+    assert governance.model_dump() == {
+        "decision": "dispute",
+        "action": (
+            "Approvals are recorded in the lineage approvals table and the sealed manifest, "
+            "not in the document body."
+        ),
+        "evidence": ["[A:plan#model_name]"],
+        "sections_to_regenerate": [],
+    }
+    assert proxy.model_dump() == {
+        "decision": "dispute",
+        "action": (
+            "The brief defines the target as a proxy for default and the limitations section "
+            "states it."
+        ),
+        "evidence": ["[A:plan#target.event]"],
+        "sections_to_regenerate": [],
+    }
+    assert monitoring.model_dump() == {
+        "decision": "accept",
+        "action": "Revised the monitoring section(s) to address the finding.",
+        "evidence": [],
+        "sections_to_regenerate": ["monitoring"],
+    }
+
+
+def _rewrite_prompt(findings: list[dict[str, Any]]) -> list[BaseMessage]:
+    excerpts = _full_excerpts()
+    excerpts["validation"]["tests"].append({"test_id": "cal.hl", "status": "warn"})
+    return _prompt(
+        {
+            "section": _section("performance"),
+            "excerpts": ("json", json.dumps(excerpts)),
+            "passages": ("json", json.dumps(PASSAGES)),
+            "findings": ("json", json.dumps(findings)),
+        }
+    )
+
+
+def test_fake_rewrite_renders_cited_test_status_and_quotes_titles() -> None:
+    marker = "[A:validation#tests[cal.hl].status]"
+    findings = [
+        _open_finding("F-1", "performance", "Calibration warning", [marker], source="precheck"),
+        _open_finding("F-2", "performance", "AUC 0.70 breach", ["performance"]),
+    ]
+    model = ScriptedChatModel()
+    plain = _draft(model, _draft_prompt("performance", _full_excerpts(), PASSAGES))["parsed"]
+
+    draft = _draft(model, _rewrite_prompt(findings))["parsed"]
+
+    status = f"The validation test `cal.hl` has outcome warn {marker}."
+    title = "This revision addresses the reviewer's finding `AUC 0.70 breach`."
+    assert draft.body_md == f"{plain.body_md} {status} {title}"
+    assert draft.citations == [*plain.citations, marker]
+
+
+def test_fake_rewrite_quotes_finding_titles_in_code_spans() -> None:
+    finding = _open_finding("F-3", "performance", "AUC `0.70` is below 0.75", ["performance"])
+
+    body = _draft(ScriptedChatModel(), _rewrite_prompt([finding]))["parsed"].body_md
+
+    last_sentence = SENTENCE.split(body)[-1]
+    assert last_sentence == (
+        "This revision addresses the reviewer's finding `AUC '0.70' is below 0.75`."
+    )
+    assert grounding.numbers_in(grounding.strip_non_claims(last_sentence)) == []
+
+
+def test_unstructured_invoke_infers_the_finding_response() -> None:
+    finding = _open_finding("F-1", "monitoring", "t", ["monitoring"])
+    prompt = _prompt(
+        {
+            "finding": ("json", json.dumps(finding)),
+            "sections": ("json", json.dumps({"monitoring": "Body."})),
+            "excerpts": ("json", "{}"),
+        }
+    )
+
+    message = ScriptedChatModel().invoke(prompt)
+
+    response = FindingResponseDraft.model_validate_json(str(message.content))
+    assert response.sections_to_regenerate == ["monitoring"]

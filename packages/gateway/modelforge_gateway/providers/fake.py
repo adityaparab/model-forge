@@ -29,6 +29,7 @@ SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 UNGROUNDED_SENTENCE = "The portfolio default rate was 0.1234 in the development window."
 NON_FINITE = {"NaN", "Infinity", "-Infinity"}
 HEADING = re.compile(r"^## \d+\. (.+)$", re.M)
+TEST_STATUS = re.compile(r"\[A:validation#tests\[(?P<id>[^\]]+)\]\.status\]")
 
 ASSUMPTIONS = [
     "The bankruptcy label stands in for the default event.",
@@ -92,6 +93,13 @@ PERFORMANCE_TITLE = "Performance and validation results"
 VERDICT_CLOSED = "the regenerated section addresses the finding"
 VERDICT_OPEN = "accepted but not remediated"
 VERDICT_DISPUTED = "dispute noted; remains visible at sign-off"
+GOVERNANCE_DISPUTE = (
+    "Approvals are recorded in the lineage approvals table and the sealed manifest, not in the "
+    "document body."
+)
+PROXY_DISPUTE = (
+    "The brief defines the target as a proxy for default and the limitations section states it."
+)
 PLAN_FIELDS = (
     "model_name",
     "portfolio",
@@ -210,11 +218,56 @@ def _query_plan(blocks: dict[str, str]) -> dict[str, Any]:
     return {"queries": list(QUERIES.get(_section_id(blocks) or "", []))}
 
 
+def _code_span(text: str) -> str:
+    """``text`` as one inline code span, as the document node writes one: a backtick inside
+    it becomes ``'`` and whitespace runs collapse."""
+    return "`" + " ".join(text.replace("`", "'").split()) + "`"
+
+
+def _status_sentence(evidence: list[str], excerpts: dict[str, Any]) -> tuple[str, str] | None:
+    """The sentence stating the first cited test status the excerpts resolve, and its marker."""
+    if "validation" not in excerpts:
+        return None
+    for item in evidence:
+        match = TEST_STATUS.fullmatch(item)
+        if match is None:
+            continue
+        test_id, marker = match.group("id"), match.group(0)
+        try:
+            value = resolve_path(excerpts["validation"], f"tests[{test_id}].status")
+            rendered = _render_value(value, marker)
+        except (PathError, _UnavailableError):
+            continue
+        return f"The validation test {_code_span(test_id)} has outcome {rendered}.", marker
+    return None
+
+
+def _finding_sentences(
+    findings: list[dict[str, Any]], excerpts: dict[str, Any]
+) -> tuple[list[str], list[str]]:
+    """One sentence per finding a rewrite addresses, and the markers they emit."""
+    sentences: list[str] = []
+    citations: list[str] = []
+    for finding in findings:
+        status = _status_sentence(finding.get("evidence", []), excerpts)
+        if status is None:
+            title = _code_span(str(finding.get("title", "")))
+            sentences.append(f"This revision addresses the reviewer's finding {title}.")
+        else:
+            sentences.append(status[0])
+            citations.append(status[1])
+    return sentences, citations
+
+
 def _section_draft(blocks: dict[str, str], fault: Fault | None) -> dict[str, Any]:
     section_id = _section_id(blocks) or ""
     template = section_templates().get(section_id, "")
     excerpts = json.loads(blocks.get("excerpts", "{}"))
     body, citations = render_section(template, excerpts, _passages(blocks))
+    if "findings" in blocks:
+        sentences, markers = _finding_sentences(json.loads(blocks["findings"]), excerpts)
+        body = " ".join([body, *sentences]).strip()
+        citations.extend(markers)
     if fault == "ungrounded":
         body = f"{body} {UNGROUNDED_SENTENCE}".strip()
     return {"body_md": body, "citations": citations}
@@ -271,6 +324,32 @@ def _re_review_draft(blocks: dict[str, str]) -> dict[str, Any]:
     return {"verdicts": [_verdict(finding, changed) for finding in findings]}
 
 
+def _finding_response(blocks: dict[str, str]) -> dict[str, Any]:
+    finding = json.loads(blocks["finding"])
+    if finding["category"] == "governance":
+        return {
+            "decision": "dispute",
+            "action": GOVERNANCE_DISPUTE,
+            "evidence": ["[A:plan#model_name]"],
+            "sections_to_regenerate": [],
+        }
+    if finding["category"] == "data" and "prox" in finding["title"].lower():
+        return {
+            "decision": "dispute",
+            "action": PROXY_DISPUTE,
+            "evidence": ["[A:plan#target.event]"],
+            "sections_to_regenerate": [],
+        }
+    sections = json.loads(blocks.get("sections", "{}"))
+    regenerate = [item for item in finding["evidence"] if item in sections]
+    return {
+        "decision": "accept",
+        "action": f"Revised the {', '.join(regenerate)} section(s) to address the finding.",
+        "evidence": [],
+        "sections_to_regenerate": regenerate,
+    }
+
+
 def script(name: str, blocks: dict[str, str], fault: Fault | None) -> dict[str, Any]:
     if name == "ScopeProposal":
         return _scope_proposal(blocks)
@@ -284,12 +363,16 @@ def script(name: str, blocks: dict[str, str], fault: Fault | None) -> dict[str, 
         return _review_draft(blocks)
     if name == "ReReviewDraft":
         return _re_review_draft(blocks)
+    if name == "FindingResponseDraft":
+        return _finding_response(blocks)
     raise GatewayError("config", f"the fake provider has no script for {name}")
 
 
 def _infer_schema_name(blocks: dict[str, str]) -> str:
     if "brief" in blocks:
         return "ScopeProposal"
+    if "finding" in blocks:
+        return "FindingResponseDraft"
     if "changed_sections" in blocks:
         return "ReReviewDraft"
     if "prechecks" in blocks and "document" in blocks:
