@@ -1,0 +1,26 @@
+# Recall@5 goldens: for each question some top-5 hit must come from doc_id and
+# contain must_contain (case-insensitive). Written against the shipped corpus.
+- question: "What does effective challenge require?"
+  doc_id: sr11-7
+  must_contain: "effective challenge"
+- question: "Does SR 26-2 cover generative AI?"
+  doc_id: sr26-2
+  must_contain: "generative"
+- question: "default AUC threshold out of time"
+  doc_id: modeling-standards
+  must_contain: "0.70"
+- question: "What is a four-eyes approval?"
+  doc_id: modelforge-governance
+  must_contain: "requester"
+- question: "Which IFRS 9 stage uses twelve-month expected credit losses?"
+  doc_id: ifrs9-ecl
+  must_contain: "twelve months"
+- question: "Under CECL, over what horizon are expected credit losses measured?"
+  doc_id: cecl-asc-326
+  must_contain: "contractual life"
+- question: "What is the Basel III PD floor for corporate exposures?"
+  doc_id: basel-irb
+  must_contain: "0.05%"
+- question: "Which agency issued OCC Bulletin 2026-13 as the parallel issuance of SR 26-2?"
+  doc_id: occ-2026-13
+  must_contain: "parallel issuance"
