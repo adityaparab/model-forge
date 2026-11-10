@@ -185,14 +185,21 @@ def _swap_last_digit(sentence: str) -> str | None:
 
 
 def _swap_digit(body: str) -> str | None:
+    """``body`` with a digit swapped in its first ``[A:``-marked sentence that claims a number.
+
+    `None` (via an unchanged body) when no marked sentence carries a number token.
+    """
     done = False
 
     def edit(sentence: str) -> str | None:
         nonlocal done
         if done or "[A:" not in sentence:
             return sentence
+        swapped = _swap_last_digit(sentence)
+        if swapped is None:
+            return sentence
         done = True
-        return _swap_last_digit(sentence) or sentence
+        return swapped
 
     return _edit_sentences(body, edit)
 

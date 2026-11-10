@@ -124,6 +124,31 @@ def test_remove_test_sentences_over_a_hand_built_document() -> None:
     assert apply_mutation(markdown, template, mutation, ctx("pass")) is None
 
 
+def test_swap_digit_skips_marker_sentences_without_a_number() -> None:
+    template = TemplateSections(
+        template_id="t",
+        sections=[
+            SectionSpec(
+                id="performance",
+                title="Performance",
+                required=True,
+                artifact_kinds=[],
+                guidance="g",
+            )
+        ],
+    )
+    first = f"The overall validation outcome is fail [A:{'e' * 64}#overall]."
+    second = f"The AUC is 0.84 [A:{'e' * 64}#tests[disc.auc].value]."
+    markdown = f"# Document\n\n## 1. Performance\n\n{first} {second}\n"
+    index = KnowledgeIndex(built_from={}, documents=[], chunks=[])
+    ctx = MutationContext(validation={"tests": []}, index=index)
+    mutation = Mutation(kind="swap_digit", section="performance")
+
+    mutated = apply_mutation(markdown, template, mutation, ctx)
+    assert mutated == markdown.replace("0.84", "0.85")
+    assert first in (mutated or "")
+
+
 @pytest.mark.db
 def test_most_mutations_apply_to_the_synthetic_document(base: Base) -> None:
     markdown, template, ctx = base
