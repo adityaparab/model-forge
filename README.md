@@ -157,13 +157,16 @@ Then approve the three gates as in "Run a governed model build". `MODELFORGE_OLL
 
 Every provider returns structured output through its integration's `json_schema` method by default, Anthropic included (forced tool calling is unsupported when thinking is enabled). A route's `structured` key overrides that: the Anthropic profiles set `structured: function_calling` on the `scope` route, because the modeling-plan schema exceeds the structured-output grammar's complexity limit, while the document routes keep `json_schema`. A section-writing call may use up to 8192 output tokens and a query-planning call up to 1024; on a thinking model the thinking tokens count against that limit.
 
-Results on the Polish brief through the three gates:
+Results on the Polish brief through the three gates, measured on 10 November 2026 at commit `00e0c6b` on one machine (Apple Silicon, 48 GB), with the deterministic artifacts identical across every run (out-of-time AUC 0.874, overall validation `fail`, 13 features):
 
-| Profile | Model | Outcome | Flagged sections | Ungrounded numbers | Cost (USD) | Wall time |
-| --- | --- | --- | --- | --- | --- | --- |
-| `default` | `claude-opus-5-5` | to be measured | to be measured | to be measured | to be measured | to be measured |
-| `local-ollama` | `gpt-oss:20b` | to be measured | to be measured | to be measured | to be measured | to be measured |
-| `local-lmstudio` | `google/gemma-4-26b-a4b-qat` | to be measured | to be measured | to be measured | to be measured | to be measured |
+| Profile | Model | Outcome | Flagged sections | Ungrounded numbers | LLM calls | Cost (USD) | Wall time |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `default` | `claude-opus-5-5` | completed; document rendered and sealed | 1 of 11 | 0 | 31 (4 sections regenerated once) | 2.03 | 10 min 30 s |
+| `local-ollama` | `gpt-oss:20b` | completed; document rendered with banners | 10 of 11 | 159 | 52 (9 schema retries) | 0 | 26 min 8 s |
+| `local-lmstudio` | `google/gemma-4-26b-a4b-qat` | parked in `needs_attention` at `document` (`provider`: output hit the 8192-token limit) | n/a | n/a | 6 | 0 | 3 min 28 s |
+| `local-lmstudio` with `MODELFORGE_LMSTUDIO_MODEL=meta/muse-glimmer` | `meta/muse-glimmer` | parked in `needs_attention` at `document` (`provider`: a planning call hit the 1024-token limit) | n/a | n/a | 9 | 0 | 33 min 5 s |
+
+What the numbers mean. The Anthropic run's one banner is the governance section, whose regenerated text still named SR 26-2 without a `[K:]` passage; every number in the document traces to an artifact. The Ollama model wrote fluent prose but did not follow the alias-marker rule: most of its "ungrounded numbers" are the digits of regulation names written in a form the checker's regulation-name pattern does not recognise, and its markers often misuse the path grammar, so ten sections carry the attention banner and the failure list. Gemma 4 on LM Studio never terminated its JSON for one writing call even with the larger budget, so the gateway recorded the provider error and the run parked; `resume` re-runs the node. These are measurements of the models under this prompt and checker, not of the data pipeline, which produced the same artifacts in every run.
 
 ## Compose
 
