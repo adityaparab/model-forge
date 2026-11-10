@@ -29,6 +29,22 @@ def enqueue(conn: Connection[DictRow], run_id: str, kind: QueueKind) -> None:
     append_event(conn, run_id, "run.enqueued", {"kind": kind})
 
 
+def enqueue_if_absent(conn: Connection[DictRow], run_id: str, kind: QueueKind) -> bool:
+    """Enqueue ``run_id`` unless it already has a queue row (claimed or not); whether it did.
+
+    Unlike `enqueue`, never resets a claimed row, so a run is not handed to a second worker.
+    """
+    cur = conn.execute(
+        "insert into run_queue (run_id, kind, enqueued_at) values (%s, %s, clock_timestamp())"
+        " on conflict (run_id) do nothing",
+        (run_id, kind),
+    )
+    if cur.rowcount != 1:
+        return False
+    append_event(conn, run_id, "run.enqueued", {"kind": kind})
+    return True
+
+
 def claim(
     conn: Connection[DictRow], worker_id: str, *, run_id: str | None = None
 ) -> QueuedRun | None:

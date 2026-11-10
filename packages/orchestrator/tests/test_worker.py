@@ -440,3 +440,37 @@ def test_no_auto_replay_when_off(
     with db.connection() as conn:
         assert list_replays(conn, run_id) == []
         assert conn.execute("select count(*) as n from run_queue").fetchone() == {"n": 0}
+
+
+@pytest.mark.db
+def test_claim_rejected_when_the_status_changes_before_the_transition(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An abort landing between the worker's read and its transition to running wins."""
+    del checkpointer
+    run_id = queued_run(database, store, SYNTHETIC)
+    real_graph_input = worker._graph_input
+
+    def abort_then_graph_input(db: Database, run: Any, kind: str) -> Any:
+        with database.transaction() as conn:
+            conn.execute("update runs set status = 'aborted' where id = %s", (run_id,))
+        return real_graph_input(db, run, kind)
+
+    monkeypatch.setattr(worker, "_graph_input", abort_then_graph_input)
+    run = run_once(
+        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "aborted"
+    with database.connection() as conn:
+        assert get_run(conn, run_id).status == "aborted"
+        assert claim(conn, "x", run_id=run_id) is None  # the queue row was released
+        events = list_events(conn, run_id)
+        assert list_steps(conn, run_id) == []
+    rejected = events[-1]
+    assert rejected.type == "worker.rejected_claim"
+    assert rejected.payload["status"] == "aborted" and "'queued'" in rejected.payload["message"]
+    assert not any(e.type == "run.claimed" for e in events)

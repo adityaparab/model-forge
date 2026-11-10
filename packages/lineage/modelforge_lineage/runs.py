@@ -1,6 +1,6 @@
 """Repository for the ``runs`` table; lifecycle changes are written to the event log."""
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 from psycopg import Connection, sql
@@ -130,6 +130,33 @@ def set_status(conn: Connection[DictRow], run_id: str, status: RunStatus) -> Non
     old = row["status"]
     conn.execute("update runs set status = %s, updated_at = now() where id = %s", (status, run_id))
     append_event(conn, run_id, "run.status_changed", {"from": old, "to": status})
+
+
+def transition(
+    conn: Connection[DictRow],
+    run_id: str,
+    *,
+    from_statuses: Collection[RunStatus],
+    to: RunStatus,
+) -> bool:
+    """Move the run to ``to`` only if its status is one of ``from_statuses``; whether it moved.
+
+    One conditional update, so a concurrent status change is never overwritten; on a move the
+    `run.status_changed` event carries the real old status. `RunNotFound` for an unknown run.
+    Call inside a transaction.
+    """
+    row = conn.execute(
+        "with old as (select id, status from runs where id = %s for update)"
+        " update runs set status = %s, updated_at = now() from old"
+        " where runs.id = old.id and old.status = any(%s) returning old.status as old_status",
+        (run_id, to, list(from_statuses)),
+    ).fetchone()
+    if row is not None:
+        append_event(conn, run_id, "run.status_changed", {"from": row["old_status"], "to": to})
+        return True
+    if conn.execute("select 1 from runs where id = %s", (run_id,)).fetchone() is None:
+        raise RunNotFound(run_id)
+    return False
 
 
 def _set_column(conn: Connection[DictRow], run_id: str, column: str, value: object) -> None:

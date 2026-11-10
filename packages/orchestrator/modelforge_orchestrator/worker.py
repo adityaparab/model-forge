@@ -259,12 +259,33 @@ def execute(
                 )
                 span.set_attribute(attr("final_status"), run.status)
                 return run
-            claimed = True
             with db.transaction() as conn:
-                runs.set_status(conn, run_id, "running")
-                append_event(
-                    conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind}
-                )
+                # Conditional: a status change since the read (an abort, say) wins over the claim.
+                claimed = runs.transition(conn, run_id, from_statuses=(run.status,), to="running")
+                if claimed:
+                    append_event(
+                        conn, run_id, "run.claimed", {"worker_id": claimant, "kind": queued.kind}
+                    )
+                else:
+                    current = runs.get_run(conn, run_id).status
+                    message = (
+                        f"run {run_id}: status changed from {run.status!r} to {current!r}"
+                        f" before the {queued.kind!r} claim took it"
+                    )
+                    append_event(
+                        conn,
+                        run_id,
+                        "worker.rejected_claim",
+                        {"kind": queued.kind, "status": current, "message": message},
+                    )
+                    log.warning(
+                        "run.claim_rejected", kind=queued.kind, status=current, error=message
+                    )
+            if not claimed:
+                with db.connection() as conn:
+                    run = runs.get_run(conn, run_id)
+                span.set_attribute(attr("final_status"), run.status)
+                return run
             log.info("run.claimed", kind=queued.kind, prior_status=run.status)
             with tool_client_factory(settings) as tools:
                 gateway = Gateway.for_run(settings.gateway, run.profile, Lineage(db), store)

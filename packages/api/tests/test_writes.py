@@ -250,6 +250,12 @@ def test_resume_from_cost_cap_park(db: Database, client: TestClient, drive: Driv
     assert response.status_code == 202, response.text
     resumed = response.json()
     assert resumed["cost_cap_usd"] == 5.0 and resumed["error"] is None
+    # a second resume before the worker runs: refused, and its cap is rolled back
+    second = client.post(
+        f"{API}/runs/{run_id}/resume", json={"cost_cap_usd": 7}, headers=_as("bob")
+    )
+    assert _error(second, 409, "state")["message"] == f"run {run_id} is already queued"
+    assert client.get(f"{API}/runs/{run_id}").json()["run"]["cost_cap_usd"] == 5.0
     run = drive(run_id)
     assert run is not None and run.status == "awaiting_scope"
     _error(client.post(f"{API}/runs/{run_id}/resume", headers=_as("bob")), 409, "state")
@@ -314,6 +320,17 @@ def test_abort_rules(db: Database, client: TestClient, drive: Drive, completed_r
     assert response.status_code == 200 and response.json()["status"] == "aborted"
     with db.connection() as conn:
         assert get_run(conn, waiting).status == "aborted"
+    error = _error(client.post(f"{API}/runs/{waiting}/abort", headers=_as("bob")), 409, "state")
+    assert "aborted" in error["message"]
+
+    # abort drops a pending resume: a parked run resumed, then aborted before the worker runs
+    parked = submit_via_api(client, profile="fake-priced", cost_cap_usd=0.000001)["id"]
+    assert (run := drive(parked)) is not None and run.status == "needs_attention"
+    assert client.post(f"{API}/runs/{parked}/resume", headers=_as("bob")).status_code == 202
+    response = client.post(f"{API}/runs/{parked}/abort", headers=_as("bob"))
+    assert response.status_code == 200 and response.json()["status"] == "aborted"
+    assert not _queued(db, parked)
+    assert drive(parked) is None
 
 
 @pytest.mark.db

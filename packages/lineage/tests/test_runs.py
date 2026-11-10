@@ -18,6 +18,7 @@ from modelforge_lineage.runs import (
     set_cost_cap,
     set_dataset_id,
     set_status,
+    transition,
 )
 from modelforge_lineage.testing import create_test_run as _run
 from psycopg import Connection
@@ -168,3 +169,19 @@ def test_list_runs_filters_and_counts(db: Database) -> None:
         assert ids(limit=2, offset=2) == everything[2:]
         assert [r.id for r in list_replays(conn, "run_a")] == ["run_c", "run_d"]
         assert list_replays(conn, "run_b") == []
+
+
+@pytest.mark.db
+def test_transition_is_conditional(db: Database) -> None:
+    with db.transaction() as conn:
+        _run(conn)
+        assert transition(conn, "run_a", from_statuses=("queued",), to="running") is True
+        assert transition(conn, "run_a", from_statuses=("queued", "paused"), to="aborted") is False
+        assert get_run(conn, "run_a").status == "running"
+        with pytest.raises(RunNotFound):
+            transition(conn, "run_zz", from_statuses=("queued",), to="running")
+    with db.connection() as conn:
+        events = list_events(conn, "run_a")
+    assert [(e.type, e.payload) for e in events[1:]] == [
+        ("run.status_changed", {"from": "queued", "to": "running"})
+    ]

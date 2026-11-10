@@ -15,8 +15,8 @@ from modelforge_lineage import settings as server_settings
 from modelforge_lineage.approvals import ApprovalError, BlockingFindingsError, record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.findings import blocking_findings
-from modelforge_lineage.models import ApprovalRecord, GateDecision, RunRecord
-from modelforge_lineage.queue import enqueue, release
+from modelforge_lineage.models import ApprovalRecord, GateDecision, RunRecord, RunStatus
+from modelforge_lineage.queue import enqueue, enqueue_if_absent, release
 from modelforge_lineage.store import ArtifactStore
 from modelforge_orchestrator.briefs import BriefError
 from modelforge_orchestrator.replay import ReplayError, create_replay
@@ -31,7 +31,7 @@ from modelforge_api.routers.runs import Run
 from modelforge_api.schemas import ApprovalRequest, ReplayRequest, ResumeRequest, SubmitRequest
 from modelforge_api.settings import ApiSettings
 
-__all__ = ["MAX_BRIEF_BYTES", "YAML_MEDIA_TYPES", "router"]
+__all__ = ["ABORTABLE", "MAX_BRIEF_BYTES", "YAML_MEDIA_TYPES", "router"]
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
@@ -42,6 +42,15 @@ YAML_MEDIA_TYPES: frozenset[str] = frozenset(
 _MAX_JSON_BYTES = 4 * MAX_BRIEF_BYTES
 """The JSON envelope escapes the brief text, so its body may exceed the brief's own limit."""
 _TOO_LARGE = "brief larger than 1 MiB"
+ABORTABLE: tuple[RunStatus, ...] = (
+    "queued",
+    "awaiting_scope",
+    "awaiting_model",
+    "awaiting_signoff",
+    "needs_attention",
+    "paused",
+)
+"""The statuses an abort moves from: neither running nor final."""
 
 Db = Annotated[Database, Depends(get_db)]
 Store = Annotated[ArtifactStore, Depends(get_store)]
@@ -110,7 +119,7 @@ def _submit(
             cost_cap_usd=cost_cap_usd,
             gateway=core.gateway,
         )
-    except (BriefError, OSError, UnknownAdapterError) as exc:
+    except (BriefError, UnknownAdapterError) as exc:
         raise ApiError(400, "brief", str(exc)) from None
     except GatewayError as exc:
         raise ApiError(400, "profile", exc.message) from None
@@ -218,7 +227,9 @@ def resume(run: Run, db: Db, body: Annotated[ResumeRequest | None, Body()] = Non
         if body is not None and body.cost_cap_usd is not None:
             runs.set_cost_cap(conn, run.id, body.cost_cap_usd)
         runs.set_error(conn, run.id, None)
-        enqueue(conn, run.id, "resume")
+        if not enqueue_if_absent(conn, run.id, "resume"):
+            # raising inside the transaction rolls the cap and error changes back
+            raise ApiError(409, "state", f"run {run.id} is already queued")
         return runs.get_run(conn, run.id)
 
 
@@ -235,19 +246,17 @@ def pause(run: Run, db: Db) -> RunRecord:
 def abort(run: Run, db: Db) -> RunRecord:
     """Mark a run aborted; a running run must be paused first."""
     with db.transaction() as conn:
-        current = runs.get_run(conn, run.id)
-        if current.status in ("completed", "rejected"):
-            raise ApiError(409, "state", f"run {run.id} is {current.status} and cannot be aborted")
-        if current.status == "running":
-            raise ApiError(
-                409,
-                "state",
-                f"run {run.id} is running and there is no cancellation; pause it first"
-                f" (POST /runs/{run.id}/pause), then abort it once it is paused",
-            )
-        if current.status == "queued":
-            release(conn, run.id)
-        runs.set_status(conn, run.id, "aborted")
+        release(conn, run.id)  # a pending start or resume; rolled back with a refusal
+        if not runs.transition(conn, run.id, from_statuses=ABORTABLE, to="aborted"):
+            status = runs.get_run(conn, run.id).status
+            if status == "running":
+                raise ApiError(
+                    409,
+                    "state",
+                    f"run {run.id} is running and there is no cancellation; pause it first"
+                    f" (POST /runs/{run.id}/pause), then abort it once it is paused",
+                )
+            raise ApiError(409, "state", f"run {run.id} is {status} and cannot be aborted")
         return runs.get_run(conn, run.id)
 
 

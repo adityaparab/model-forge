@@ -2,8 +2,9 @@ import threading
 
 import pytest
 from modelforge_lineage.db import Database
+from modelforge_lineage.events import list_events
 from modelforge_lineage.models import QueuedRun
-from modelforge_lineage.queue import claim, enqueue, release
+from modelforge_lineage.queue import claim, enqueue, enqueue_if_absent, release
 from modelforge_lineage.testing import create_test_run as _run
 
 
@@ -58,3 +59,16 @@ def test_concurrent_claims_take_different_runs(db: Database) -> None:
     assert not t1.is_alive() and not t2.is_alive()
     assert got["w1_saw_w2"] is True  # worker2 finished while worker1 still held its lock
     assert {got["w1"], got["w2"]} == {"run_a", "run_b"}
+
+
+@pytest.mark.db
+def test_enqueue_if_absent_keeps_an_existing_row(db: Database) -> None:
+    with db.transaction() as conn:
+        _run(conn, "run_a")
+        assert enqueue_if_absent(conn, "run_a", "resume") is True
+        assert claim(conn, "w1", run_id="run_a") == QueuedRun(run_id="run_a", kind="resume")
+        assert enqueue_if_absent(conn, "run_a", "resume") is False
+        assert claim(conn, "w2", run_id="run_a") is None  # still claimed by w1
+    with db.connection() as conn:
+        enqueued = [e for e in list_events(conn, "run_a") if e.type == "run.enqueued"]
+    assert [e.payload for e in enqueued] == [{"kind": "resume"}]

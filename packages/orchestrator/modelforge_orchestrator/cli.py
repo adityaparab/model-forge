@@ -20,9 +20,9 @@ from modelforge_lineage import settings as server_settings
 from modelforge_lineage.approvals import ApprovalError, record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.findings import list_findings
-from modelforge_lineage.models import GateDecision, GateName, RunRecord
+from modelforge_lineage.models import GateDecision, GateName, RunRecord, RunStatus
 from modelforge_lineage.observability import configure_logging
-from modelforge_lineage.queue import enqueue, release
+from modelforge_lineage.queue import enqueue, enqueue_if_absent, release
 from modelforge_lineage.steps import list_steps
 from modelforge_lineage.store import ArtifactStore
 from modelforge_lineage.tracing import configure_tracing, shutdown_tracing
@@ -50,6 +50,21 @@ _GATE_OF_STATUS: dict[str, GateName] = {
     "awaiting_model": "model",
     "awaiting_signoff": "signoff",
 }
+
+_ABORTABLE: tuple[RunStatus, ...] = (
+    "queued",
+    "awaiting_scope",
+    "awaiting_model",
+    "awaiting_signoff",
+    "needs_attention",
+    "paused",
+)
+"""The statuses an abort moves from: neither running nor final."""
+
+
+class _RefusedError(Exception):
+    """Raised inside a transaction to roll a refused resume or abort back."""
+
 
 JsonOption = Annotated[bool, typer.Option("--json", help="Print one JSON document.")]
 DetachOption = Annotated[
@@ -229,11 +244,15 @@ def resume(
         current = _get_run(db, run_id)
         if current.status not in ("needs_attention", "paused"):
             _fail(f"run {run_id} is {current.status}; only a needs_attention or paused run resumes")
-        with db.transaction() as conn:
-            if cost_cap is not None:
-                runs.set_cost_cap(conn, run_id, cost_cap)
-            runs.set_error(conn, run_id, None)
-            enqueue(conn, run_id, "resume")
+        try:
+            with db.transaction() as conn:
+                if cost_cap is not None:
+                    runs.set_cost_cap(conn, run_id, cost_cap)
+                runs.set_error(conn, run_id, None)
+                if not enqueue_if_absent(conn, run_id, "resume"):
+                    raise _RefusedError  # rolls the cap and error changes back
+        except _RefusedError:
+            _fail(f"run {run_id} is already queued")
         record = _execute(settings, db, store, run_id) if not detach else _get_run(db, run_id)
         _print_run(db, record, as_json=False)
     finally:
@@ -263,18 +282,20 @@ def abort(run_id: Annotated[str, typer.Argument(metavar="RUN_ID")]) -> None:
     """Mark a run aborted."""
     _, db, _ = _context()
     try:
-        current = _get_run(db, run_id)
-        if current.status in ("completed", "rejected"):
+        _get_run(db, run_id)  # exits 2 for an unknown run
+        try:
+            with db.transaction() as conn:
+                release(conn, run_id)  # a pending start or resume; kept when the abort is refused
+                if not runs.transition(conn, run_id, from_statuses=_ABORTABLE, to="aborted"):
+                    raise _RefusedError  # rolls the release back
+        except _RefusedError:
+            current = _get_run(db, run_id)
+            if current.status == "running":
+                _fail(
+                    f"run {run_id} is running and there is no cancellation; pause it first"
+                    f" (modelforge pause {run_id}), then abort it once it is paused"
+                )
             _fail(f"run {run_id} is {current.status} and cannot be aborted")
-        if current.status == "running":
-            _fail(
-                f"run {run_id} is running and there is no cancellation; pause it first"
-                f" (modelforge pause {run_id}), then abort it once it is paused"
-            )
-        with db.transaction() as conn:
-            if current.status == "queued":
-                release(conn, run_id)
-            runs.set_status(conn, run_id, "aborted")
         _print_run(db, _get_run(db, run_id), as_json=False)
     finally:
         db.close()

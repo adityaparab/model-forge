@@ -71,6 +71,15 @@ def test_cli_resume_and_abort(cli: Cli, settings: Settings) -> None:
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
         queued = conn.execute("select 1 from run_queue where run_id = %s", (run_id,)).fetchone()
         assert queued is None  # aborting a queued run releases its queue row
+    again = cli("abort", run_id)
+    assert again.returncode == 2 and "aborted" in again.stderr
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        conn.execute("update runs set status = 'needs_attention' where id = %s", (run_id,))
+    assert cli("resume", run_id, "--detach").returncode == 0
+    twice = cli("resume", run_id, "--detach", "--cost-cap", "7")
+    assert twice.returncode == 2 and "already queued" in twice.stderr
+    assert "cap 10.00 USD" in cli("status", run_id).stdout  # the refused cap was rolled back
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
         conn.execute("update runs set status = 'completed' where id = %s", (run_id,))
     assert cli("abort", run_id).returncode == 2
 
