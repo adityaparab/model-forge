@@ -28,9 +28,9 @@ breaks one is checked, rejected and rewritten:
    out: digits appear only when copied from an excerpt with an `[A:]` marker in the same
    sentence.
 4. Write plain numbers only: no unit suffixes such as `50k`, `3x`, `9pp` or `12bp`, no ordinals
-   such as `2nd`, and no scientific notation. A value the excerpt shows in scientific notation,
-   such as `1.235e-05`, is written as the plain decimal with the same significant digits,
-   `0.00001235`.
+   such as `2nd`. If a value appears in scientific notation such as `1.235e-05` or
+   `4.262e-84`, copy it exactly as given, or write the plain decimal with the same significant
+   digits (`0.00001235`) when it is short enough.
 5. Write no headings of any kind, numbered or not; the document template supplies the heading.
 6. Every sentence that names a regulation or standard (SR 11-7, SR 26-2, SR 21-8, OCC 2026-13,
    CECL, ASC 326, IFRS 9, Basel) carries a `[K:<citation_id>]` marker naming one of the

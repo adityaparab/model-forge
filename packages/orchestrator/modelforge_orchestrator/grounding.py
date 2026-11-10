@@ -14,7 +14,10 @@ from modelforge_lineage.citations import PathError, resolve_path
 from modelforge_mcp.schemas import GroundingReport
 from modelforge_mcp.servers.doc_renderer import MARKER, REGULATIONS
 
-NUMBER = re.compile(r"(?<![\w.])(-?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(\s*(?:%|percent))?(?![\w.])")
+NUMBER = re.compile(
+    r"(?<![\w.])(-?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?([eE][-+]?\d+)?(\s*(?:%|percent))?(?![\w.])"
+)
+"""A decimal number with optional thousands separators, exponent and percent."""
 REGULATION_NAME = re.compile(
     r"\b(?:SR\s+\d+-\d+|OCC\s+(?:Bulletin\s+)?\d{4}-\d+|ASC\s+\d+|IFRS\s+\d+|Basel\s+(?:I{1,3}|\d))\b"
 )
@@ -23,8 +26,10 @@ DATE = re.compile(
     r"|November|December)\s+\d{4}\b|(?<![\d.,])\b(?:19|20)\d{2}\b(?!\d|\.\d)"
 )
 """A month-year, or a standalone year; a year-like run inside a decimal (``0.2015``) is not one."""
-UNIT_SUFFIXED = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?[A-Za-z]+(?![\w])")
-"""A number with a letter suffix (``50k``, ``3x``, ``9pp``): a claim that never grounds."""
+UNIT_SUFFIXED = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?(?![eE][-+]?\d)[A-Za-z]+(?![\w])")
+"""A number with a letter suffix (``50k``, ``3x``, ``9pp``): a claim that never grounds.
+
+An exponent (``1e-5``, ``4.262e-84``) is not a suffix; it falls through to ``NUMBER``."""
 SENTENCE_BREAK = re.compile(r"(?<=[.!?])\s+")
 
 _ARTIFACT_ID = re.compile(r"^[0-9a-f]{64}$")
@@ -35,7 +40,8 @@ _LINE_PREFIX = re.compile(r"^\s*(?:[-*+]|\d+[.)]|#{1,6})\s+")
 
 
 class NumberToken(StrictModel):
-    """A number as written in prose; ``is_integer`` only without a decimal part or percent."""
+    """A number as written in prose; ``is_integer`` only without a decimal part, exponent or
+    percent. ``sig_figs`` counts the mantissa's digits (``4.262e-84`` has 4)."""
 
     text: str
     value: float
@@ -103,17 +109,17 @@ def numbers_in(text: str) -> list[NumberToken]:
         )
     plain = UNIT_SUFFIXED.sub(lambda m: " " * len(m.group(0)), text)
     for match in NUMBER.finditer(plain):
-        sign, whole, fraction, percent = match.groups()
+        sign, whole, fraction, exponent, percent = match.groups()
         integer_digits = whole.replace(",", "")
         found.append(
             (
                 match.start(),
                 NumberToken(
                     text=match.group(0),
-                    value=float(f"{sign}{integer_digits}{fraction or ''}"),
+                    value=float(f"{sign}{integer_digits}{fraction or ''}{exponent or ''}"),
                     percent=percent is not None,
                     sig_figs=_sig_figs(integer_digits + (fraction or "")),
-                    is_integer=fraction is None and percent is None,
+                    is_integer=fraction is None and exponent is None and percent is None,
                 ),
             )
         )

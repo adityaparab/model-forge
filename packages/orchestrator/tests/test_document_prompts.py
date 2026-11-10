@@ -19,5 +19,6 @@ def test_writing_prompts_teach_paths_and_number_formats() -> None:
     assert "`name` for `columns`" in user
     assert "path rules above" in user  # the regeneration instruction points back to them
     assert "keeping a trailing `.0`" in system
-    assert "`1.235e-05`" in system and "`0.00001235`" in system
+    assert "If a value appears in scientific notation such as `1.235e-05` or" in system
+    assert "`4.262e-84`, copy it exactly as given" in system and "`0.00001235`" in system
     assert "written in words or left" in system

@@ -1,3 +1,4 @@
+import math
 from typing import Any
 
 import pytest
@@ -66,6 +67,9 @@ def test_sig_figs_and_round_sig() -> None:
         ("43,405", "43,405 rows", True),
         ("43405", "43,405 rows", True),
         ("50k", 50000, False),
+        ("4.262e-84", 4.2619e-84, True),
+        ("4.262e-84", 4.3e-84, False),
+        ("1e-5", 0.00001, True),
     ],
 )
 def test_matches(text: str, value: Any, expected: bool) -> None:
@@ -178,3 +182,28 @@ def test_bracketed_discriminator_paths_expand_and_resolve() -> None:
         body, load_artifact=lambda i: artifact if i == artifact_id else {}, retrieved=set()
     )
     assert report.ok and report.unresolved_markers == []
+
+
+def test_exponent_notation_is_one_plain_token() -> None:
+    tokens = numbers_in("p-value 4.262e-84 [A:x#y] and 1e-5 and 2.5E+03")
+    assert [(t.value, t.sig_figs, t.suffixed, t.is_integer) for t in tokens] == [
+        (4.262e-84, 4, False, False),
+        (1e-5, 1, False, False),
+        (2500.0, 2, False, False),
+    ]
+    assert [t.text for t in tokens] == ["4.262e-84", "1e-5", "2.5E+03"]
+
+
+def test_round_sig_handles_tiny_magnitudes() -> None:
+    assert math.isfinite(math.log10(4.262e-84))
+    assert round_sig(4.262e-84, 4) == 4.262e-84
+
+
+def test_check_section_grounds_a_number_in_exponent_notation() -> None:
+    ida = "a" * 64
+    report = check_section(
+        f"The Hosmer-Lemeshow p-value is 4.262e-84 [A:{ida}#hl_p_value].",
+        load_artifact=_loader({"hl_p_value": 4.2619e-84}, ida),
+        retrieved=set(),
+    )
+    assert report.ok
