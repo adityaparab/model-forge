@@ -115,7 +115,9 @@ def seal(state: RunState, runtime: Runtime[Deps]) -> dict[str, Any]:
         step.event("run.sealed", {"manifest_id": manifest_ref.id, "outcome": outcome})
         refs = {"manifest": manifest_ref}
         if state.replay_of is not None:
-            report = compare_refs(original_manifest(state, deps), manifest)
+            report = compare_refs(
+                original_manifest(state, deps), manifest, rerun_llm=state.rerun_llm
+            )
             refs["replay_report"] = step.store(
                 report,
                 kind="replay_report",

@@ -22,6 +22,7 @@ from modelforge_lineage.approvals import ApprovalError, record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
 from modelforge_lineage.ids import new_id
+from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.models import ArtifactRef, GateDecision, GateName, RunRecord
 from modelforge_lineage.observability import configure_logging
 from modelforge_lineage.queue import enqueue, release
@@ -94,7 +95,10 @@ def _gate_prompt(db: Database, run_id: str) -> dict[str, Any] | None:
 
 
 def _run_lines(db: Database, run: RunRecord) -> list[str]:
-    lines = [f"{run.id} {run.status}"]
+    lines = [
+        f"{run.id} {run.status}",
+        f"cost: {run.cost_usd:.4f} USD / cap {run.cost_cap_usd:.2f} USD",
+    ]
     if run.status in _GATE_OF_STATUS:
         lines.append(f"gate: {_GATE_OF_STATUS[run.status]}")
         prompt = _gate_prompt(db, run.id) or {}
@@ -102,7 +106,11 @@ def _run_lines(db: Database, run: RunRecord) -> list[str]:
     if run.status == "needs_attention" and run.error is not None:
         detail = run.error.get("error", {})
         message = detail.get("message", json.dumps(detail)) if isinstance(detail, dict) else detail
-        lines.append(f"error: {run.error.get('kind', 'unknown')} {message}")
+        if run.error.get("kind") == "llm" and isinstance(detail, dict):
+            # a gateway failure: name its kind (cost_cap, redaction, schema, refusal, ...)
+            lines.append(f"error: llm {detail.get('kind', 'unknown')}: {message}")
+        else:
+            lines.append(f"error: {run.error.get('kind', 'unknown')} {message}")
     if run.replay_of is not None:
         lines.append(f"replay_of: {run.replay_of}")
     return lines
@@ -226,15 +234,23 @@ def approve(
 @app.command()
 def resume(
     run_id: Annotated[str, typer.Argument(metavar="RUN_ID")],
+    cost_cap: Annotated[
+        float | None,
+        typer.Option("--cost-cap", help="Raise the run's cost cap (USD) before resuming."),
+    ] = None,
     detach: DetachOption = False,
 ) -> None:
     """Retry a run in needs_attention from its last checkpoint."""
     settings, db, store = _context()
     try:
+        if cost_cap is not None and cost_cap <= 0:
+            _fail(f"invalid cost cap {cost_cap}; it must be positive")
         current = _get_run(db, run_id)
         if current.status != "needs_attention":
             _fail(f"run {run_id} is {current.status}; only a needs_attention run resumes")
         with db.transaction() as conn:
+            if cost_cap is not None:
+                runs.set_cost_cap(conn, run_id, cost_cap)
             runs.set_error(conn, run_id, None)
             enqueue(conn, run_id, "resume")
         record = _execute(settings, db, store, run_id) if not detach else _get_run(db, run_id)
@@ -278,11 +294,14 @@ def status(
             steps = list_steps(conn, run_id)
         refs = _refs(db, run_id)
         if as_json:
+            with db.connection() as conn:
+                llm_calls = list_llm_calls(conn, run_id)
             document = {
                 "run": record.model_dump(mode="json"),
                 "steps": [s.model_dump(mode="json") for s in steps],
                 "refs": {name: ref.model_dump(mode="json") for name, ref in refs.items()},
                 "gate_prompt": _gate_prompt(db, run_id),
+                "llm_calls": [c.model_dump(mode="json") for c in llm_calls],
             }
             typer.echo(json.dumps(document))
             return
@@ -330,6 +349,7 @@ def _print_replay(db: Database, run: RunRecord, report: ReplayReport, *, as_json
         f"matched: {len(report.matched)}",
         f"mismatched: {mismatched}",
         f"missing: {', '.join(report.missing)}",
+        f"regenerated: {', '.join(report.regenerated)}",
     ]
     typer.echo("\n".join(lines))
 
@@ -337,6 +357,14 @@ def _print_replay(db: Database, run: RunRecord, report: ReplayReport, *, as_json
 @app.command()
 def replay(
     run_id: Annotated[str, typer.Argument(metavar="RUN_ID")],
+    rerun_llm: Annotated[
+        bool,
+        typer.Option(
+            "--rerun-llm",
+            help="Call the LLM again for scope and the document instead of copying the"
+            " original's outputs; the document refs are then reported as regenerated.",
+        ),
+    ] = False,
     detach: DetachOption = False,
     as_json: JsonOption = False,
 ) -> None:
@@ -345,7 +373,7 @@ def replay(
     try:
         try:
             with db.transaction() as conn:
-                record = create_replay(conn, run_id)
+                record = create_replay(conn, run_id, rerun_llm=rerun_llm)
         except ReplayError as exc:
             _fail(str(exc))
         except runs.RunNotFound:

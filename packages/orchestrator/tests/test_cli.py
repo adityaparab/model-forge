@@ -1,8 +1,13 @@
 import json
+import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
 import psycopg
 import pytest
+import yaml
+from modelforge_lineage.db import Database
+from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_orchestrator.config import Settings
 
 from .conftest import REPO, Cli, run_id_from
@@ -103,8 +108,12 @@ def test_cli_run_records_brief_artifact_and_shows_gate_prompt(cli: Cli, settings
     assert result.returncode == 0, result.stderr
     run_id = run_id_from(result.stdout)
     lines = result.stdout.splitlines()
-    assert lines[:2] == [f"{run_id} awaiting_scope", "gate: scope"]
-    assert lines[2].startswith("summary: {") and '"plan":{' in lines[2]
+    assert lines[:3] == [
+        f"{run_id} awaiting_scope",
+        "cost: 0.0000 USD / cap 10.00 USD",
+        "gate: scope",
+    ]
+    assert lines[3].startswith("summary: {") and '"plan":{' in lines[3]
     status = cli("status", run_id, "--json")
     assert status.returncode == 0, status.stderr
     prompt = json.loads(status.stdout)["gate_prompt"]
@@ -204,3 +213,87 @@ def test_cli_run_rejects_profile_without_credentials(cli: Cli, settings: Setting
     unknown = cli("run", str(SYNTHETIC), "--profile", "nope")
     assert unknown.returncode == 2 and "nope" in unknown.stderr
     assert result.stdout == "" and unknown.stdout == "" and count() == before
+
+
+@pytest.mark.db
+def test_cli_replay_rerun_llm_regenerates_and_records_calls(
+    cli: Cli, completed_cli_run: str, database: Database
+) -> None:
+    plain_result = cli("replay", completed_cli_run, "--json")
+    assert plain_result.returncode == 0, plain_result.stderr
+    plain = json.loads(plain_result.stdout)
+    assert plain["ok"] and plain["regenerated"] == []
+    rerun_result = cli("replay", completed_cli_run, "--rerun-llm", "--json")
+    assert rerun_result.returncode == 0, rerun_result.stderr
+    rerun = json.loads(rerun_result.stdout)
+    assert rerun["ok"]
+    assert rerun["regenerated"] == ["document_md", "document_html", "completeness"]
+    assert "knowledge_index" in rerun["matched"]
+    with database.connection() as conn:
+        assert list_llm_calls(conn, plain["replay_run_id"]) == []
+        assert len(list_llm_calls(conn, rerun["replay_run_id"])) >= 23
+
+
+def _priced_profiles(tmp_path: Path) -> Path:
+    """A copy of the repo's profiles plus ``fake-priced``: the fake routes at 4/20 USD per Mtok."""
+    profiles = tmp_path / "profiles"
+    shutil.copytree(REPO / "profiles", profiles)
+    fake = yaml.safe_load((profiles / "fake.yaml").read_text())
+    priced = {
+        "name": "fake-priced",
+        "routes": fake["routes"],
+        "prices": {
+            "scripted-v1": {"input": 4.0, "output": 20.0, "cache_read": 0.0, "cache_write": 0.0}
+        },
+    }
+    (profiles / "fake-priced.yaml").write_text(yaml.safe_dump(priced, sort_keys=False))
+    return profiles
+
+
+@pytest.mark.db
+def test_cli_cost_cap_parks_and_resume_raises_cap(cli: Cli, tmp_path: Path) -> None:
+    profiles = _priced_profiles(tmp_path)
+    env = {"MODELFORGE_PROFILES_DIR": str(profiles), "MODELFORGE_COST_CAP_USD": "0.000001"}
+    out = cli("run", str(SYNTHETIC), "--requester", "alice", "--profile", "fake-priced", env=env)
+    assert out.returncode == 0, out.stderr
+    assert "needs_attention" in out.stdout and "cost_cap" in out.stdout, out.stdout
+    run_id = run_id_from(out.stdout)
+    assert "cap 0.00 USD" in cli("status", run_id, env=env).stdout
+    refused = cli("resume", run_id, "--cost-cap", "0", env=env)
+    assert refused.returncode == 2 and "cost cap" in refused.stderr
+    resumed = cli("resume", run_id, "--cost-cap", "5", env=env)
+    assert resumed.returncode == 0, resumed.stderr
+    assert resumed.stdout.splitlines()[0] == f"{run_id} awaiting_scope"
+    status = cli("status", run_id, env=env).stdout
+    assert "cap 5.00 USD" in status
+    document = json.loads(cli("status", run_id, "--json", env=env).stdout)
+    assert document["llm_calls"]
+
+
+def _drive_through_gates(cli: Cli, env: Mapping[str, str]) -> str:
+    result = cli("run", str(SYNTHETIC), "--requester", "alice", env=env)
+    assert result.returncode == 0, result.stderr
+    run_id = run_id_from(result.stdout)
+    for args in (
+        ("scope", "--decision", "approve", "--approver", "alice"),
+        ("model", "--decision", "accept", "--approver", "bob"),
+        ("signoff", "--decision", "approve", "--approver", "bob"),
+    ):
+        result = cli("approve", run_id, *args, env=env)
+        assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines()[0] == f"{run_id} completed"
+    return run_id
+
+
+@pytest.mark.db
+def test_replay_detects_corpus_change(cli: Cli, tmp_path: Path) -> None:
+    corpus = tmp_path / "kb"
+    shutil.copytree(REPO / "knowledge-base", corpus)
+    env = {"MODELFORGE_KNOWLEDGE_DIR": str(corpus)}
+    run_id = _drive_through_gates(cli, env)
+    governance = corpus / "modelforge-governance.md"
+    governance.write_text(governance.read_text() + "\n\nAn extra paragraph for the drift test.\n")
+    replay = cli("replay", run_id, "--json", env=env)
+    assert replay.returncode == 1, replay.stderr
+    report = json.loads(replay.stdout)
+    assert any(m["ref"] == "knowledge_index" for m in report["mismatched"])

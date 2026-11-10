@@ -14,16 +14,27 @@ from modelforge_orchestrator.schemas import (
     ReplayReport,
 )
 
-__all__ = ["ReplayError", "compare_refs", "create_replay"]
+__all__ = ["LLM_DERIVED_REFS", "ReplayError", "compare_refs", "create_replay"]
+
+LLM_DERIVED_REFS: tuple[RefName, ...] = ("document_md", "document_html", "completeness")
+"""The refs a ``--rerun-llm`` replay regenerates rather than reproduces."""
 
 
-def compare_refs(original: Manifest, replay: Manifest) -> ReplayReport:
-    """Compare the deterministic refs; a ref absent from both manifests is ignored."""
+def compare_refs(original: Manifest, replay: Manifest, *, rerun_llm: bool = False) -> ReplayReport:
+    """Compare the deterministic refs; a ref absent from both manifests is ignored.
+
+    With ``rerun_llm`` the LLM-derived refs the original carries are listed as ``regenerated``
+    and not compared; ``ok`` ignores them.
+    """
     matched: list[RefName] = []
     mismatched: list[ReplayMismatch] = []
     missing: list[RefName] = []
+    regenerated: list[RefName] = []
     for name in DETERMINISTIC_REFS:
         if name not in original.refs:
+            continue
+        if rerun_llm and name in LLM_DERIVED_REFS:
+            regenerated.append(name)
             continue
         if name not in replay.refs:
             missing.append(name)
@@ -41,6 +52,7 @@ def compare_refs(original: Manifest, replay: Manifest) -> ReplayReport:
         matched=matched,
         mismatched=mismatched,
         missing=missing,
+        regenerated=regenerated,
         ok=not mismatched and not missing,
     )
 
@@ -49,8 +61,14 @@ class ReplayError(ValueError):
     """A replay was requested for a run that has not been sealed."""
 
 
-def create_replay(conn: Connection[DictRow], original_run_id: str) -> RunRecord:
-    """Create and enqueue a replay of a `completed` or `rejected` run; call inside a transaction."""
+def create_replay(
+    conn: Connection[DictRow], original_run_id: str, *, rerun_llm: bool = False
+) -> RunRecord:
+    """Create and enqueue a replay of a `completed` or `rejected` run; call inside a transaction.
+
+    The replay inherits the original's cost cap; ``rerun_llm`` makes its LLM nodes call the
+    gateway again instead of copying the original's outputs.
+    """
     original = runs.get_run(conn, original_run_id)
     if original.status not in ("completed", "rejected"):
         raise ReplayError(
@@ -67,6 +85,8 @@ def create_replay(conn: Connection[DictRow], original_run_id: str) -> RunRecord:
         dataset_ref=original.dataset_ref,
         seed=original.seed,
         replay_of=original.id,
+        cost_cap_usd=original.cost_cap_usd,
+        rerun_llm=rerun_llm,
     )
     queue.enqueue(conn, run_id, "replay")
     return record
