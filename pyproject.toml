@@ -119,3 +119,6 @@ source_modules = [
     "modelforge_gateway.redaction",
 ]
 forbidden_modules = ["langchain_anthropic", "langchain_ollama", "langchain_openai"]
+# Direct imports only: the gateway and its callers reach the integrations through
+# modelforge_gateway.providers, which is the one place allowed to import them.
+allow_indirect_imports = true
