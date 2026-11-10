@@ -43,3 +43,16 @@ test("api adds the identity header on writes and raises ApiError on error bodies
   expect(calls[2].method).toBe("GET");
   expect(calls[2].headers.has("X-ModelForge-User")).toBe(false);
 });
+
+test("api raises a network ApiError when fetch itself rejects", async () => {
+  globalThis.fetch = async () => {
+    throw new TypeError("Failed to fetch");
+  };
+
+  const failure = await api("/config").catch((e: unknown) => e);
+  expect(failure).toBeInstanceOf(ApiError);
+  const error = failure as ApiError;
+  expect(error.kind).toBe("network");
+  expect(error.message).toBe("Failed to fetch");
+  expect(error.status).toBe(0);
+});

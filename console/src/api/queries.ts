@@ -8,7 +8,7 @@ export type RunFilters = {
   status?: string;
   profile?: string;
   requester?: string;
-  replays?: boolean;
+  replays?: "include" | "exclude";
 };
 
 export type SubmitRun = { brief: string; profile?: string | null; cost_cap_usd?: number | null };
@@ -165,13 +165,13 @@ export function useResume(id: string) {
 }
 
 export function usePause(id: string) {
-  return useRunMutation(id, () =>
+  return useRunMutation<void, Schema<"RunRecord">>(id, () =>
     api<Schema<"RunRecord">>(runPath(id, "/pause"), { method: "POST" }),
   );
 }
 
 export function useAbort(id: string) {
-  return useRunMutation(id, () =>
+  return useRunMutation<void, Schema<"RunRecord">>(id, () =>
     api<Schema<"RunRecord">>(runPath(id, "/abort"), { method: "POST" }),
   );
 }
@@ -184,7 +184,9 @@ export function useReplay(id: string) {
 
 /** Verification runs on demand (it recomputes every hash), so it is a mutation over a GET. */
 export function useVerify(id: string) {
-  return useRunMutation(id, () => api<Schema<"VerifyReport">>(runPath(id, "/verify")));
+  return useRunMutation<void, Schema<"VerifyReport">>(id, () =>
+    api<Schema<"VerifyReport">>(runPath(id, "/verify")),
+  );
 }
 
 export function usePatchSettings() {

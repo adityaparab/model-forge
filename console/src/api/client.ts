@@ -52,7 +52,10 @@ function toError(status: number, statusText: string, body: unknown): ApiError {
   return new ApiError("http", statusText || `HTTP ${status}`, status);
 }
 
-/** Calls `/api/v1{path}`; writes carry the identity header; error bodies raise `ApiError`. */
+/**
+ * Calls `/api/v1{path}`; writes carry the identity header; error bodies raise `ApiError`,
+ * and a request that never got a response raises `ApiError` of kind `network` (status 0).
+ */
 export async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
   const { json, headers: given, ...rest } = init;
   const method = (rest.method ?? "GET").toUpperCase();
@@ -65,7 +68,13 @@ export async function api<T>(path: string, init: ApiInit = {}): Promise<T> {
   if (method !== "GET" && method !== "HEAD" && identity !== "") {
     headers.set("X-ModelForge-User", identity);
   }
-  const response = await fetch(`${API_PREFIX}${path}`, { ...rest, method, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_PREFIX}${path}`, { ...rest, method, headers });
+  } catch (error) {
+    // the request never reached the server: offline, refused, or aborted
+    throw new ApiError("network", error instanceof Error ? error.message : String(error), 0);
+  }
   const body = await readBody(response);
   if (!response.ok) throw toError(response.status, response.statusText, body);
   return body as T;
