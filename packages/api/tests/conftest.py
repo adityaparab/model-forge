@@ -1,6 +1,7 @@
 import os
 from collections.abc import Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -40,6 +41,7 @@ __all__ = [
     "settings",
     "spans",
     "submit",
+    "submit_via_api",
 ]
 
 REPO = Path(__file__).resolve().parents[3]
@@ -126,6 +128,19 @@ def submit(settings: Settings, db: Database) -> Submit:
         return record.id
 
     return create
+
+
+def submit_via_api(
+    client: TestClient, brief: Path = SYNTHETIC_BRIEF, requester: str = "alice", **fields: Any
+) -> dict[str, Any]:
+    """``POST /runs`` with the brief's text as JSON, acting as ``requester``; the `RunRecord`."""
+    response = client.post(
+        "/api/v1/runs",
+        json={"brief": brief.read_text(), **fields},
+        headers={"X-ModelForge-User": requester},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
 
 
 @pytest.fixture

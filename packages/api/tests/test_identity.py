@@ -1,27 +1,15 @@
 from dataclasses import replace
 from pathlib import Path
-from typing import Annotated
 
 import pytest
-from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from modelforge_api.app import create_app
-from modelforge_api.identity import IDENTITY_HEADER, Identity, require
+from modelforge_api.identity import IDENTITY_HEADER
 from modelforge_api.settings import ApiSettings, load_api_settings, parse_users
 
-# Throwaway write routes standing in for the real ones (Task 12 moves these tests onto them).
-APPROVER_ROUTE = "/api/v1/_test/approver"
-REQUESTER_ROUTE = "/api/v1/_test/requester"
-
-
-def add_test_routes(app: FastAPI) -> None:
-    @app.post(APPROVER_ROUTE)
-    def approver(who: Annotated[Identity, Depends(require("approver"))]) -> dict[str, str]:
-        return {"name": who.name}
-
-    @app.post(REQUESTER_ROUTE)
-    def requester(who: Annotated[Identity, Depends(require("requester"))]) -> dict[str, object]:
-        return {"name": who.name, "roles": sorted(who.roles)}
+SUBMIT = "/api/v1/runs"
+PAUSE = "/api/v1/runs/run_missing/pause"
+EMPTY_YAML = {"Content-Type": "application/yaml"}
 
 
 def test_parse_users() -> None:
@@ -37,6 +25,11 @@ def test_parse_users() -> None:
     for bad in ("bob", "x:owner", "alice:", ":requester", "alice:requester,", "a b:requester"):
         with pytest.raises(ValueError):
             parse_users(bad)
+
+
+def test_parse_users_rejects_a_duplicate_name() -> None:
+    with pytest.raises(ValueError, match="alice"):
+        parse_users("alice:requester bob:approver alice:admin")
 
 
 def test_load_api_settings_reads_the_variables() -> None:
@@ -80,6 +73,10 @@ def test_load_api_settings_reads_the_variables() -> None:
         load_api_settings({"MODELFORGE_USERS": "alice:root"}, dotenv=None)
 
 
+def test_empty_users_variable_means_open_mode() -> None:
+    assert load_api_settings({"MODELFORGE_USERS": ""}, dotenv=None).users is None
+
+
 def test_load_api_settings_honours_dotenv(tmp_path: Path) -> None:
     dotenv = tmp_path / ".env"
     dotenv.write_text("MODELFORGE_USERS=alice:admin\nMODELFORGE_PROFILE=fake\n")
@@ -89,47 +86,57 @@ def test_load_api_settings_honours_dotenv(tmp_path: Path) -> None:
 
 
 @pytest.mark.db
-def test_identity_header_rules(app: FastAPI, client: TestClient) -> None:
-    add_test_routes(app)
-    for headers in ({}, {IDENTITY_HEADER: ""}, {IDENTITY_HEADER: "  "}):
-        response = client.post(APPROVER_ROUTE, headers=headers)
-        assert response.status_code == 401, headers
-        assert response.json()["error"]["kind"] == "identity"
+def test_identity_header_rules(client: TestClient) -> None:
+    for route in (SUBMIT, PAUSE):
+        for headers in ({}, {IDENTITY_HEADER: ""}, {IDENTITY_HEADER: "  "}):
+            response = client.post(route, headers=headers)
+            assert response.status_code == 401, (route, headers)
+            assert response.json()["error"]["kind"] == "identity"
     for name in ("a" * 65, "alice b", "alice/b", "aliceé"):
-        response = client.post(APPROVER_ROUTE, headers={IDENTITY_HEADER.encode(): name.encode()})
+        response = client.post(SUBMIT, headers={IDENTITY_HEADER.encode(): name.encode()})
         assert response.status_code == 401, name
         body = response.json()
         assert set(body) == {"error"}
         assert body["error"]["kind"] == "identity"
         assert isinstance(body["error"]["message"], str)
-    response = client.post(APPROVER_ROUTE, headers={IDENTITY_HEADER: "alice.b@example.org"})
-    assert response.status_code == 200
-    assert response.json() == {"name": "alice.b@example.org"}
-    # open mode: every identity has every role
-    response = client.post(REQUESTER_ROUTE, headers={IDENTITY_HEADER: "a" * 64})
-    assert response.status_code == 200
-    assert response.json()["roles"] == ["admin", "approver", "requester"]
+    # accepted: the request reaches the brief check (an empty brief) and the run lookup
+    for name in ("alice.b@example.org", "a" * 64):
+        response = client.post(SUBMIT, headers={IDENTITY_HEADER: name, **EMPTY_YAML})
+        assert response.status_code == 400, name
+        assert response.json()["error"]["kind"] == "brief"
+    response = client.post(PAUSE, headers={IDENTITY_HEADER: "alice.b@example.org"})
+    assert response.status_code == 404
+    assert response.json()["error"]["kind"] == "not_found"
 
 
 @pytest.mark.db
 def test_role_map_enforced(api_settings: ApiSettings) -> None:
     app = create_app(replace(api_settings, users={"alice": frozenset({"requester"})}))
-    add_test_routes(app)
     with TestClient(app) as client:
-        response = client.post(REQUESTER_ROUTE, headers={IDENTITY_HEADER: "alice"})
-        assert response.status_code == 200
-        assert response.json() == {"name": "alice", "roles": ["requester"]}
+        # alice may submit: the request reaches the brief check, not the role check
+        response = client.post(SUBMIT, headers={IDENTITY_HEADER: "alice", **EMPTY_YAML})
+        assert response.status_code == 400
+        assert response.json()["error"]["kind"] == "brief"
 
-        response = client.post(APPROVER_ROUTE, headers={IDENTITY_HEADER: "alice"})
+        # the role is checked before the run lookup: an unknown run is still a 403
+        for route in ("pause", "resume", "abort", "replay", "approvals"):
+            response = client.post(
+                f"/api/v1/runs/run_missing/{route}", headers={IDENTITY_HEADER: "alice"}
+            )
+            assert response.status_code == 403, route
+            error = response.json()["error"]
+            assert error["kind"] == "role" and error["role"] == "approver"
+
+        response = client.post(SUBMIT, headers={IDENTITY_HEADER: "mallory", **EMPTY_YAML})
         assert response.status_code == 403
-        assert response.json()["error"]["kind"] == "role"
+        assert response.json()["error"] == {
+            "kind": "role",
+            "message": "mallory lacks the requester role",
+            "role": "requester",
+        }
 
-        response = client.post(REQUESTER_ROUTE, headers={IDENTITY_HEADER: "mallory"})
-        assert response.status_code == 403
-        assert response.json()["error"]["kind"] == "role"
-
-        # a malformed header is still an identity error under a role map
-        response = client.post(REQUESTER_ROUTE)
+        # a missing header is still an identity error under a role map
+        response = client.post(SUBMIT)
         assert response.status_code == 401
         assert response.json()["error"]["kind"] == "identity"
 

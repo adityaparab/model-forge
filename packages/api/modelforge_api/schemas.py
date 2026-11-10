@@ -2,6 +2,7 @@
 
 from typing import Any, Literal
 
+from modelforge_core.schemas import ModelingPlan
 from modelforge_lineage.models import (
     ApprovalRecord,
     ArtifactRef,
@@ -17,9 +18,10 @@ from modelforge_lineage.models import (
 )
 from modelforge_mcp.schemas import GroundingReport
 from modelforge_orchestrator.schemas import Counters, FindingResponse, ReplayReport
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = [
+    "ApprovalRequest",
     "ArtifactItem",
     "ConfigResponse",
     "CostBucket",
@@ -38,12 +40,15 @@ __all__ = [
     "LlmCallsResponse",
     "PassageView",
     "ReplayItem",
+    "ReplayRequest",
     "ResolvedCitation",
+    "ResumeRequest",
     "RunDetail",
     "RunListItem",
     "RunListResponse",
     "SectionView",
     "StepDetail",
+    "SubmitRequest",
     "TraceLinks",
     "TraceUrls",
     "TracingConfig",
@@ -298,3 +303,42 @@ class FindingsResponse(BaseModel):
     responses: list[FindingResponse]
     """From the run's ``responses`` ref; empty when it has none."""
     summary: FindingsSummary
+
+
+class _Request(BaseModel):
+    """A request body: an unknown field is a 422, never silently dropped (an ``approver``
+    in the body would otherwise read as if it were honoured)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class SubmitRequest(_Request):
+    """The JSON form of ``POST /runs``; the YAML form sends the brief as the raw body."""
+
+    brief: str
+    """The brief YAML text."""
+    profile: str | None = None
+    """Defaults to the ``default_profile`` setting."""
+    cost_cap_usd: float | None = Field(default=None, gt=0)
+    """Defaults to the ``default_cost_cap_usd`` setting."""
+
+
+class ApprovalRequest(_Request):
+    """A gate decision; the approver is the request's identity."""
+
+    gate: GateName
+    decision: str
+    comment: str = ""
+    plan: ModelingPlan | None = None
+    adjust_target: Literal["features", "build"] | None = None
+    conditions: list[str] = Field(default_factory=list)
+
+
+class ResumeRequest(_Request):
+    cost_cap_usd: float | None = Field(default=None, gt=0)
+    """Set the run's cost cap (USD) before resuming."""
+
+
+class ReplayRequest(_Request):
+    rerun_llm: bool = False
+    """Call the LLM again instead of copying the original's outputs."""
