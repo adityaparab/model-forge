@@ -18,6 +18,7 @@ COPY packages/knowledge/pyproject.toml packages/knowledge/pyproject.toml
 COPY packages/gateway/pyproject.toml packages/gateway/pyproject.toml
 COPY packages/mcp/pyproject.toml packages/mcp/pyproject.toml
 COPY packages/orchestrator/pyproject.toml packages/orchestrator/pyproject.toml
+COPY packages/evals/pyproject.toml packages/evals/pyproject.toml
 RUN uv sync --frozen --no-dev --no-install-workspace
 
 # Workspace packages and runtime assets.

@@ -1,6 +1,7 @@
 # local data and run outputs
 data
 artifacts
+evals/reports/
 .env
 .env.*
 

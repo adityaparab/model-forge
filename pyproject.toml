@@ -9,6 +9,7 @@ dependencies = [
     "modelforge-gateway",
     "modelforge-mcp",
     "modelforge-orchestrator",
+    "modelforge-evals",
 ]
 
 [tool.uv.workspace]
@@ -21,6 +22,7 @@ modelforge-knowledge = { workspace = true }
 modelforge-gateway = { workspace = true }
 modelforge-mcp = { workspace = true }
 modelforge-orchestrator = { workspace = true }
+modelforge-evals = { workspace = true }
 
 [dependency-groups]
 dev = ["pytest>=8.2", "hypothesis>=6.100", "ruff>=0.6", "pyright>=1.1.380", "import-linter>=2.0", "pre-commit>=3.7"]
@@ -46,6 +48,7 @@ testpaths = [
     "packages/gateway/tests",
     "packages/mcp/tests",
     "packages/orchestrator/tests",
+    "packages/evals/tests",
 ]
 addopts = "-ra --import-mode=importlib"
 markers = [
@@ -61,6 +64,7 @@ root_packages = [
     "modelforge_gateway",
     "modelforge_mcp",
     "modelforge_orchestrator",
+    "modelforge_evals",
 ]
 include_external_packages = true
 
@@ -72,9 +76,9 @@ forbidden_modules = ["anthropic", "ollama", "openai", "httpx", "requests", "lang
 ignore_imports = ["modelforge_core.datasets.download -> httpx"]
 
 [[tool.importlinter.contracts]]
-name = "package layering: orchestrator > mcp | gateway > knowledge > lineage > core"
+name = "package layering: evals > orchestrator > mcp | gateway > knowledge > lineage > core"
 type = "layers"
-layers = ["modelforge_orchestrator", "modelforge_mcp | modelforge_gateway", "modelforge_knowledge", "modelforge_lineage", "modelforge_core"]
+layers = ["modelforge_evals", "modelforge_orchestrator", "modelforge_mcp | modelforge_gateway", "modelforge_knowledge", "modelforge_lineage", "modelforge_core"]
 
 [[tool.importlinter.contracts]]
 name = "lineage is MCP-free and LangGraph-free"
@@ -97,7 +101,7 @@ forbidden_modules = ["langgraph", "langchain", "langchain_core", "langchain_anth
 [[tool.importlinter.contracts]]
 name = "no direct LLM provider SDKs or HTTP clients"
 type = "forbidden"
-source_modules = ["modelforge_core", "modelforge_lineage", "modelforge_knowledge", "modelforge_gateway", "modelforge_mcp", "modelforge_orchestrator"]
+source_modules = ["modelforge_core", "modelforge_lineage", "modelforge_knowledge", "modelforge_gateway", "modelforge_mcp", "modelforge_orchestrator", "modelforge_evals"]
 forbidden_modules = ["anthropic", "openai", "ollama", "httpx", "requests"]
 ignore_imports = ["modelforge_core.datasets.download -> httpx"]
 
@@ -110,6 +114,7 @@ source_modules = [
     "modelforge_knowledge",
     "modelforge_mcp",
     "modelforge_orchestrator",
+    "modelforge_evals",
     "modelforge_gateway.gateway",
     "modelforge_gateway.schemas",
     "modelforge_gateway.settings",
@@ -122,3 +127,9 @@ forbidden_modules = ["langchain_anthropic", "langchain_ollama", "langchain_opena
 # Direct imports only: the gateway and its callers reach the integrations through
 # modelforge_gateway.providers, which is the one place allowed to import them.
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "evals reach models and tools only through the orchestrator and gateway"
+type = "forbidden"
+source_modules = ["modelforge_evals"]
+forbidden_modules = ["langchain_core", "langgraph", "mcp", "langchain_anthropic", "langchain_ollama", "langchain_openai"]

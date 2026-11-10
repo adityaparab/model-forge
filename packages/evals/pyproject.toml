@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "modelforge-evals"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "modelforge-core",
+    "modelforge-lineage",
+    "modelforge-knowledge",
+    "modelforge-gateway",
+    "modelforge-orchestrator",
+    "typer>=0.28",
+    "pyyaml>=6",
+    "pydantic>=2.7",
+]
+
+[project.scripts]
+modelforge-evals = "modelforge_evals.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["modelforge_evals"]
