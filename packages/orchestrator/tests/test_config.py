@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from modelforge_mcp.common import ServerSettings
-from modelforge_orchestrator.config import load_settings, server_settings
+from modelforge_orchestrator.config import load_settings, server_settings, setting_seeds
 
 
 def test_defaults_and_env_and_dotenv(tmp_path: Path) -> None:
@@ -53,3 +53,23 @@ def test_settings_gateway_from_env_and_dotenv(tmp_path: Path) -> None:
     assert s.knowledge_dir == Path("./knowledge-base")
     assert s.gateway.profiles_dir == Path("./profiles")
     assert load_settings({}, dotenv=None).gateway.anthropic_api_key is None
+
+
+def test_auto_replay_env_parsing() -> None:
+    assert load_settings({}, dotenv=None).auto_replay is False
+    assert load_settings({"MODELFORGE_AUTO_REPLAY": "1"}, dotenv=None).auto_replay is True
+    assert load_settings({"MODELFORGE_AUTO_REPLAY": "true"}, dotenv=None).auto_replay is True
+    assert load_settings({"MODELFORGE_AUTO_REPLAY": "0"}, dotenv=None).auto_replay is False
+    s = load_settings(
+        {
+            "MODELFORGE_PROFILE": "ci-cheap",
+            "MODELFORGE_COST_CAP_USD": "3",
+            "MODELFORGE_AUTO_REPLAY": "true",
+        },
+        dotenv=None,
+    )
+    assert setting_seeds(s) == {
+        "default_profile": "ci-cheap",
+        "default_cost_cap_usd": 3.0,
+        "auto_replay": True,
+    }

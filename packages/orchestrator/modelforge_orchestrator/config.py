@@ -5,6 +5,7 @@ import shlex
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from modelforge_gateway.settings import GatewaySettings, gateway_settings_from_env
 from modelforge_mcp.common import ServerSettings
@@ -24,6 +25,7 @@ class Settings:
     log_level: str
     knowledge_dir: Path = Path("./knowledge-base")
     gateway: GatewaySettings = GatewaySettings()
+    auto_replay: bool = False
 
 
 def _read_dotenv(path: Path) -> dict[str, str]:
@@ -62,6 +64,7 @@ def load_settings(
         log_level=source.get("MODELFORGE_LOG_LEVEL", "INFO"),
         knowledge_dir=Path(source.get("MODELFORGE_KNOWLEDGE_DIR", "./knowledge-base")),
         gateway=gateway_settings_from_env(source),
+        auto_replay=source.get("MODELFORGE_AUTO_REPLAY", "").lower() in ("1", "true", "yes"),
     )
 
 
@@ -73,3 +76,12 @@ def server_settings(settings: Settings) -> ServerSettings:
         templates_dir=settings.templates_dir,
         knowledge_dir=settings.knowledge_dir,
     )
+
+
+def setting_seeds(settings: Settings) -> dict[str, Any]:
+    """The defaults written to the server-side ``settings`` table where a key is absent."""
+    return {
+        "default_profile": settings.profile,
+        "default_cost_cap_usd": settings.gateway.cost_cap_usd,
+        "auto_replay": settings.auto_replay,
+    }

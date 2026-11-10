@@ -1,5 +1,6 @@
 """Repository for the ``runs`` table; lifecycle changes are written to the event log."""
 
+from collections.abc import Mapping
 from typing import Any
 
 from psycopg import Connection, sql
@@ -28,7 +29,12 @@ def create_run(
     cost_cap_usd: float = 10.0,
     rerun_llm: bool = False,
     trace_id: str | None = None,
+    event_extra: Mapping[str, Any] | None = None,
 ) -> RunRecord:
+    """Insert a queued run and append its `run.created` event; call inside a transaction.
+
+    ``event_extra`` is merged into the event payload (the record) and is not stored on the run.
+    """
     row = conn.execute(
         "insert into runs (id, requester, status, profile, brief_hash, brief_ref, dataset_ref,"
         " seed, replay_of, cost_usd, cost_cap_usd, rerun_llm, trace_id)"
@@ -49,7 +55,9 @@ def create_run(
     ).fetchone()
     assert row is not None
     record = RunRecord.model_validate(row)
-    append_event(conn, run_id, "run.created", record.model_dump(mode="json"))
+    append_event(
+        conn, run_id, "run.created", {**record.model_dump(mode="json"), **(event_extra or {})}
+    )
     return record
 
 

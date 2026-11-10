@@ -69,13 +69,17 @@ class ReplayError(ValueError):
 
 
 def create_replay(
-    conn: Connection[DictRow], original_run_id: str, *, rerun_llm: bool = False
+    conn: Connection[DictRow],
+    original_run_id: str,
+    *,
+    rerun_llm: bool = False,
+    auto: bool = False,
 ) -> RunRecord:
     """Create and enqueue a replay of a `completed` or `rejected` run; call inside a transaction.
 
     The replay inherits the original's cost cap; ``rerun_llm`` makes its LLM nodes call the
     gateway again instead of copying the original's outputs. The replay gets its own fresh trace
-    id.
+    id. ``auto`` marks the `run.created` event of a replay the worker enqueued on its own.
     """
     original = runs.get_run(conn, original_run_id)
     if original.status not in ("completed", "rejected"):
@@ -96,6 +100,7 @@ def create_replay(
         cost_cap_usd=original.cost_cap_usd,
         rerun_llm=rerun_llm,
         trace_id=new_trace_id(),
+        event_extra={"auto": True} if auto else None,
     )
     queue.enqueue(conn, run_id, "replay")
     return record

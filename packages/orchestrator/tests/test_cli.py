@@ -7,6 +7,7 @@ from pathlib import Path
 import psycopg
 import pytest
 import yaml
+from modelforge_lineage import settings as server_settings
 from modelforge_lineage.db import Database
 from modelforge_lineage.findings import insert_findings, list_findings
 from modelforge_lineage.llm_calls import list_llm_calls
@@ -410,3 +411,21 @@ def test_replay_detects_corpus_change(cli: Cli, tmp_path: Path) -> None:
     assert replay.returncode == 1, replay.stderr
     report = json.loads(replay.stdout)
     assert any(m["ref"] == "knowledge_index" for m in report["mismatched"])
+
+
+@pytest.mark.db
+def test_cli_migrate_seeds_settings(cli: Cli, db: Database) -> None:
+    first = cli("migrate", env={"MODELFORGE_AUTO_REPLAY": "0", "MODELFORGE_COST_CAP_USD": "4"})
+    assert first.returncode == 0, first.stderr
+    assert "seeded: default_profile, default_cost_cap_usd, auto_replay" in first.stdout
+    with db.connection() as conn:
+        assert server_settings.get_all(conn) == {
+            "default_profile": "fake",
+            "default_cost_cap_usd": 4.0,
+            "auto_replay": False,
+        }
+    second = cli("migrate", env={"MODELFORGE_AUTO_REPLAY": "1"})
+    assert second.returncode == 0, second.stderr
+    assert "seeded: none" in second.stdout
+    with db.connection() as conn:
+        assert server_settings.get(conn, "auto_replay") is False

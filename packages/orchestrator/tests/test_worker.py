@@ -1,16 +1,18 @@
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 import structlog
 from langgraph.checkpoint.postgres import PostgresSaver
 from langgraph.runtime import Runtime
+from modelforge_lineage import settings as server_settings
 from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
 from modelforge_lineage.inventory import get_for_run
 from modelforge_lineage.models import GateDecision
 from modelforge_lineage.queue import claim, enqueue
-from modelforge_lineage.runs import get_run, request_pause, set_error
+from modelforge_lineage.runs import get_run, list_replays, request_pause, set_error
 from modelforge_lineage.steps import list_artifacts, list_steps
 from modelforge_lineage.store import ArtifactStore
 from modelforge_orchestrator import graph, worker
@@ -22,7 +24,7 @@ from modelforge_orchestrator.tools import InProcessToolClient, ToolError
 from modelforge_orchestrator.worker import run_loop, run_once
 from structlog.testing import capture_logs
 
-from .conftest import REPO, queued_run
+from .conftest import REPO, SYNTHETIC_BRIEF, queued_run
 
 SYNTHETIC = REPO / "examples/briefs/synthetic.yaml"
 
@@ -371,3 +373,70 @@ def test_late_pause_request_is_cleared_on_finish(
     assert requested == [True]  # the run was running when seal asked
     assert run is not None and run.status == "completed"
     assert run.pause_requested is False
+
+
+def _drive_to_completed(settings: Settings, database: Database, store: ArtifactStore) -> str:
+    """A fresh synthetic run driven through the three gates by the worker; return its id."""
+    run_id = queued_run(database, store, SYNTHETIC_BRIEF)
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    for decision in (
+        GateDecision(gate="scope", decision="approve", approver="alice"),
+        GateDecision(gate="model", decision="accept", approver="bob"),
+        GateDecision(gate="signoff", decision="approve", approver="bob"),
+    ):
+        with database.transaction() as conn:
+            record_approval(conn, run_id, decision, current_plan=None)
+            enqueue(conn, run_id, "resume")
+        run = run_once(
+            settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+        )
+    assert run is not None and run.status == "completed"
+    return run_id
+
+
+@pytest.fixture
+def auto_replay_on(db: Database) -> Iterator[None]:
+    """``auto_replay`` seeded true; the row is removed afterwards so later tests are unaffected."""
+    with db.transaction() as conn:
+        assert server_settings.seed(conn, {"auto_replay": True}) == ["auto_replay"]
+    yield
+    with db.transaction() as conn:
+        conn.execute("delete from settings where key = 'auto_replay'")
+
+
+@pytest.mark.db
+def test_completed_run_enqueues_auto_replay_when_on(
+    settings: Settings,
+    db: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    auto_replay_on: None,
+) -> None:
+    run_id = _drive_to_completed(settings, db, store)
+    with db.connection() as conn:
+        replays = list_replays(conn, run_id)
+        assert len(replays) == 1
+        replay = replays[0]
+        assert replay.status == "queued" and replay.rerun_llm is False
+        assert replay.requester == "replay"
+        created = next(e for e in list_events(conn, replay.id) if e.type == "run.created")
+        assert created.payload["auto"] is True and created.payload["replay_of"] == run_id
+        queued = conn.execute("select run_id, kind from run_queue").fetchall()
+        assert queued == [{"run_id": replay.id, "kind": "replay"}]
+        assert get_run(conn, run_id).status == "completed"
+    finished = run_once(settings, db, store, tool_client_factory=InProcessToolClient)
+    assert finished is not None and finished.id == replay.id and finished.status == "completed"
+    with db.connection() as conn:
+        assert list_replays(conn, replay.id) == []
+        assert len(list_replays(conn, run_id)) == 1
+        assert conn.execute("select count(*) as n from run_queue").fetchone() == {"n": 0}
+
+
+@pytest.mark.db
+def test_no_auto_replay_when_off(
+    settings: Settings, db: Database, store: ArtifactStore, checkpointer: PostgresSaver
+) -> None:
+    run_id = _drive_to_completed(settings, db, store)
+    with db.connection() as conn:
+        assert list_replays(conn, run_id) == []
+        assert conn.execute("select count(*) as n from run_queue").fetchone() == {"n": 0}

@@ -21,6 +21,7 @@ from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.types import Command
 from modelforge_gateway.gateway import Gateway
 from modelforge_lineage import migrate, queue, runs
+from modelforge_lineage import settings as server_settings
 from modelforge_lineage.approvals import list_approvals
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import append_event, list_events
@@ -31,9 +32,10 @@ from modelforge_lineage.store import ArtifactStore
 from modelforge_mcp.schemas import DatasetRef
 from pydantic import BaseModel
 
-from modelforge_orchestrator.config import Settings
+from modelforge_orchestrator.config import Settings, setting_seeds
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.graph import build_graph
+from modelforge_orchestrator.replay import create_replay
 from modelforge_orchestrator.schemas import ErrorRecord, GatePrompt, RunState
 from modelforge_orchestrator.steps import PauseRequested
 from modelforge_orchestrator.tools import StdioToolClient, ToolClient
@@ -164,6 +166,26 @@ def _error_record(db: Database, run_id: str, exc: Exception) -> ErrorRecord:
     )
 
 
+def _auto_replay(db: Database, run: RunRecord) -> None:
+    """Enqueue a replay of the just-completed ``run`` when the ``auto_replay`` setting is on.
+
+    A replay never replays itself. Any failure is logged and swallowed: the original run's
+    status stands.
+    """
+    if run.replay_of is not None:
+        return
+    log = get_logger(component="worker", run_id=run.id)
+    try:
+        with db.connection() as conn:
+            if not server_settings.get(conn, "auto_replay", False):
+                return
+        with db.transaction() as conn:
+            replay = create_replay(conn, run.id, auto=True)
+        log.info("run.auto_replay_enqueued", replay_run_id=replay.id)
+    except Exception as exc:
+        log.error("run.auto_replay_failed", error=str(exc), error_type=type(exc).__name__)
+
+
 def execute(
     settings: Settings,
     db: Database,
@@ -220,6 +242,8 @@ def execute(
             with db.transaction() as conn:
                 runs.set_status(conn, run_id, result["status"])
             log.info("run.finished", status=result["status"])
+            if result["status"] == "completed":
+                _auto_replay(db, run)
     except PauseRequested as exc:
         # LangGraph 1.2.20 re-raises a node's exception as itself, not in an `ExceptionGroup`.
         with db.transaction() as conn:
@@ -275,6 +299,8 @@ def run_loop(settings: Settings, *, once: bool = False, poll_interval_s: float =
     try:
         store = ArtifactStore(settings.artifact_dir)
         migrate.apply(db)
+        with db.transaction() as conn:
+            server_settings.seed(conn, setting_seeds(settings))
         setup_checkpointer(db)
         log = get_logger(component="worker")
         url = urlsplit(settings.database_url)

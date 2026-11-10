@@ -15,6 +15,7 @@ from modelforge_core.schemas import ModelingPlan
 from modelforge_gateway.schemas import GatewayError
 from modelforge_lineage import migrate as lineage_migrate
 from modelforge_lineage import runs
+from modelforge_lineage import settings as server_settings
 from modelforge_lineage.approvals import ApprovalError, record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.findings import list_findings
@@ -27,7 +28,7 @@ from modelforge_lineage.verify import verify_run
 from pydantic import TypeAdapter, ValidationError
 
 from modelforge_orchestrator.briefs import BriefError
-from modelforge_orchestrator.config import Settings, load_settings
+from modelforge_orchestrator.config import Settings, load_settings, setting_seeds
 from modelforge_orchestrator.inspect import gate_prompt, run_refs, run_snapshot
 from modelforge_orchestrator.replay import ReplayError, create_replay
 from modelforge_orchestrator.schemas import ReplayReport
@@ -316,12 +317,15 @@ def worker(
 
 @app.command()
 def migrate() -> None:
-    """Apply lineage migrations and create the checkpoint tables."""
-    _, db, _ = _context()
+    """Apply lineage migrations, seed absent server-side settings, create the checkpoint tables."""
+    settings, db, _ = _context()
     try:
         applied = lineage_migrate.apply(db)
+        with db.transaction() as conn:
+            seeded = server_settings.seed(conn, setting_seeds(settings))
         setup_checkpointer(db)
         typer.echo(f"applied: {', '.join(map(str, applied)) if applied else 'none'}")
+        typer.echo(f"seeded: {', '.join(seeded) if seeded else 'none'}")
     finally:
         db.close()
 
