@@ -5,6 +5,9 @@ import { Shell } from "./components/Shell";
 import { NewRunPage } from "./pages/NewRunPage";
 import { RunPage } from "./pages/RunPage";
 import { RunsPage } from "./pages/RunsPage";
+import { FindingsTab } from "./pages/run/FindingsTab";
+import { LineageTab } from "./pages/run/LineageTab";
+import { LlmCallsTab } from "./pages/run/LlmCallsTab";
 import { OverviewTab } from "./pages/run/OverviewTab";
 import { ValidationTab } from "./pages/run/ValidationTab";
 
@@ -36,9 +39,9 @@ export function App() {
             }
           />
           <Route path="validation" element={<ValidationTab />} />
-          <Route path="findings" element={<Placeholder title="Findings" />} />
-          <Route path="lineage" element={<Placeholder title="Lineage" />} />
-          <Route path="llm-calls" element={<Placeholder title="LLM calls" />} />
+          <Route path="findings" element={<FindingsTab />} />
+          <Route path="lineage" element={<LineageTab />} />
+          <Route path="llm-calls" element={<LlmCallsTab />} />
         </Route>
         <Route path="inventory" element={<Placeholder title="Inventory" />} />
         <Route path="costs" element={<Placeholder title="Costs" />} />
