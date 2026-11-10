@@ -1,0 +1,8 @@
+name: fake
+# Scripted provider for tests; no network, no cost.
+routes:
+  scope:     {provider: fake, model: scripted-v1, effort: low}
+  document:  {provider: fake, model: scripted-v1, effort: low}
+  challenge: {provider: fake, model: scripted-v1, effort: low}
+  remediate: {provider: fake, model: scripted-v1, effort: low}
+  judge:     {provider: fake, model: scripted-v1, effort: low}

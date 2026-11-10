@@ -1,0 +1,8 @@
+name: local-ollama
+# Local models have no price entry and cost 0. MODELFORGE_OLLAMA_MODEL overrides the model.
+routes:
+  scope:     {provider: ollama, model: "gpt-oss:20b"}
+  document:  {provider: ollama, model: "gpt-oss:20b"}
+  challenge: {provider: ollama, model: "gpt-oss:20b"}
+  remediate: {provider: ollama, model: "gpt-oss:20b"}
+  judge:     {provider: ollama, model: "gpt-oss:20b"}

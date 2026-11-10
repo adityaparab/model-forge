@@ -1,0 +1,8 @@
+name: local-lmstudio
+# Local models have no price entry and cost 0. MODELFORGE_LMSTUDIO_MODEL overrides the model.
+routes:
+  scope:     {provider: lmstudio, model: google/gemma-4-26b-a4b-qat}
+  document:  {provider: lmstudio, model: google/gemma-4-26b-a4b-qat}
+  challenge: {provider: lmstudio, model: google/gemma-4-26b-a4b-qat}
+  remediate: {provider: lmstudio, model: google/gemma-4-26b-a4b-qat}
+  judge:     {provider: lmstudio, model: google/gemma-4-26b-a4b-qat}
