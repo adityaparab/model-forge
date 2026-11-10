@@ -44,7 +44,13 @@ from pydantic import BaseModel
 
 from modelforge_orchestrator.agent_schemas import QueryPlan, SectionDraft
 from modelforge_orchestrator.deps import Deps
-from modelforge_orchestrator.excerpts import ALIAS_DESCRIPTIONS, SectionContext, for_section
+from modelforge_orchestrator.excerpts import (
+    ALIAS_DESCRIPTIONS,
+    KIND_TO_REF,
+    SectionContext,
+    excerpt,
+    for_section,
+)
 from modelforge_orchestrator.grounding import check_section, expand_aliases
 from modelforge_orchestrator.nodes import brief_of, original_manifest, plan_of
 from modelforge_orchestrator.schemas import RunState
@@ -67,6 +73,10 @@ PROMPT_VERSION = 1
 QUERY_K = 3
 GOVERNANCE_SECTION = "governance"
 LLM_CALLS_PER_ATTEMPT = 2
+PLAN_MAX_OUTPUT_TOKENS = 1024
+WRITE_MAX_OUTPUT_TOKENS = 8192
+"""A section draft is long, and a thinking model's reasoning counts against the limit."""
+ALIAS_TO_KIND: dict[str, str] = {alias: kind for kind, alias in KIND_TO_REF.items()}
 
 
 class SectionOutcome(StrictModel):
@@ -100,7 +110,7 @@ def excerpt_floats_to_four_sig_figs(value: Any) -> Any:
     Applied to the excerpts sent to the writing prompt: full-precision floats would read as long
     digit runs to the gateway's redaction scan, and the writing rule is four significant figures
     anyway. Integers, strings and booleans pass through. Grounding still checks each stated
-    number against the full artifact.
+    number against the unrounded excerpt.
     """
     if isinstance(value, float):
         return float(f"{value:.4g}") if math.isfinite(value) else value
@@ -129,6 +139,7 @@ def _request(
     prompt_name: str,
     output_schema: type[BaseModel],
     restricted_terms: list[str],
+    max_output_tokens: int,
     **values: Any,
 ) -> CompletionRequest:
     registry = step.deps.gateway.registry
@@ -141,6 +152,7 @@ def _request(
         system=system,
         messages=[Message(role="user", content=user)],
         output_schema=output_schema,
+        max_output_tokens=max_output_tokens,
         redaction=RedactionContext(restricted_terms=restricted_terms),
         metadata=step.call_metadata(section_id=spec.id),
     )
@@ -165,10 +177,24 @@ def _citations(body: str) -> list[Citation]:
     ]
 
 
+def _code_span(item: str) -> str:
+    """``item`` as one inline code span: the completeness check reads no marker or regulation
+    name inside one, and the grounding check reads no number.
+
+    A code span cannot escape a backtick, so one inside ``item`` becomes ``'``; whitespace
+    runs collapse so the span stays on its bullet's line.
+    """
+    return "`" + " ".join(item.replace("`", "'").split()) + "`"
+
+
 def _bannered(body: str, report: GroundingReport) -> str:
-    """``body`` under the author-attention banner and the list of failures."""
+    """``body`` under the author-attention banner and the list of failures.
+
+    Each failure is quoted in a code span, so the banner does not re-inject the markers and
+    regulatory sentences it lists into the rendered document's checks.
+    """
     failures = [
-        f"- {kind}: {item}"
+        f"- {kind}: {_code_span(item)}"
         for kind, items in (
             ("ungrounded_numbers", report.ungrounded_numbers),
             ("unresolved_markers", report.unresolved_markers),
@@ -178,6 +204,18 @@ def _bannered(body: str, report: GroundingReport) -> str:
         for item in items
     ]
     return BANNER + "\n\n" + "\n".join(failures) + "\n\n" + body
+
+
+def _excerpt_kinds(context: SectionContext, state: RunState) -> dict[str, str]:
+    """Artifact id to the kind whose excerpt grounding resolves its markers against.
+
+    The section's aliases map through `KIND_TO_REF`; any other run artifact (the governance
+    section lists them by id) is projected by its own kind. So a marker resolves against the
+    same projection the writer saw, and a bulk list the excerpt hid grounds nothing.
+    """
+    kinds = {ref.id: ref.kind for ref in state.refs.values()}
+    kinds.update({ref.id: ALIAS_TO_KIND[alias] for alias, ref in context.aliases.items()})
+    return kinds
 
 
 def write_section(
@@ -192,10 +230,17 @@ def write_section(
     section = section_json(spec, context, state)
     excerpts = json.dumps(excerpt_floats_to_four_sig_figs(context.excerpts), indent=2)
     aliases = {alias: ref.id for alias, ref in context.aliases.items()}
+    kind_of = _excerpt_kinds(context, state)
 
     def attempt(failures_json: str | None) -> tuple[str, GroundingReport, list[Passage]]:
         plan_request = _request(
-            step, spec, PLAN_PROMPT_NAME, QueryPlan, restricted_terms, section_json=section
+            step,
+            spec,
+            PLAN_PROMPT_NAME,
+            QueryPlan,
+            restricted_terms,
+            PLAN_MAX_OUTPUT_TOKENS,
+            section_json=section,
         )
         plan = step.llm(plan_request).parsed
         if not isinstance(plan, QueryPlan):
@@ -207,6 +252,7 @@ def write_section(
             WRITE_PROMPT_NAME,
             SectionDraft,
             restricted_terms,
+            WRITE_MAX_OUTPUT_TOKENS,
             section_json=section,
             excerpts_json=excerpts,
             passages_json=_passages_json(passages),
@@ -218,7 +264,9 @@ def write_section(
         expanded, _unknown = expand_aliases(draft.body_md, aliases)
         report = check_section(
             expanded,
-            load_artifact=lambda artifact_id: json.loads(deps.store.get(artifact_id)),
+            load_artifact=lambda artifact_id: excerpt(
+                kind_of[artifact_id], json.loads(deps.store.get(artifact_id))
+            ),
             retrieved={p.citation_id for p in passages},
         )
         return expanded, report, passages
