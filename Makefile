@@ -1,4 +1,6 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline
+
+PROFILE ?= default
 
 lint:
 	uv run ruff check packages examples && uv run ruff format --check packages examples && uv run pyright && uv run lint-imports
@@ -38,3 +40,12 @@ up:
 
 down:
 	docker compose down
+
+evals:
+	uv run modelforge-evals run --profile fake --baseline evals/baselines/fake.json
+
+evals-live:
+	uv run modelforge-evals run --profile $(PROFILE) --baseline evals/baselines/$(PROFILE).json
+
+evals-baseline:
+	uv run modelforge-evals run --profile fake --write-baseline evals/baselines/fake.json

@@ -1,13 +1,19 @@
 """Probe runs: the real challenger over a mutated document, recorded on a run of its own."""
 
+import json
+from typing import Any
+
 import pytest
 from modelforge_evals.defects import load_defects
+from modelforge_evals.harness import EvalError
 from modelforge_evals.probes import document_template, run_probe, run_probes
+from modelforge_gateway.schemas import GatewayError
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
 from modelforge_lineage.findings import list_findings
 from modelforge_lineage.llm_calls import list_llm_calls
+from modelforge_lineage.models import RunRecord
 from modelforge_lineage.steps import list_artifacts, list_steps, list_tool_calls
 from modelforge_orchestrator.deps import Deps
 
@@ -79,3 +85,34 @@ def test_inapplicable_probe_runs_no_challenger(
         calls = list_llm_calls(conn, results[0].run_id)
         events = [e.type for e in list_events(conn, results[0].run_id)]
     assert probe.status == "completed" and calls == [] and "eval.probe" in events
+
+
+def _latest_probe(database: Database) -> RunRecord:
+    with database.connection() as conn:
+        latest = [r for r in runs.list_runs(conn, limit=50) if r.requester == "evals"]
+    return latest[0]
+
+
+@pytest.mark.db
+def test_failing_challenger_parks_the_probe(
+    deps: Deps, database: Database, completed_run_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def failing(*args: Any, **kwargs: Any) -> Any:
+        raise GatewayError("provider", "planted provider failure")
+
+    monkeypatch.setattr(deps.gateway, "complete", failing)
+    with pytest.raises(GatewayError):
+        run_probe(deps, completed_run_id, CASES["swapped_number"], document_template(deps))
+    probe = _latest_probe(database)
+    assert probe.status == "needs_attention"
+    assert probe.error is not None and "planted provider failure" in json.dumps(probe.error)
+
+
+@pytest.mark.db
+def test_probe_refuses_a_gateway_of_another_profile(
+    deps: Deps, completed_run_id: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    other = deps.gateway.profile.model_copy(update={"name": "default"})
+    monkeypatch.setattr(deps.gateway, "profile", other)
+    with pytest.raises(EvalError, match="profile"):
+        run_probe(deps, completed_run_id, CASES["swapped_number"], document_template(deps))

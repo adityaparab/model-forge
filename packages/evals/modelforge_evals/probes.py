@@ -7,11 +7,13 @@ would accept one, `original_manifest` would then fail).
 """
 
 import json
+from datetime import UTC, datetime
+from typing import Any
 
 from modelforge_core.schemas import ModelingPlan, StrictModel
 from modelforge_knowledge.index import KnowledgeIndex
 from modelforge_lineage import runs, steps
-from modelforge_lineage.events import append_event
+from modelforge_lineage.events import append_event, list_events
 from modelforge_lineage.ids import new_id
 from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.models import ArtifactRef, RunRecord
@@ -26,6 +28,7 @@ from modelforge_orchestrator.schemas import Finding, FindingsList, Manifest, Ref
 from modelforge_orchestrator.steps import Step
 
 from modelforge_evals.defects import DefectCase, MutationContext, apply_mutation
+from modelforge_evals.harness import EvalError
 
 __all__ = ["ProbeResult", "document_template", "run_probe", "run_probes"]
 
@@ -118,15 +121,46 @@ def _with_document(deps: Deps, state: RunState, mutated: str) -> RunState:
     return state.model_copy(update={"refs": {**state.refs, **refs}})
 
 
+def _park(deps: Deps, probe_id: str, exc: Exception) -> None:
+    """Record ``exc`` on the probe and mark it ``needs_attention``, as the worker parks a run.
+
+    The error is the one the failing step recorded (its ``error.recorded`` event), else an
+    internal record naming the exception.
+    """
+    with deps.lineage.connection() as conn:
+        recorded = [e.payload for e in list_events(conn, probe_id) if e.type == "error.recorded"]
+    error: dict[str, Any] = (
+        recorded[-1]
+        if recorded
+        else {
+            "node": "probe",
+            "attempt": 0,
+            "kind": "internal",
+            "error": {"type": type(exc).__name__, "message": str(exc)},
+            "ts": datetime.now(UTC).isoformat(timespec="microseconds"),
+        }
+    )
+    with deps.lineage.transaction() as conn:
+        runs.set_error(conn, probe_id, error)
+        runs.set_status(conn, probe_id, "needs_attention")
+
+
 def run_probe(
     deps: Deps, base_run_id: str, case: DefectCase, template: TemplateSections
 ) -> ProbeResult:
     """Run the challenger over ``case``'s mutation of ``base_run_id``'s document on a probe run.
 
     An inapplicable case (the mutation changes nothing) still gets its probe run and event, but
-    no challenger call.
+    no challenger call. `EvalError` when ``deps.gateway`` serves another profile than the base
+    run's. A failure of the probe's steps or the challenger parks the probe in
+    ``needs_attention`` with its error recorded, then propagates.
     """
     base, manifest = _base(deps, base_run_id)
+    if deps.gateway.profile.name != base.profile:
+        raise EvalError(
+            f"the gateway serves profile {deps.gateway.profile.name!r}, "
+            f"run {base_run_id} ran under {base.profile!r}"
+        )
     markdown = deps.store.get(manifest.refs["document_md"].id).decode("utf-8")
     ctx = MutationContext(
         validation=json.loads(deps.store.get(manifest.refs["validation"].id)),
@@ -136,8 +170,12 @@ def run_probe(
     probe_id = _create_probe(deps, base)
     findings: list[Finding] = []
     if mutated is not None:
-        state = _with_document(deps, _state(deps, probe_id, base, manifest), mutated)
-        update, _ = invoke_node(challenge, state, deps)
+        try:
+            state = _with_document(deps, _state(deps, probe_id, base, manifest), mutated)
+            update, _ = invoke_node(challenge, state, deps)
+        except Exception as exc:
+            _park(deps, probe_id, exc)
+            raise
         findings = deps.store.get_model(update["refs"]["findings"].id, FindingsList).findings
     with deps.lineage.transaction() as conn:
         append_event(

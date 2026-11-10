@@ -1,0 +1,51 @@
+name: evals
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"
+  pull_request:
+    types: [labeled]
+
+jobs:
+  evals:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'run-evals'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: modelforge
+          POSTGRES_PASSWORD: modelforge
+          POSTGRES_DB: modelforge
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U modelforge"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      MODELFORGE_DATABASE_URL: postgresql://modelforge:modelforge@localhost:5432/modelforge
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      MODELFORGE_COST_CAP_USD: "8"
+      MODELFORGE_PROFILE: ci-cheap
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --all-groups
+      - uses: actions/cache@v4
+        with:
+          path: data/
+          key: uci-datasets-v1
+      - run: uv run modelforge-evals run --profile ci-cheap --baseline evals/baselines/ci-cheap.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-reports
+          path: evals/reports/
+          if-no-files-found: warn

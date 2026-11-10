@@ -38,6 +38,7 @@ jobs:
           key: uci-datasets-v1
       - run: make lint
       - run: make test
+      - run: make evals
       - run: uv run modelforge-mcp goldens --artifact-dir /tmp/goldens-artifacts
       - uses: actions/upload-artifact@v4
         with:
