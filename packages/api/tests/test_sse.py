@@ -91,7 +91,7 @@ def test_format_event_and_start_after() -> None:
         hash="h",
     )
     assert sse.format_event(event) == (
-        b"id: 3\nevent: run.created\ndata: "
+        b"id: 3\ndata: "
         b'{"id":3,"run_id":"r1","step_id":null,"ts":"2026-11-10T00:00:00+00:00",'
         b'"type":"run.created","payload":{"a":1},"prev_hash":"p","hash":"h"}\n\n'
     )
@@ -196,7 +196,8 @@ def test_run_stream_replays_history(client: TestClient, submit: Submit) -> None:
 
     with _stream(client, path) as lines:
         seen = lines.until(lambda seen: len(_data(seen)) >= 1, timeout=3)
-    assert seen[0].startswith("id: ") and seen[1] == "event: run.created"
+    assert seen[0].startswith("id: ") and seen[1].startswith("data: ")
+    assert not any(line.startswith("event:") for line in seen)
     first = _data(seen)[0]
     assert first["run_id"] == run_id and first["type"] == "run.created"
     assert seen[0] == f"id: {first['id']}"
@@ -226,7 +227,8 @@ def test_run_stream_delivers_live_event(
         with database.transaction() as conn:
             appended = append_event(conn, run_id, "test.ping", {})
         seen = lines.until(lambda seen: bool(_data(seen)), timeout=3)
-        assert "event: test.ping" in seen
+        assert any(line.startswith("data: ") and '"type":"test.ping"' in line for line in seen)
+        assert not any(line.startswith("event:") for line in seen)
         assert f"id: {appended.id}" in seen
         assert [d["id"] for d in _data(seen)] == [appended.id]
     assert time.monotonic() - started < 5

@@ -65,7 +65,8 @@ function Refusal({ error }: { error: Error }) {
  * The decision half of a gate panel: the gate's decisions as a segmented choice, the fields the
  * chosen decision needs (`children`), a comment, and the primary submit. A failed decision (a
  * `409` refusal with its blocking findings, a four-eyes refusal, any other error) shows under
- * the form until the next attempt.
+ * the form until the next attempt. After a decision is recorded the submit stays disabled until
+ * the panel remounts for the next gate.
  */
 export function DecisionForm({
   decisions,
@@ -148,7 +149,8 @@ export function DecisionForm({
       <div className="flex items-center gap-3">
         <button
           type="submit"
-          disabled={pending || blocked !== null}
+          // once recorded the gate is decided; a second post would only meet a 409
+          disabled={pending || blocked !== null || sent !== null}
           className="inline-flex h-8 items-center rounded-sm bg-accent px-4 text-sm font-semibold text-bg hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
         >
           {pending ? "Recording..." : `Record decision: ${label(decision)}`}

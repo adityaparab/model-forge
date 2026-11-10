@@ -6,7 +6,26 @@ import { runKeys } from "../api/queries";
 import { setConnectionState } from "./connection";
 
 /** The event types that change what the run list shows. */
-const LIST_EVENTS = ["run.created", "run.status_changed", "gate.requested", "run.sealed"] as const;
+const LIST_EVENTS: readonly string[] = [
+  "run.created",
+  "run.status_changed",
+  "gate.requested",
+  "run.sealed",
+];
+
+/** The `type` of a frame's `EventRecord` (the server sends unnamed frames). */
+function eventType(data: unknown): string | null {
+  if (typeof data !== "string") return null;
+  try {
+    const record = JSON.parse(data) as unknown;
+    if (typeof record === "object" && record !== null && "type" in record) {
+      return typeof record.type === "string" ? record.type : null;
+    }
+  } catch {
+    // not an event record
+  }
+  return null;
+}
 
 const DEBOUNCE_MS = 300;
 
@@ -29,11 +48,13 @@ export function useGlobalEvents(): void {
     // the browser retries after an error unless it closed the stream for good
     source.onerror = () =>
       setConnectionState(source.readyState === EventSource.CLOSED ? "offline" : "reconnecting");
-    LIST_EVENTS.forEach((type) => source.addEventListener(type, invalidate));
+    source.onmessage = (message: MessageEvent) => {
+      const type = eventType(message.data);
+      if (type !== null && LIST_EVENTS.includes(type)) invalidate();
+    };
 
     return () => {
       window.clearTimeout(timer);
-      LIST_EVENTS.forEach((type) => source.removeEventListener(type, invalidate));
       source.close();
       setConnectionState("offline");
     };

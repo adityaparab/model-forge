@@ -23,9 +23,14 @@ test("global events invalidate the run list and track the connection", async () 
   act(() => source.open());
   expect(getConnectionState()).toBe("live");
 
+  // unnamed frames, as the server sends; a type the run list does not show is ignored
+  act(() => source.emit({ id: "2", data: { id: 2, type: "step.started" } }));
+  await act(() => new Promise((resolve) => setTimeout(resolve, 400)));
+  expect(invalidate).not.toHaveBeenCalled();
+
   act(() => {
-    source.emit({ type: "run.created", id: "3", data: "{}" });
-    source.emit({ type: "run.status_changed", id: "4", data: "{}" });
+    source.emit({ id: "3", data: { id: 3, type: "run.created" } });
+    source.emit({ id: "4", data: { id: 4, type: "run.status_changed" } });
   });
   await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["runs"] }));
   expect(invalidate).toHaveBeenCalledTimes(1);

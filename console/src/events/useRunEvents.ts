@@ -7,34 +7,6 @@ import { setConnectionState, type ConnectionState } from "./connection";
 
 type EventRecord = Schema<"EventRecord">;
 
-/**
- * The event types the run stream carries. The server names each message (`event: <type>`), and
- * `EventSource` only hands a named message to a listener registered for that name.
- */
-export const RUN_EVENT_TYPES = [
-  "run.created",
-  "run.enqueued",
-  "run.claimed",
-  "run.claim_rejected",
-  "run.status_changed",
-  "run.paused",
-  "run.sealed",
-  "intake.validated",
-  "step.started",
-  "step.finished",
-  "tool.called",
-  "tool.failed",
-  "llm.called",
-  "llm.failed",
-  "artifact.stored",
-  "profile.psi_skipped",
-  "gate.requested",
-  "gate.decided",
-  "gate.applied",
-  "error.recorded",
-  "replay.completed",
-] as const;
-
 const DEBOUNCE_MS = 300;
 const KEEP = 200;
 
@@ -95,12 +67,11 @@ export function useRunEvents(runId: string): { events: EventRecord[]; state: Con
     source.onopen = () => report("live");
     source.onerror = () =>
       report(source.readyState === EventSource.CLOSED ? "offline" : "reconnecting");
+    // the server sends unnamed frames, so every event of every type arrives here
     source.onmessage = onMessage;
-    RUN_EVENT_TYPES.forEach((type) => source.addEventListener(type, onMessage));
 
     return () => {
       window.clearTimeout(timer);
-      RUN_EVENT_TYPES.forEach((type) => source.removeEventListener(type, onMessage));
       source.close();
       setConnectionState("offline");
     };

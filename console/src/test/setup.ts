@@ -42,7 +42,10 @@ export class EventSourceStub {
     this.onopen?.(new Event("open"));
   }
 
-  /** Delivers one server-sent event; `data` is JSON-encoded unless it is already a string. */
+  /**
+   * Delivers one server-sent event; `data` is JSON-encoded unless it is already a string. With
+   * no `type` (or `message`) it is an unnamed frame, as the server sends, and reaches `onmessage`.
+   */
   emit(event: { type?: string; data: unknown; id?: string }): void {
     const type = event.type ?? "message";
     const message = new MessageEvent(type, {

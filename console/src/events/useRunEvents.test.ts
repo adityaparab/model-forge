@@ -25,10 +25,13 @@ test("useRunEvents invalidates the run's queries and keeps events", async () => 
   expect(result.current.state).toBe("live");
 
   const { events } = fixtures<Schema<"EventsResponse">>("events");
-  const [first, second] = events.filter((event) => event.type.startsWith("step."));
+  // unnamed frames of two different types, as the server sends them
+  const first = events[0];
+  const second = events.find((event) => event.type === "step.started");
+  if (second === undefined) throw new Error("no step.started in the fixture");
   act(() => {
-    source.emit({ type: first.type, id: String(first.id), data: first });
-    source.emit({ type: second.type, id: String(second.id), data: second });
+    source.emit({ id: String(first.id), data: first });
+    source.emit({ id: String(second.id), data: second });
   });
 
   await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ["runs", RUN_ID] }));

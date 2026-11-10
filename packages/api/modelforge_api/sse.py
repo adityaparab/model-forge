@@ -1,5 +1,10 @@
 """Server-sent event framing and the polling stream behind the event routes (spec 3.5).
 
+Every frame is an unnamed message (``id`` and ``data`` only, no ``event:`` line), so a
+browser `EventSource` hands each one to ``onmessage``; the event type travels inside the
+data as the `EventRecord`'s ``type``. A named frame would reach only a listener registered
+for that name, so a client would silently drop any type it did not list.
+
 The stream polls the events table: each read runs in a worker thread through
 `asyncio.to_thread`, so no thread or connection is held between polls.
 
@@ -49,9 +54,9 @@ WINDOW = 200
 
 
 def format_event(event: EventRecord) -> bytes:
-    """One SSE message: ``id: <id>\\nevent: <type>\\ndata: <EventRecord JSON>\\n\\n``."""
+    """One SSE message: ``id: <id>\\ndata: <EventRecord JSON>\\n\\n`` (no ``event:`` line)."""
     data = json.dumps(event.model_dump(mode="json"), separators=(",", ":"))
-    return f"id: {event.id}\nevent: {event.type}\ndata: {data}\n\n".encode()
+    return f"id: {event.id}\ndata: {data}\n\n".encode()
 
 
 def start_after(last_event_id: str | None, after: int | None, *, default: int) -> int:

@@ -81,6 +81,13 @@ export function ModelGate({
     plan: null,
   });
 
+  function onDecision(next: string) {
+    // the plan editor unmounts with `adjust` and comes back showing the stored plan, so an
+    // earlier edit must not stay behind to be sent unseen
+    if (next !== "adjust") setEdit({ proposal: null, plan: null });
+    setDecision(next);
+  }
+
   let draft: Draft = { body: { gate: "model", decision } };
   if (decision === "adjust") {
     draft =
@@ -118,7 +125,7 @@ export function ModelGate({
         <DecisionForm
           decisions={DECISIONS}
           decision={decision}
-          onDecision={setDecision}
+          onDecision={onDecision}
           draft={draft}
           onDecide={onDecide}
         >
