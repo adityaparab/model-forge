@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check ui-dev api demo demo-down
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check results results-check ui-dev api demo demo-down
 
 PROFILE ?= default
 
@@ -67,6 +67,14 @@ scripts-install:
 
 docs-check:
 	uv run python scripts/check_docs.py
+
+RESULTS_DOCS = README.md docs/trade-offs.md docs/results/README.md
+
+results:
+	uv run python scripts/record_result.py render $(RESULTS_DOCS)
+
+results-check:
+	uv run python scripts/record_result.py render --check $(RESULTS_DOCS)
 
 ui-dev:
 	npm run dev --prefix console
