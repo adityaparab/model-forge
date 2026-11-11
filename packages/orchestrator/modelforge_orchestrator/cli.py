@@ -244,18 +244,24 @@ def resume(
     try:
         if cost_cap is not None and cost_cap <= 0:
             _fail(f"invalid cost cap {cost_cap}; it must be positive")
-        current = _get_run(db, run_id)
-        if current.status not in ("needs_attention", "paused"):
-            _fail(f"run {run_id} is {current.status}; only a needs_attention or paused run resumes")
+        _get_run(db, run_id)  # an unknown run fails here
         try:
             with db.transaction() as conn:
+                # Locked: a concurrent abort either lands first (and is seen here) or waits.
+                current = runs.get_run(conn, run_id, for_update=True)
+                if current.status not in ("needs_attention", "paused"):
+                    raise _RefusedError(
+                        f"run {run_id} is {current.status};"
+                        " only a needs_attention or paused run resumes"
+                    )
                 if cost_cap is not None:
                     runs.set_cost_cap(conn, run_id, cost_cap)
                 runs.set_error(conn, run_id, None)
                 if not enqueue_if_absent(conn, run_id, "resume"):
-                    raise _RefusedError  # rolls the cap and error changes back
-        except _RefusedError:
-            _fail(f"run {run_id} is already queued")
+                    # rolls the cap and error changes back
+                    raise _RefusedError(f"run {run_id} is already queued")
+        except _RefusedError as exc:
+            _fail(str(exc))
         record = _execute(settings, db, store, run_id) if not detach else _get_run(db, run_id)
         _print_run(db, record, as_json=False)
     finally:

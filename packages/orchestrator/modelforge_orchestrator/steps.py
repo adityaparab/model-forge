@@ -190,19 +190,24 @@ class Step:
         self._span_scope.__enter__()
 
     def _close_span(self, exc: BaseException | None, *, status: str) -> None:
-        """Record the outcome on the node span, end it, and restore the previous context."""
-        set_attributes(
-            self._span,
-            {attr("status"): status, attr("output_state_hash"): self.output_state_hash},
-        )
-        if exc is not None:
-            record_failure(self._span, exc, trace_content=self.deps.settings.gateway.trace_content)
-        if self._step_token is not None:
-            CURRENT_STEP.reset(self._step_token)
-            self._step_token = None
-        if self._span_scope is not None:
-            self._span_scope.__exit__(None, None, None)
-            self._span_scope = None
+        """Record the outcome on the node span, end it, and restore the previous context
+        (restored even when recording raises, so no context leaks past the step)."""
+        try:
+            set_attributes(
+                self._span,
+                {attr("status"): status, attr("output_state_hash"): self.output_state_hash},
+            )
+            if exc is not None:
+                record_failure(
+                    self._span, exc, trace_content=self.deps.settings.gateway.trace_content
+                )
+        finally:
+            if self._step_token is not None:
+                CURRENT_STEP.reset(self._step_token)
+                self._step_token = None
+            if self._span_scope is not None:
+                self._span_scope.__exit__(None, None, None)
+                self._span_scope = None
 
     def tool(
         self,

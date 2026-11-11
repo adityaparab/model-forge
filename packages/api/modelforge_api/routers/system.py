@@ -51,7 +51,7 @@ def health(db: Annotated[Database, Depends(get_db)]) -> HealthResponse | JSONRes
     except Exception as exc:
         body = HealthResponse(
             status="degraded",
-            database=f"{type(exc).__name__}: {exc}",
+            database=type(exc).__name__,  # never the message: it can carry host and user
             version=modelforge_api.__version__,
         )
         return JSONResponse(status_code=503, content=body.model_dump())

@@ -9,6 +9,7 @@ from contextlib import contextmanager
 import pytest
 from fastapi.testclient import TestClient
 from modelforge_api import sse
+from modelforge_api.queries import events_head
 from modelforge_lineage.db import Database
 from modelforge_lineage.events import append_event
 from modelforge_lineage.models import EventRecord
@@ -215,6 +216,14 @@ def test_run_stream_replays_history(client: TestClient, submit: Submit) -> None:
         seen = lines.until(lambda seen: bool(_data(seen)), timeout=1.0)
     assert _data(seen) == []  # the query parameter wins over the header
 
+    stale = str(head + 1_000_000)  # an id from before the database was reset, say
+    for query, headers in (("", {"Last-Event-ID": stale}), (f"?after={stale}", {})):
+        with _stream(client, f"{path}{query}", headers) as lines:
+            seen = lines.until(lambda seen: len(_data(seen)) >= 1, timeout=3)
+        replayed = _data(seen)
+        assert replayed and replayed[0]["type"] == "run.created"  # from the beginning
+        assert replayed[0]["id"] == first["id"]
+
 
 @pytest.mark.db
 def test_run_stream_delivers_live_event(
@@ -253,6 +262,28 @@ def test_global_stream_starts_at_head(client: TestClient, submit: Submit) -> Non
     resumed = [d["id"] for d in _data(seen)]
     assert created in resumed  # a resume re-reads the window behind the client's id
     assert len(resumed) == len(set(resumed))
+
+
+@pytest.mark.db
+def test_global_stream_clamps_an_id_above_the_head(
+    client: TestClient, submit: Submit, database: Database
+) -> None:
+    submit()
+    with database.connection() as conn:
+        head = events_head(conn)
+    stale = str(head + 1_000_000)
+    for query, headers in (("", {"Last-Event-ID": stale}), (f"?after={stale}", {})):
+        with _stream(client, f"/events/stream{query}", headers) as lines:
+            run_id = submit()
+            seen = lines.until(
+                lambda seen, run_id=run_id: any(
+                    d["type"] == "run.created" and d["run_id"] == run_id for d in _data(seen)
+                ),
+                timeout=3,
+            )
+        received = _data(seen)
+        assert any(d["run_id"] == run_id for d in received)  # live events after the head
+        assert all(int(str(d["id"])) > head for d in received)  # none from before it
 
 
 @pytest.mark.db

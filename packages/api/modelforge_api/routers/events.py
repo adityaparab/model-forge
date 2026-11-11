@@ -42,14 +42,20 @@ def run_stream(
     after: After = None,
     last_event_id: LastEventId = None,
 ) -> StreamingResponse:
-    """The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says."""
+    """The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says; an id
+    above the run's newest event (stale, from before a reset) starts from the beginning."""
     run_id = run.id
 
     def read(after_id: int) -> list[EventRecord]:
         with db.connection() as conn:
             return queries.list_events_after(conn, run_id, after_id, _PAGE)
 
-    return _response(request, read, sse.start_after(last_event_id, after, default=0))
+    start = sse.start_after(last_event_id, after, default=0)
+    if start > 0:
+        with db.connection() as conn:
+            if start > queries.run_events_head(conn, run_id):
+                start = 0  # a stale id (from before a reset, say) replays from the beginning
+    return _response(request, read, start)
 
 
 @router.get("/events/stream", response_class=StreamingResponse)
@@ -59,7 +65,8 @@ def global_stream(
     after: After = None,
     last_event_id: LastEventId = None,
 ) -> StreamingResponse:
-    """Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says.
+    """Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says;
+    an id above the head (stale, from before a reset) starts at the head.
 
     A resume (``after`` or ``Last-Event-ID``) starts `sse.WINDOW` ids behind the client's id,
     and every poll re-reads that window, for commits that land out of id order (see `sse`).
@@ -70,9 +77,12 @@ def global_stream(
             return queries.list_events_after_global(conn, after_id, _PAGE)
 
     resume = sse.start_after(last_event_id, after, default=-1)
-    if resume >= 0:  # a reconnect re-reads the window behind the client's id
+    with db.connection() as conn:
+        head = queries.events_head(conn)
+    if resume > head:  # a stale id (from before a reset, say) starts at the head
+        start = head
+    elif resume >= 0:  # a reconnect re-reads the window behind the client's id
         start = max(resume - sse.WINDOW, 0)
     else:
-        with db.connection() as conn:
-            start = queries.events_head(conn)
+        start = head
     return _response(request, read, start, window=sse.WINDOW)

@@ -10,7 +10,7 @@ from modelforge_orchestrator.inspect import run_refs
 from modelforge_api.deps import get_settings
 from modelforge_api.documents import document_response
 from modelforge_api.errors import ApiError
-from modelforge_api.routers.runs import Db, Run, Store
+from modelforge_api.routers.runs import CONTENT_HEADERS, Db, Run, Store
 from modelforge_api.schemas import DocumentResponse
 from modelforge_api.settings import ApiSettings
 
@@ -38,7 +38,7 @@ def document(
     ref = run_refs(db, run.id).get(_RENDERED[format])
     if ref is None:
         raise ApiError(409, "not_ready", f"run {run.id} has no document yet", run_id=run.id)
-    return Response(content=store.get(ref.id), media_type=ref.media_type)
+    return Response(content=store.get(ref.id), media_type=ref.media_type, headers=CONTENT_HEADERS)
 
 
 @router.get("/{run_id}/validation", response_model=ValidationReport)

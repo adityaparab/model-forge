@@ -47,3 +47,22 @@ def test_findings_grouped(client: TestClient, completed_run: str, submit: Submit
     queued = submit()
     response = client.get(f"{API}/runs/{queued}/findings")
     assert response.status_code == 409 and response.json()["error"]["kind"] == "not_ready"
+
+
+@pytest.mark.db
+def test_findings_resolve_evidence_citations(client: TestClient, completed_run: str) -> None:
+    body = _get(client, f"/runs/{completed_run}/findings")
+    validation_ref = _get(client, f"/runs/{completed_run}")["refs"]["validation"]["id"]
+    checked = False
+    for row in body["findings"]:
+        markers = [
+            m for m in [*row["evidence"], *(row["response_evidence"] or [])] if m.startswith("[")
+        ]
+        assert [c["marker"] for c in row["citations"]] == list(dict.fromkeys(markers))
+        for citation in row["citations"]:
+            if citation["artifact_id"] == validation_ref and citation["path"].startswith("tests["):
+                assert citation["resolved"] is True, citation
+                assert citation["artifact_kind"] == "validation_report"
+                assert citation["value"] is not None
+                checked = True
+    assert checked, "no validation test-status evidence among the findings"

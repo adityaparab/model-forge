@@ -102,7 +102,16 @@ function regeneratedIn(responses: FindingResponse[]): string[] {
   return [...new Set(responses.flatMap((response) => response.sections_regenerated ?? []))];
 }
 
-function ResponsesList({ round, responses }: { round: number; responses: FindingResponse[] }) {
+/** A response's evidence resolves through its finding's citations (the API resolves both lists). */
+function ResponsesList({
+  round,
+  responses,
+  findings,
+}: {
+  round: number;
+  responses: FindingResponse[];
+  findings: FindingRow[];
+}) {
   if (responses.length === 0) return null;
   return (
     <ul aria-label={`Responses in round ${round}`} className="flex flex-col divide-y divide-border rounded-sm border border-border">
@@ -115,7 +124,12 @@ function ResponsesList({ round, responses }: { round: number; responses: Finding
             {response.decision}
           </span>
           <span className="min-w-0 flex-1">{response.action}</span>
-          {(response.evidence ?? []).length > 0 && <EvidenceList items={response.evidence ?? []} />}
+          {(response.evidence ?? []).length > 0 && (
+            <EvidenceList
+              items={response.evidence ?? []}
+              citations={findings.find((finding) => finding.id === response.finding_id)?.citations ?? []}
+            />
+          )}
         </li>
       ))}
     </ul>
@@ -143,7 +157,7 @@ function RoundGroup({
           <FindingCard key={finding.row_id} finding={finding} />
         ))}
       </div>
-      <ResponsesList round={round} responses={shownResponses} />
+      <ResponsesList round={round} responses={shownResponses} findings={findings} />
       {regenerated.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
           Sections regenerated

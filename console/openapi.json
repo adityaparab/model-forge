@@ -493,7 +493,7 @@
         "type": "object"
       },
       "CostGroup": {
-        "description": "The calls of the window sharing a profile, model or purpose; unused fields are 0.",
+        "description": "The calls of the window sharing a profile, model or purpose, with their token sums;\n``n_runs`` is 0 for a model or purpose group.",
         "properties": {
           "cost_usd": {
             "title": "Cost Usd",
@@ -1037,6 +1037,13 @@
             ],
             "title": "Check Key"
           },
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/ResolvedCitation"
+            },
+            "title": "Citations",
+            "type": "array"
+          },
           "closed_round": {
             "anyOf": [
               {
@@ -1149,7 +1156,8 @@
           "source",
           "check_key",
           "verdict",
-          "closed_round"
+          "closed_round",
+          "citations"
         ],
         "title": "FindingRow",
         "type": "object"
@@ -3948,7 +3956,7 @@
     },
     "/api/v1/events/stream": {
       "get": {
-        "description": "Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says.\n\nA resume (``after`` or ``Last-Event-ID``) starts `sse.WINDOW` ids behind the client's id,\nand every poll re-reads that window, for commits that land out of id order (see `sse`).",
+        "description": "Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says;\nan id above the head (stale, from before a reset) starts at the head.\n\nA resume (``after`` or ``Last-Event-ID``) starts `sse.WINDOW` ids behind the client's id,\nand every poll re-reads that window, for commits that land out of id order (see `sse`).",
         "operationId": "global_stream_api_v1_events_stream_get",
         "parameters": [
           {
@@ -4836,7 +4844,7 @@
     },
     "/api/v1/runs/{run_id}/events/stream": {
       "get": {
-        "description": "The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says.",
+        "description": "The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says; an id\nabove the run's newest event (stale, from before a reset) starts from the beginning.",
         "operationId": "run_stream_api_v1_runs__run_id__events_stream_get",
         "parameters": [
           {

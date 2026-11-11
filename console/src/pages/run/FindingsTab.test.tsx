@@ -86,3 +86,25 @@ test("findings filters narrow the round's responses but not its regenerated sect
   const regenerated = within(round1).getByRole("list", { name: "Sections regenerated in round 1" });
   expect(within(regenerated).getAllByRole("listitem")).toHaveLength(2);
 });
+
+test("an evidence chip shows the resolved value in its popover", async () => {
+  const user = userEvent.setup();
+  const findings = fixtures<FindingsResponse>("findings");
+  installFetchStub([
+    { path: `/api/v1/runs/${RUN_ID}`, body: fixtures("run") },
+    { path: `/api/v1/runs/${RUN_ID}/findings`, body: findings },
+  ]);
+  renderApp(<App />, { route: `/runs/${RUN_ID}/findings` });
+
+  const [finding] = findings.findings;
+  const resolved = finding.citations.find((c) => c.resolved && c.path?.startsWith("tests["));
+  if (resolved === undefined) throw new Error("the fixture has no resolved test-status evidence");
+  const card = await screen.findByRole("article", { name: finding.id });
+  const chip = within(card).getByRole("button", { name: `Citation ${resolved.marker}` });
+  expect(chip).toHaveAttribute("data-resolved", "true");
+  await user.hover(chip);
+  const popover = await screen.findByRole("dialog");
+  expect(popover).not.toHaveTextContent("Unresolved citation");
+  expect(popover).toHaveTextContent(JSON.stringify(resolved.value));
+  expect(popover).toHaveTextContent(resolved.artifact_kind ?? "");
+});

@@ -1,9 +1,9 @@
 [
   {
     "run": {
-      "id": "run_298284169cbb",
-      "created_at": "2026-11-10T22:38:08.779987Z",
-      "updated_at": "2026-11-10T22:38:10.113319Z",
+      "id": "run_0499f8b5f9f6",
+      "created_at": "2026-11-11T00:32:56.506652Z",
+      "updated_at": "2026-11-11T00:32:57.771501Z",
       "requester": "replay",
       "status": "completed",
       "profile": "fake",
@@ -15,16 +15,16 @@
       "seed": 42,
       "cost_usd": 0.0,
       "cost_cap_usd": 10.0,
-      "trace_id": "46812af257c34b2099929e2ca48795eb",
-      "manifest_hash": "aa28706d5ecc072ebb61eec5169af211665f2d7477bcf4eb1d490c97f562a75d",
-      "replay_of": "run_f3541e630110",
+      "trace_id": "20c089023bb84895bb1c32115993cca8",
+      "manifest_hash": "7c080666035effddc0f210794e193ff98eec1ba2ae70d5328579bfd391a973b6",
+      "replay_of": "run_5b0aeecbc09d",
       "error": null,
       "rerun_llm": false,
       "pause_requested": false
     },
     "report": {
-      "original_run_id": "run_f3541e630110",
-      "replay_run_id": "run_298284169cbb",
+      "original_run_id": "run_5b0aeecbc09d",
+      "replay_run_id": "run_0499f8b5f9f6",
       "matched": [
         "dataset",
         "dictionary",

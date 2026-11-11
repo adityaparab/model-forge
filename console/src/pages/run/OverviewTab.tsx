@@ -6,6 +6,7 @@ import { LiveFeed } from "../../components/run/LiveFeed";
 import { ReplaysPanel } from "../../components/run/ReplaysPanel";
 import { Timeline } from "../../components/run/Timeline";
 import { useRunEventsFeed } from "../../events/runEventsContext";
+import { gatePanelKey } from "./gatePanelKey";
 import { useRunDetail } from "./useRunDetail";
 
 function TimelineSection({ runId }: { runId: string }) {
@@ -34,7 +35,7 @@ export function OverviewTab() {
   return (
     <div className="flex flex-col gap-5">
       {gate !== null && (
-        <GatePanel key={`${run.id}:${gate.gate}`} detail={detail} onDecide={approve.mutateAsync} />
+        <GatePanel key={gatePanelKey(detail)} detail={detail} onDecide={approve.mutateAsync} />
       )}
       {run.status === "needs_attention" && <AttentionPanel run={run} />}
       <TimelineSection runId={run.id} />

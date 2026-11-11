@@ -1,11 +1,10 @@
 """Run reads: the list, the detail, steps, LLM calls, artifacts, approvals, the manifest,
 verification, events and replays (spec 3.3)."""
 
-import json
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Path, Query
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, Response
 from modelforge_lineage import runs
 from modelforge_lineage.approvals import list_approvals
 from modelforge_lineage.db import Database
@@ -25,6 +24,7 @@ from modelforge_lineage.store import (
     MEDIA_MARKDOWN,
     MEDIA_PARQUET,
     MEDIA_YAML,
+    ArtifactNotFound,
     ArtifactStore,
 )
 from modelforge_lineage.verify import verify_run
@@ -49,13 +49,16 @@ from modelforge_api.schemas import (
 )
 from modelforge_api.settings import ApiSettings
 
-__all__ = ["router"]
+__all__ = ["CONTENT_HEADERS", "router"]
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 _AWAITING: frozenset[str] = frozenset({"awaiting_scope", "awaiting_model", "awaiting_signoff"})
 _TEXT_TYPES = frozenset({MEDIA_YAML, MEDIA_MARKDOWN, MEDIA_HTML})
 _EXTENSIONS = {MEDIA_PARQUET: ".parquet", "text/plain": ".txt"}
+
+CONTENT_HEADERS = {"Content-Security-Policy": "sandbox", "X-Content-Type-Options": "nosniff"}
+"""On stored content (model-derived HTML among it): no script, no origin, no sniffing."""
 
 Db = Annotated[Database, Depends(get_db)]
 Store = Annotated[ArtifactStore, Depends(get_store)]
@@ -225,15 +228,16 @@ def artifact_content(run: Run, artifact_id: str, db: Db, store: Store) -> Respon
             run_id=run.id,
             artifact_id=artifact_id,
         )
-    if row.media_type == MEDIA_JSON:
-        return JSONResponse(content=json.loads(store.get(artifact_id)))
-    if row.media_type in _TEXT_TYPES:
-        return Response(content=store.get(artifact_id), media_type=row.media_type)
+    if row.media_type == MEDIA_JSON or row.media_type in _TEXT_TYPES:
+        # The stored bytes verbatim: exact, and a NaN in a JSON artifact is not a 500.
+        return Response(
+            content=store.get(artifact_id), media_type=row.media_type, headers=CONTENT_HEADERS
+        )
     filename = f"{artifact_id}{_EXTENSIONS.get(row.media_type, '')}"
     return FileResponse(
         store.path(artifact_id),
         media_type=row.media_type,
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={**CONTENT_HEADERS, "Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
@@ -245,7 +249,13 @@ def approvals(run: Run, db: Db) -> list[ApprovalRecord]:
 
 @router.get("/{run_id}/manifest", response_model=Manifest)
 def manifest(run: Run, store: Store) -> Manifest:
-    return store.get_model(_sealed(run), Manifest)
+    manifest_hash = _sealed(run)
+    try:
+        return store.get_model(manifest_hash, Manifest)
+    except ArtifactNotFound:
+        raise ApiError(
+            404, "not_found", f"manifest of run {run.id} is missing from the store", run_id=run.id
+        ) from None
 
 
 @router.get("/{run_id}/verify", response_model=VerifyReport)

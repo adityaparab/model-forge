@@ -1,7 +1,7 @@
 """Repository for the ``runs`` table; lifecycle changes are written to the event log."""
 
 from collections.abc import Collection, Mapping
-from typing import Any
+from typing import Any, LiteralString
 
 from psycopg import Connection, sql
 from psycopg.rows import DictRow
@@ -61,8 +61,14 @@ def create_run(
     return record
 
 
-def get_run(conn: Connection[DictRow], run_id: str) -> RunRecord:
-    row = conn.execute("select * from runs where id = %s", (run_id,)).fetchone()
+def get_run(conn: Connection[DictRow], run_id: str, *, for_update: bool = False) -> RunRecord:
+    """The run; with ``for_update`` its row stays locked until the transaction ends."""
+    query: LiteralString = (
+        "select * from runs where id = %s for update"
+        if for_update
+        else "select * from runs where id = %s"
+    )
+    row = conn.execute(query, (run_id,)).fetchone()
     if row is None:
         raise RunNotFound(run_id)
     return RunRecord.model_validate(row)

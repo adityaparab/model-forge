@@ -25,4 +25,6 @@ def configure_logging(level: str = "INFO", *, stream: TextIO | None = None) -> N
 
 
 def get_logger(**bind: Any) -> FilteringBoundLogger:
-    return structlog.get_logger().bind(**bind)
+    """A logger with ``bind`` that resolves the configuration when it logs, so a module-level
+    logger created before `configure_logging` (or before a test's `capture_logs`) follows it."""
+    return structlog.get_logger(**bind)

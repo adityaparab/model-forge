@@ -73,7 +73,7 @@ __all__ = [
 class HealthResponse(BaseModel):
     status: Literal["ok", "degraded"]
     database: str
-    """``ok``, or the error the database query raised."""
+    """``ok``, or the type of the error the database query raised (never its message)."""
     version: str
 
 
@@ -297,6 +297,9 @@ class FindingRow(BaseModel):
     check_key: str | None
     verdict: str | None
     closed_round: int | None
+    citations: list[ResolvedCitation]
+    """The markers of ``evidence`` and ``response_evidence`` resolved as in the document, one
+    per distinct marker in order of first occurrence (section ids are not markers)."""
 
 
 class FindingsSummary(BaseModel):
@@ -426,7 +429,8 @@ class CostRunRow(BaseModel):
 
 
 class CostGroup(BaseModel):
-    """The calls of the window sharing a profile, model or purpose; unused fields are 0."""
+    """The calls of the window sharing a profile, model or purpose, with their token sums;
+    ``n_runs`` is 0 for a model or purpose group."""
 
     key: str
     cost_usd: float

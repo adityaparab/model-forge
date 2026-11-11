@@ -23,21 +23,33 @@ TABLES: tuple[str, ...] = (
 )
 
 
+MIGRATION_LOCK = 5_026_110_501
+"""The `pg_advisory_xact_lock` key every migration transaction takes first, so two processes
+migrating one database at first boot (the API and the worker) never run a step together."""
+
+
 def apply(db: Database) -> list[int]:
-    """Apply every migration not yet recorded; return the versions applied in this call."""
+    """Apply every migration not yet recorded; return the versions applied in this call.
+
+    Each transaction takes `MIGRATION_LOCK` first and re-reads what is recorded under it, so a
+    concurrent `apply` waits and then skips what the other one applied.
+    """
     with db.transaction() as conn:
+        conn.execute("select pg_advisory_xact_lock(%s)", (MIGRATION_LOCK,))
         conn.execute(
             "create table if not exists schema_migrations (version int primary key,"
             " name text not null, applied_at timestamptz not null default now())"
         )
-    with db.connection() as conn:
-        done = {r["version"] for r in conn.execute("select version from schema_migrations")}
     applied: list[int] = []
     for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
         version = int(path.name.split("_", 1)[0])
-        if version in done:
-            continue
         with db.transaction() as conn:
+            conn.execute("select pg_advisory_xact_lock(%s)", (MIGRATION_LOCK,))
+            done = conn.execute(
+                "select 1 from schema_migrations where version = %s", (version,)
+            ).fetchone()
+            if done is not None:
+                continue
             conn.execute(path.read_bytes(), prepare=False)
             conn.execute(
                 "insert into schema_migrations (version, name) values (%s, %s)",

@@ -67,7 +67,8 @@ export interface paths {
         };
         /**
          * Global Stream
-         * @description Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says.
+         * @description Every run's events, from the current head unless ``after`` or ``Last-Event-ID`` says;
+         *     an id above the head (stale, from before a reset) starts at the head.
          *
          *     A resume (``after`` or ``Last-Event-ID``) starts `sse.WINDOW` ids behind the client's id,
          *     and every poll re-reads that window, for commits that land out of id order (see `sse`).
@@ -292,7 +293,8 @@ export interface paths {
         };
         /**
          * Run Stream
-         * @description The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says.
+         * @description The run's events, from the beginning unless ``after`` or ``Last-Event-ID`` says; an id
+         *     above the run's newest event (stale, from before a reset) starts from the beginning.
          */
         get: operations["run_stream_api_v1_runs__run_id__events_stream_get"];
         put?: never;
@@ -690,7 +692,8 @@ export interface components {
         };
         /**
          * CostGroup
-         * @description The calls of the window sharing a profile, model or purpose; unused fields are 0.
+         * @description The calls of the window sharing a profile, model or purpose, with their token sums;
+         *     ``n_runs`` is 0 for a model or purpose group.
          */
         CostGroup: {
             /** Cost Usd */
@@ -937,6 +940,8 @@ export interface components {
             category: string;
             /** Check Key */
             check_key: string | null;
+            /** Citations */
+            citations: components["schemas"]["ResolvedCitation"][];
             /** Closed Round */
             closed_round: number | null;
             /** Description */

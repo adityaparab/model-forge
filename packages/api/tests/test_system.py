@@ -214,7 +214,7 @@ def test_config_redacts_credentials_and_reports_console_modes(
 class _BrokenDatabase:
     @contextmanager
     def connection(self) -> Iterator[Any]:
-        raise OSError("connection refused")
+        raise OSError("connection to server at db.internal (10.0.0.5), port 5432 refused")
         yield
 
 
@@ -229,7 +229,7 @@ def test_health_is_503_when_the_database_fails(app: FastAPI, client: TestClient)
     assert response.status_code == 503
     assert response.json() == {
         "status": "degraded",
-        "database": "OSError: connection refused",
+        "database": "OSError",  # the type only: a driver message can carry host and user
         "version": modelforge_api.__version__,
     }
 

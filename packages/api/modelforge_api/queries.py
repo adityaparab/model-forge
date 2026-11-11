@@ -7,12 +7,13 @@ from typing import Any, LiteralString
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.models import ArtifactRow, EventRecord, InventoryEntry
-from modelforge_lineage.store import ArtifactStore
+from modelforge_lineage.store import ArtifactNotFound, ArtifactStore
 from modelforge_orchestrator.inspect import run_refs
 from modelforge_orchestrator.schemas import ReplayReport
 from psycopg import Connection
 from psycopg.rows import DictRow
 
+from modelforge_api.errors import ApiError
 from modelforge_api.schemas import (
     CostBucket,
     CostDay,
@@ -37,6 +38,7 @@ __all__ = [
     "list_events_after_global",
     "list_inventory",
     "replay_items",
+    "run_events_head",
 ]
 
 SEVERITY_ORDER = ("critical", "high", "medium", "low")
@@ -150,20 +152,19 @@ def costs_window(conn: Connection[DictRow], since: datetime, until: datetime) ->
             window,
         )
     ]
-    # the fields a group does not use are 0 (spec 3.9)
+    # every group sums its calls' tokens; `n_runs` is counted for profiles only (spec 3.9)
     groups: dict[str, LiteralString] = {
-        "profile": "r.profile as key, count(distinct r.id) as n_runs, 0 as input_tokens,"
-        " 0 as output_tokens",
-        "model": "lc.model as key, 0 as n_runs,"
-        " coalesce(sum(lc.input_tokens), 0) as input_tokens,"
-        " coalesce(sum(lc.output_tokens), 0) as output_tokens",
-        "purpose": "lc.purpose as key, 0 as n_runs, 0 as input_tokens, 0 as output_tokens",
+        "profile": "r.profile as key, count(distinct r.id) as n_runs",
+        "model": "lc.model as key, 0 as n_runs",
+        "purpose": "lc.purpose as key, 0 as n_runs",
     }
     grouped = {
         name: [
             _group(row)
             for row in conn.execute(
                 f"select {columns}, count(*) as n_calls,"
+                " coalesce(sum(lc.input_tokens), 0) as input_tokens,"
+                " coalesce(sum(lc.output_tokens), 0) as output_tokens,"
                 f" coalesce(sum(lc.cost_usd), 0) as cost_usd {_WINDOW_CALLS}"
                 " group by 1 order by 1",
                 window,
@@ -290,6 +291,15 @@ def events_head(conn: Connection[DictRow]) -> int:
     return int(row["head"])
 
 
+def run_events_head(conn: Connection[DictRow], run_id: str) -> int:
+    """The highest event id of ``run_id``; ``0`` when it has no events."""
+    row = conn.execute(
+        "select coalesce(max(id), 0) as head from events where run_id = %s", (run_id,)
+    ).fetchone()
+    assert row is not None
+    return int(row["head"])
+
+
 def replay_items(db: Database, store: ArtifactStore, run_id: str) -> list[ReplayItem]:
     """The replays of ``run_id``, oldest first, each with its report once it has one.
 
@@ -301,6 +311,14 @@ def replay_items(db: Database, store: ArtifactStore, run_id: str) -> list[Replay
     items: list[ReplayItem] = []
     for replay in replays:
         ref = run_refs(db, replay.id).get("replay_report")
-        report = store.get_model(ref.id, ReplayReport) if ref is not None else None
+        try:
+            report = store.get_model(ref.id, ReplayReport) if ref is not None else None
+        except ArtifactNotFound:
+            raise ApiError(
+                404,
+                "not_found",
+                f"replay report of {replay.id} is missing from the store",
+                run_id=run_id,
+            ) from None
         items.append(ReplayItem(run=replay, report=report))
     return items

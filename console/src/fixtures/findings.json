@@ -2,8 +2,8 @@
   "findings": [
     {
       "id": "F-1",
-      "row_id": "run_f3541e630110/F-1",
-      "run_id": "run_f3541e630110",
+      "row_id": "run_5b0aeecbc09d/F-1",
+      "run_id": "run_5b0aeecbc09d",
       "round": 1,
       "severity": "medium",
       "category": "performance",
@@ -20,12 +20,26 @@
       "source": "precheck",
       "check_key": "unreported_test:disc.ks.oot",
       "verdict": "check passes after remediation",
-      "closed_round": 2
+      "closed_round": 2,
+      "citations": [
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.ks.oot].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[disc.ks.oot].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[disc.ks.oot].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
     },
     {
       "id": "F-2",
-      "row_id": "run_f3541e630110/F-2",
-      "run_id": "run_f3541e630110",
+      "row_id": "run_5b0aeecbc09d/F-2",
+      "run_id": "run_5b0aeecbc09d",
       "round": 1,
       "severity": "medium",
       "category": "performance",
@@ -42,12 +56,26 @@
       "source": "precheck",
       "check_key": "unreported_test:sens.signs",
       "verdict": "check passes after remediation",
-      "closed_round": 2
+      "closed_round": 2,
+      "citations": [
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.signs].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.signs].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[sens.signs].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
     },
     {
       "id": "F-3",
-      "row_id": "run_f3541e630110/F-3",
-      "run_id": "run_f3541e630110",
+      "row_id": "run_5b0aeecbc09d/F-3",
+      "run_id": "run_5b0aeecbc09d",
       "round": 1,
       "severity": "medium",
       "category": "performance",
@@ -64,12 +92,26 @@
       "source": "precheck",
       "check_key": "unreported_test:sens.monotonic",
       "verdict": "check passes after remediation",
-      "closed_round": 2
+      "closed_round": 2,
+      "citations": [
+        {
+          "marker": "[A:86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.monotonic].status]",
+          "kind": "A",
+          "target": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39#tests[sens.monotonic].status",
+          "resolved": true,
+          "artifact_id": "86b8f3af768295d1ab7706b31321671c6c4fd86e55a0a59248cd44d48d394f39",
+          "artifact_kind": "validation_report",
+          "path": "tests[sens.monotonic].status",
+          "value": "pass",
+          "passage": null,
+          "note": null
+        }
+      ]
     },
     {
       "id": "F-4",
-      "row_id": "run_f3541e630110/F-4",
-      "run_id": "run_f3541e630110",
+      "row_id": "run_5b0aeecbc09d/F-4",
+      "run_id": "run_5b0aeecbc09d",
       "round": 1,
       "severity": "medium",
       "category": "monitoring",
@@ -86,12 +128,26 @@
       "source": "review",
       "check_key": null,
       "verdict": "the regenerated section addresses the finding",
-      "closed_round": 2
+      "closed_round": 2,
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#thresholds.psi_warn]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#thresholds.psi_warn",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "thresholds.psi_warn",
+          "value": 0.1,
+          "passage": null,
+          "note": null
+        }
+      ]
     },
     {
       "id": "F-5",
-      "row_id": "run_f3541e630110/F-5",
-      "run_id": "run_f3541e630110",
+      "row_id": "run_5b0aeecbc09d/F-5",
+      "run_id": "run_5b0aeecbc09d",
       "round": 1,
       "severity": "low",
       "category": "governance",
@@ -109,7 +165,21 @@
       "source": "review",
       "check_key": null,
       "verdict": "dispute noted; remains visible at sign-off",
-      "closed_round": null
+      "closed_round": null,
+      "citations": [
+        {
+          "marker": "[A:5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name]",
+          "kind": "A",
+          "target": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8#model_name",
+          "resolved": true,
+          "artifact_id": "5c2859d2c12245182829390b010502c17d4be5ca8af39e9560b74f695b3bcdd8",
+          "artifact_kind": "modeling_plan",
+          "path": "model_name",
+          "value": "synthetic_pd",
+          "passage": null,
+          "note": null
+        }
+      ]
     }
   ],
   "responses": [

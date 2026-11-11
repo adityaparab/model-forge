@@ -11,7 +11,7 @@ from modelforge_lineage.db import Database
 from modelforge_lineage.events import list_events
 from modelforge_lineage.inventory import get_for_run
 from modelforge_lineage.models import GateDecision
-from modelforge_lineage.queue import claim, enqueue
+from modelforge_lineage.queue import claim, enqueue, enqueue_if_absent, release
 from modelforge_lineage.runs import get_run, list_replays, request_pause, set_error
 from modelforge_lineage.steps import list_artifacts, list_steps
 from modelforge_lineage.store import ArtifactStore
@@ -65,6 +65,116 @@ def test_execute_parks_at_gates_and_completes(
     with database.connection() as conn:
         entry = get_for_run(conn, run_id)
         assert entry is not None and entry.status == "approved"
+
+
+@pytest.mark.db
+def test_gate_park_releases_the_queue_row_in_the_same_transaction(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A decision landing right after the park commits finds no queue row left behind."""
+    run_id = queued_run(database, store, SYNTHETIC, requester="alice")
+    in_window: list[bool] = []
+    real_get_logger = worker.get_logger
+
+    class _Spy:
+        def __init__(self, inner: Any) -> None:
+            self._inner = inner
+
+        def info(self, event: str, **kw: Any) -> None:
+            if event == "run.parked":
+                # The park has committed; the `finally` backstop has not run yet.
+                with database.transaction() as conn:
+                    in_window.append(enqueue_if_absent(conn, run_id, "resume"))
+                    release(conn, run_id)
+            self._inner.info(event, **kw)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(worker, "get_logger", lambda **kw: _Spy(real_get_logger(**kw)))
+    run = run_once(
+        settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient
+    )
+    assert run is not None and run.status == "awaiting_scope"
+    assert in_window == [True]
+    with database.transaction() as conn:
+        assert enqueue_if_absent(conn, run_id, "resume") is True
+
+
+@pytest.mark.db
+def test_a_decision_queued_after_the_park_survives_the_backstop(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The `finally` release must not delete a resume row enqueued after the park released."""
+    run_id = queued_run(database, store, SYNTHETIC, requester="alice")
+    real_get_logger = worker.get_logger
+
+    class _Spy:
+        def __init__(self, inner: Any) -> None:
+            self._inner = inner
+
+        def info(self, event: str, **kw: Any) -> None:
+            if event == "run.parked":
+                with database.transaction() as conn:
+                    enqueue_if_absent(conn, run_id, "resume")
+            self._inner.info(event, **kw)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self._inner, name)
+
+    monkeypatch.setattr(worker, "get_logger", lambda **kw: _Spy(real_get_logger(**kw)))
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    with database.transaction() as conn:
+        assert enqueue_if_absent(conn, run_id, "resume") is False
+
+
+@pytest.mark.db
+def test_needs_attention_is_written_before_the_span_records_the_failure(
+    settings: Settings,
+    database: Database,
+    store: ArtifactStore,
+    checkpointer: PostgresSaver,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A raising `record_failure` cannot lose the lineage writes or leave the row behind."""
+    run_id = queued_run(database, store, SYNTHETIC)
+    run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    real_call = InProcessToolClient.call
+
+    def failing(self: InProcessToolClient, server: Any, tool: str, request: Any, **kw: Any) -> Any:
+        if tool == "make_splits":
+            raise ToolError(
+                server=server, tool=tool, version="1.0.0", code="transport", message="server died"
+            )
+        return real_call(self, server, tool, request, **kw)
+
+    def broken(*args: Any, **kwargs: Any) -> None:
+        raise RuntimeError("recording failed")
+
+    monkeypatch.setattr(InProcessToolClient, "call", failing)
+    monkeypatch.setattr(worker, "record_failure", broken)
+    with database.transaction() as conn:
+        record_approval(
+            conn,
+            run_id,
+            GateDecision(gate="scope", decision="approve", approver="alice"),
+            current_plan=None,
+        )
+        enqueue(conn, run_id, "resume")
+    with pytest.raises(RuntimeError, match="recording failed"):
+        run_once(settings, database, store, run_id=run_id, tool_client_factory=InProcessToolClient)
+    with database.transaction() as conn:
+        run = get_run(conn, run_id)
+        assert run.status == "needs_attention" and run.error is not None
+        assert enqueue_if_absent(conn, run_id, "resume") is True
 
 
 @pytest.mark.db

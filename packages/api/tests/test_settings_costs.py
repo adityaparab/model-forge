@@ -164,6 +164,12 @@ def test_costs_window(db: Database, completed_run: str, client: TestClient) -> N
     assert sum(group["n_calls"] for group in body["by_purpose"]) == n_calls["n"]
     assert sum(group["n_calls"] for group in body["by_model"]) == n_calls["n"]
     assert sum(group["input_tokens"] for group in body["by_model"]) == body["tokens"]["input"]
+    assert body["tokens"]["input"] > 0 and body["tokens"]["output"] > 0  # the fake run has tokens
+    for groups in ("by_purpose", "by_profile"):
+        for field, total in (("input_tokens", "input"), ("output_tokens", "output")):
+            assert sum(group[field] for group in body[groups]) == body["tokens"][total], groups
+    document = next(group for group in body["by_purpose"] if group["key"] == "document")
+    assert document["input_tokens"] > 0 and document["output_tokens"] > 0
     assert body["by_day"] == [
         {"day": datetime.now(UTC).date().isoformat(), "cost_usd": 0.0, "n_calls": n_calls["n"]}
     ]

@@ -9,11 +9,13 @@ from modelforge_lineage.llm_calls import list_llm_calls
 from modelforge_lineage.runs import request_pause, set_status
 from modelforge_lineage.steps import list_artifacts, list_steps, list_tool_calls
 from modelforge_mcp.servers.data_profiler import LoadDatasetInput, ProfileDatasetInput
+from modelforge_orchestrator import steps as steps_module
 from modelforge_orchestrator.agent_schemas import QueryPlan
 from modelforge_orchestrator.deps import Deps
 from modelforge_orchestrator.schemas import RunState
 from modelforge_orchestrator.steps import PAUSE_EXEMPT, PauseRequested, Step, state_hash
-from modelforge_orchestrator.tools import ToolError
+from modelforge_orchestrator.tools import CURRENT_STEP, ToolError
+from opentelemetry import trace
 
 
 @pytest.mark.db
@@ -54,6 +56,26 @@ def test_step_failure_is_recorded_and_reraised(
     assert [e.type for e in events][-3:] == ["tool.failed", "error.recorded", "step.finished"]
     assert events[-2].payload["kind"] == "tool"
     assert events[-2].payload["error"]["code"] == "artifact_not_found"
+
+
+@pytest.mark.db
+def test_close_span_restores_context_when_recording_raises(
+    deps: Deps,
+    runtime: Runtime[Deps],
+    synthetic_state: RunState,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("recording failed")
+
+    monkeypatch.setattr(steps_module, "record_failure", broken)
+    before = trace.get_current_span()
+    with pytest.raises(RuntimeError, match="recording failed"):
+        with Step(deps, synthetic_state, "profile"):
+            assert CURRENT_STEP.get() is not None
+            raise ValueError("node failed")
+    assert CURRENT_STEP.get() is None
+    assert trace.get_current_span() is before
 
 
 QUERY_PROMPT = (

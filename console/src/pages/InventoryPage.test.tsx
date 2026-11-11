@@ -5,7 +5,7 @@ import { Route, Routes } from "react-router";
 import type { Schema } from "../api/client";
 import { InventoryPage } from "./InventoryPage";
 import { renderApp } from "../test/render";
-import { fixtures, installFetchStub } from "../test/server";
+import { RUN_ID, fixtures, installFetchStub } from "../test/server";
 
 test("inventory page lists entries", async () => {
   const inventory = fixtures<Schema<"InventoryEntry">[]>("inventory");
@@ -47,9 +47,9 @@ test("inventory page lists entries", async () => {
   expect(first.getByText("alice")).toBeInTheDocument();
   expect(first.getByText("approved")).toBeInTheDocument();
   expect(first.getByText("bob")).toBeInTheDocument();
-  expect(first.getByRole("link", { name: "run_f3541e630110" })).toHaveAttribute(
+  expect(first.getByRole("link", { name: RUN_ID })).toHaveAttribute(
     "href",
-    "/runs/run_f3541e630110",
+    `/runs/${RUN_ID}`,
   );
 
   const second = within(rows[1]);

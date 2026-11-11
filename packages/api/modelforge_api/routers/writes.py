@@ -220,7 +220,8 @@ def approve(
 def resume(run: Run, db: Db, body: Annotated[ResumeRequest | None, Body()] = None) -> RunRecord:
     """Continue a ``needs_attention`` or ``paused`` run from its last checkpoint."""
     with db.transaction() as conn:
-        current = runs.get_run(conn, run.id)
+        # Locked: a concurrent abort either lands first (and is seen here) or waits for us.
+        current = runs.get_run(conn, run.id, for_update=True)
         if current.status not in ("needs_attention", "paused"):
             raise ApiError(
                 409,

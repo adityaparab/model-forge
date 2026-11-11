@@ -8,6 +8,7 @@ import { Mono } from "../Mono";
 import { SeverityPill, type Severity } from "../SeverityPill";
 
 type FindingRow = Schema<"FindingRow">;
+type ResolvedCitation = Schema<"ResolvedCitation">;
 
 const SEVERITIES: readonly string[] = ["critical", "high", "medium", "low"] satisfies Severity[];
 
@@ -54,13 +55,15 @@ function Chip({ children }: { children: string }) {
 }
 
 /**
- * One evidence item: a citation marker becomes a chip (unresolved, since findings carry no
- * resolution), anything else is a section id and links to that section of the document.
+ * One evidence item: a citation marker becomes a chip with the API's resolution of it (the
+ * unresolved tone only when the API could not resolve it), anything else is a section id and
+ * links to that section of the document.
  */
-function EvidenceItem({ item }: { item: string }) {
+function EvidenceItem({ item, citations }: { item: string; citations: readonly ResolvedCitation[] }) {
   const parts = splitMarkers(item);
   if (parts.length === 1 && parts[0].kind === "marker") {
-    return <Citation marker={parts[0].marker} citation={undefined} />;
+    const marker = parts[0].marker;
+    return <Citation marker={marker} citation={citations.find((c) => c.marker === marker)} />;
   }
   return (
     <Link
@@ -72,13 +75,13 @@ function EvidenceItem({ item }: { item: string }) {
   );
 }
 
-/** The evidence of a finding or a response, inline. */
-export function EvidenceList({ items }: { items: string[] }) {
+/** The evidence of a finding or a response, inline, its markers resolved through `citations`. */
+export function EvidenceList({ items, citations }: { items: string[]; citations: readonly ResolvedCitation[] }) {
   if (items.length === 0) return <span className="text-xs text-muted">none</span>;
   return (
     <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {items.map((item) => (
-        <EvidenceItem key={item} item={item} />
+        <EvidenceItem key={item} item={item} citations={citations} />
       ))}
     </span>
   );
@@ -110,7 +113,7 @@ export function FindingCard({ finding }: { finding: FindingRow }) {
       <p className="text-[0.8125rem] leading-relaxed text-muted">{finding.description}</p>
       <dl className="flex flex-col gap-1.5 border-t border-border pt-2">
         <Field label="Evidence">
-          <EvidenceList items={finding.evidence} />
+          <EvidenceList items={finding.evidence} citations={finding.citations} />
         </Field>
         <Field label="Required action">{finding.required_action}</Field>
         <Field label="Response">
@@ -118,7 +121,7 @@ export function FindingCard({ finding }: { finding: FindingRow }) {
         </Field>
         {finding.response_evidence !== null && finding.response_evidence.length > 0 && (
           <Field label="Response evidence">
-            <EvidenceList items={finding.response_evidence} />
+            <EvidenceList items={finding.response_evidence} citations={finding.citations} />
           </Field>
         )}
         <Field label="Verdict">

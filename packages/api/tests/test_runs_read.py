@@ -2,6 +2,8 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from modelforge_lineage.store import ArtifactStore
+from modelforge_orchestrator.config import Settings
 
 from .conftest import POLISH_BRIEF, Drive, Submit
 
@@ -167,6 +169,61 @@ def test_artifacts_list_and_content(client: TestClient, completed_run: str, subm
         response = client.get(f"{base}/{missing}")
         assert response.status_code == 404
         assert response.json()["error"]["kind"] == "not_found"
+
+
+_HARDENING = {"content-security-policy": "sandbox", "x-content-type-options": "nosniff"}
+
+
+@pytest.mark.db
+def test_artifact_and_document_content_carry_hardening_headers(
+    client: TestClient, completed_run: str
+) -> None:
+    refs = _get(client, f"/runs/{completed_run}")["refs"]
+    base = f"{API}/runs/{completed_run}"
+    paths = [
+        f"{base}/artifacts/{refs[name]['id']}"
+        for name in ("validation", "document_html", "document_md", "champion_scores")
+    ]
+    paths += [f"{base}/document?format=html", f"{base}/document?format=md"]
+    for path in paths:
+        response = client.get(path)
+        assert response.status_code == 200, path
+        for header, value in _HARDENING.items():
+            assert response.headers.get(header) == value, (path, header)
+
+
+@pytest.mark.db
+def test_json_artifact_is_served_verbatim(
+    client: TestClient, completed_run: str, settings: Settings
+) -> None:
+    validation = _get(client, f"/runs/{completed_run}")["refs"]["validation"]["id"]
+    path = ArtifactStore(settings.artifact_dir).path(validation)
+    stored = path.read_bytes()
+    response = client.get(f"{API}/runs/{completed_run}/artifacts/{validation}")
+    assert response.status_code == 200 and response.content == stored
+    # a stored NaN (valid for Python's json, not for strict JSON) is served, not a 500
+    path.write_bytes(b'{"auc": NaN}')
+    response = client.get(f"{API}/runs/{completed_run}/artifacts/{validation}")
+    assert response.status_code == 200 and response.content == b'{"auc": NaN}'
+    assert response.headers["content-type"].startswith("application/json")
+
+
+@pytest.mark.db
+def test_missing_store_files_are_404(
+    client: TestClient, auto_replay: None, completed_run: str, drive: Drive, settings: Settings
+) -> None:
+    store = ArtifactStore(settings.artifact_dir)
+    manifest = _get(client, f"/runs/{completed_run}")["run"]["manifest_hash"]
+    (replay,) = _get(client, f"/runs/{completed_run}/replays")
+    drive(replay["run"]["id"])
+    report = _get(client, f"/runs/{replay['run']['id']}")["refs"]["replay_report"]["id"]
+    store.path(report).unlink()
+    response = client.get(f"{API}/runs/{completed_run}/replays")
+    assert response.status_code == 404 and response.json()["error"]["kind"] == "not_found"
+
+    store.path(manifest).unlink()
+    response = client.get(f"{API}/runs/{completed_run}/manifest")
+    assert response.status_code == 404 and response.json()["error"]["kind"] == "not_found"
 
 
 @pytest.mark.db

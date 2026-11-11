@@ -14,6 +14,7 @@ from modelforge_lineage import settings as server_settings
 from modelforge_lineage.approvals import record_approval
 from modelforge_lineage.db import Database
 from modelforge_lineage.models import GateDecision, RunRecord
+from modelforge_lineage.observability import configure_logging
 from modelforge_lineage.queue import enqueue
 from modelforge_lineage.store import ArtifactStore
 from modelforge_lineage.testing import database, database_url, db, spans
@@ -64,6 +65,12 @@ def make_settings(tmp: Path, database_url: str) -> Settings:
         knowledge_dir=REPO / "knowledge-base",
         gateway=GatewaySettings(prompts_dir=REPO / "prompts", profiles_dir=REPO / "profiles"),
     )
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _logging() -> None:
+    """The api tests' logging, set once: no test depends on what an earlier package's left."""
+    configure_logging("WARNING")
 
 
 @pytest.fixture

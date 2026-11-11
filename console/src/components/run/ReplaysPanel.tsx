@@ -10,7 +10,7 @@ const SETTLED: readonly string[] = ["completed", "rejected", "aborted", "needs_a
 
 type Badge = { text: string; tone: "ok" | "bad" | "neutral" };
 
-/** The reproducibility verdict of the latest replay. */
+/** The reproducibility verdict of one replay. */
 function badge(latest: ReplayItem): Badge {
   const { run, report } = latest;
   if (!SETTLED.includes(run.status) || report === null) {
@@ -29,6 +29,19 @@ function badge(latest: ReplayItem): Badge {
   return { text: `Reproduced: ${report.matched.length} artifacts matched`, tone: "ok" };
 }
 
+function reproduced({ run, report }: ReplayItem): boolean {
+  return run.status === "completed" && !run.rerun_llm && report !== null && report.ok;
+}
+
+/**
+ * The replay the badge speaks for: the latest completed plain replay that reproduced the run,
+ * else the latest one still in flight, else the latest replay of any kind.
+ */
+function featured(replays: ReplayItem[]): ReplayItem | undefined {
+  const latest = (match: (item: ReplayItem) => boolean) => [...replays].reverse().find(match);
+  return latest(reproduced) ?? latest((item) => !SETTLED.includes(item.run.status)) ?? replays.at(-1);
+}
+
 const TONE: Record<Badge["tone"], string> = {
   ok: "border-status-completed text-status-completed",
   bad: "border-status-attention text-status-attention",
@@ -39,8 +52,8 @@ const cell = "h-8 border-b border-border px-2 whitespace-nowrap";
 
 /** The run's replays (oldest first, as the server lists them) and whether they reproduced it. */
 export function ReplaysPanel({ replays }: { replays: ReplayItem[] }) {
-  const latest = replays.at(-1);
-  const verdict = latest === undefined ? null : badge(latest);
+  const shown = featured(replays);
+  const verdict = shown === undefined ? null : badge(shown);
   return (
     <section aria-label="Replays" className="flex flex-col gap-2">
       <div className="flex items-center gap-3">

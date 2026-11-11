@@ -41,6 +41,8 @@ from modelforge_lineage.tracing import (
 from modelforge_mcp.schemas import DatasetRef
 from opentelemetry import trace
 from opentelemetry.trace import Span
+from psycopg import Connection
+from psycopg.rows import DictRow
 from pydantic import BaseModel
 
 from modelforge_orchestrator.config import Settings, setting_seeds
@@ -218,6 +220,14 @@ def _run_span(run: RunRecord, kind: str, claimant: str) -> Span:
     return span
 
 
+def _settle(conn: Connection[DictRow], run_id: str) -> None:
+    """Clear the pause flag and release the queue row of a claimed run whose outcome is being
+    written in ``conn``'s transaction."""
+    # A pause requested too late (during an exempt node) must not reach a later execution.
+    runs.clear_pause(conn, run_id)
+    queue.release(conn, run_id)
+
+
 def execute(
     settings: Settings,
     db: Database,
@@ -237,6 +247,10 @@ def execute(
     graph = build_graph(make_checkpointer(db))
     claimant = worker_id if worker_id is not None else _this_worker_id()
     claimed = False
+    # Each outcome releases the queue row (and clears the pause flag) in the transaction that
+    # writes the parked status, so a decision landing right after it is never refused as
+    # "already queued"; the `finally` is the backstop, and must then leave a newer row alone.
+    settled = False
     span: Span = trace.INVALID_SPAN
     try:
         try:
@@ -310,10 +324,14 @@ def execute(
                         {"gate": prompt.gate, "summary": prompt.summary},
                     )
                     runs.set_status(conn, run_id, status)
+                    _settle(conn, run_id)
+                settled = True  # only once the transaction has committed
                 log.info("run.parked", status=status)
             else:
                 with db.transaction() as conn:
                     runs.set_status(conn, run_id, result["status"])
+                    _settle(conn, run_id)
+                settled = True
                 log.info("run.finished", status=result["status"])
                 if result["status"] == "completed":
                     _auto_replay(db, run)
@@ -321,27 +339,32 @@ def execute(
             # LangGraph 1.2.20 re-raises a node's exception as itself, not in an `ExceptionGroup`.
             with db.transaction() as conn:
                 runs.set_status(conn, run_id, "paused")
-                runs.clear_pause(conn, run_id)
                 append_event(conn, run_id, "run.paused", {"node": exc.node})
+                _settle(conn, run_id)
+            settled = True
             log.info("run.paused", node=exc.node)
         except Exception as exc:
-            record_failure(span, exc, trace_content=settings.gateway.trace_content)
             record = _error_record(db, run_id, exc)
             payload = record.model_dump(mode="json")
             with db.transaction() as conn:
                 runs.set_error(conn, run_id, payload)
                 runs.set_status(conn, run_id, "needs_attention")
+                _settle(conn, run_id)
+            settled = True
+            record_failure(span, exc, trace_content=settings.gateway.trace_content)
             # No `graph.update_state` here: LangGraph attributes it to the last completed node,
             # and after a gate that routed by `Command` that drops the pending task, so `resume`
             # ran nothing. The error lives in `runs.error` and the `error.recorded` event.
             log.error("run.needs_attention", error=payload)
         finally:
-            with db.transaction() as conn:
-                if claimed:
-                    # A pause requested too late (during an exempt node) must not reach a later
-                    # execution. A rejected claim never ran the run, so its flag is left alone.
-                    runs.clear_pause(conn, run_id)
-                queue.release(conn, run_id)
+            if not settled:
+                with db.transaction() as conn:
+                    if claimed:
+                        # A pause requested too late (during an exempt node) must not reach a
+                        # later execution. A rejected claim never ran the run, so its flag is
+                        # left alone.
+                        runs.clear_pause(conn, run_id)
+                    queue.release(conn, run_id)
         with db.connection() as conn:
             final = runs.get_run(conn, run_id)
         span.set_attribute(attr("final_status"), final.status)

@@ -1,4 +1,6 @@
 import shutil
+import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -11,7 +13,7 @@ from modelforge_lineage import settings as server_settings
 from modelforge_lineage.db import Database
 from modelforge_lineage.findings import insert_findings
 from modelforge_lineage.queue import claim
-from modelforge_lineage.runs import get_run
+from modelforge_lineage.runs import get_run, transition
 from modelforge_orchestrator import graph
 from modelforge_orchestrator.briefs import brief_hash
 from modelforge_orchestrator.config import Settings
@@ -268,6 +270,31 @@ def test_resume_from_cost_cap_park(db: Database, client: TestClient, drive: Driv
         422,
         "validation",
     )
+
+
+@pytest.mark.db
+def test_resume_locks_the_run_against_a_concurrent_abort(
+    db: Database, client: TestClient, drive: Drive
+) -> None:
+    run_id = submit_via_api(client, profile="fake-priced", cost_cap_usd=0.000001)["id"]
+    assert (run := drive(run_id)) is not None and run.status == "needs_attention"
+    answers: list[Any] = []
+    with db.transaction() as conn:
+        # An abort holding the run's row: the resume must wait for it, then see `aborted`.
+        conn.execute("select 1 from runs where id = %s for update", (run_id,))
+        resume = threading.Thread(
+            target=lambda: answers.append(
+                client.post(f"{API}/runs/{run_id}/resume", headers=_as("bob"))
+            )
+        )
+        resume.start()
+        time.sleep(0.5)
+        assert resume.is_alive(), "the resume did not wait for the row lock"
+        assert transition(conn, run_id, from_statuses=("needs_attention",), to="aborted")
+    resume.join(timeout=10)
+    (answer,) = answers
+    assert "aborted" in _error(answer, 409, "state")["message"]
+    assert not _queued(db, run_id)  # no resume row left on the aborted run
 
 
 @pytest.mark.db

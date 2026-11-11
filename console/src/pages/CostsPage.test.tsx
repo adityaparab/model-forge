@@ -6,7 +6,7 @@ import { Route, Routes } from "react-router";
 import type { Schema } from "../api/client";
 import { CostsPage } from "./CostsPage";
 import { renderApp } from "../test/render";
-import { calls, fixtures, installFetchStub } from "../test/server";
+import { RUN_ID, calls, fixtures, installFetchStub } from "../test/server";
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -54,9 +54,9 @@ test("costs page renders tiles and bars for the window", async () => {
   const runRows = within(byRun).getAllByRole("row").slice(1);
   expect(runRows).toHaveLength(2);
   const original = within(runRows[1]);
-  expect(original.getByRole("link", { name: "run_f3541e630110" })).toHaveAttribute(
+  expect(original.getByRole("link", { name: RUN_ID })).toHaveAttribute(
     "href",
-    "/runs/run_f3541e630110",
+    `/runs/${RUN_ID}`,
   );
   expect(original.getByText("completed")).toBeInTheDocument();
   expect(original.getByText("alice")).toBeInTheDocument();
