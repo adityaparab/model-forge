@@ -54,6 +54,25 @@ jobs:
           path: packages/mcp/contracts/goldens/
           if-no-files-found: error
 
+  docs:
+    needs: lint-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --all-groups
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+      - run: npm ci --prefix scripts
+      - run: npx --prefix scripts playwright install chromium
+      - run: make docs-check
+
   docker-build:
     runs-on: ubuntu-latest
     steps:

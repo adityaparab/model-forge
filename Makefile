@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install ui-dev api demo demo-down
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check ui-dev api demo demo-down
 
 PROFILE ?= default
 
@@ -64,6 +64,9 @@ console-fixtures:
 
 scripts-install:
 	npm ci --prefix scripts
+
+docs-check:
+	uv run python scripts/check_docs.py
 
 ui-dev:
 	npm run dev --prefix console
