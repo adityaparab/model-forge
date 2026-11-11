@@ -19,7 +19,7 @@ The API (`packages/api`, `modelforge_api`, the `modelforge-api` command) is a Fa
 | `GET /runs/{id}/findings` | the findings, their evidence citations resolved as in the document, the remediation responses and a summary |
 | `GET /runs/{id}/approvals`, `GET /runs/{id}/manifest`, `GET /runs/{id}/verify` | the approvals; the sealed manifest; the result of verifying the event chain, artifacts and manifest |
 | `GET /runs/{id}/events?after&limit` | a page of the run's events after an event id |
-| `GET /runs/{id}/replays` | the run's replays, oldest first, each as `{run, report}` (the report `null` until the replay seals) |
+| `GET /runs/{id}/replays` | the run's replays, oldest first, each as `{run, report, report_missing}` (the report `null` until the replay seals; `report_missing` true when the replay's report artifact is missing from the store) |
 | `GET /inventory`, `GET /inventory/{model_id}` | the model inventory; one entry |
 | `GET /costs?since&until` | costs across runs (see "Costs across runs") |
 | `GET /settings` | the editable settings, the last 20 audit rows, the configuration and the profiles |

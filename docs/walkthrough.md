@@ -174,7 +174,7 @@ The run is `completed`: the `seal` node wrote the manifest, and the approvals ta
 curl -s "$API/runs/$RUN/replays" -H 'X-ModelForge-User: bob'
 ```
 
-Each replay comes back as `{run, report}`, the report `null` until the replay seals. A replay can also be requested by an approver with `POST /api/v1/runs/{id}/replay`.
+Each replay comes back as `{run, report, report_missing}`, the report `null` until the replay seals and `report_missing` true when the replay's report artifact is missing from the store. A replay can also be requested by an approver with `POST /api/v1/runs/{id}/replay`.
 
 ## From a fresh clone
 
