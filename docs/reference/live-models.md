@@ -1,0 +1,41 @@
+This page is the reference for running against a real model; the README is the front door.
+
+# Running against a real model
+
+Each live profile runs the same governed sequence; only the profile changes.
+
+```bash
+# Anthropic: ANTHROPIC_API_KEY in .env
+MODELFORGE_PROFILE=default uv run modelforge run examples/briefs/polish-pd.yaml --requester alice
+
+# Ollama on localhost:11434
+ollama pull gpt-oss:20b
+MODELFORGE_PROFILE=local-ollama uv run modelforge run examples/briefs/polish-pd.yaml --requester alice
+
+# LM Studio serving google/gemma-4-26b-a4b-qat on port 1234
+MODELFORGE_PROFILE=local-lmstudio uv run modelforge run examples/briefs/polish-pd.yaml --requester alice
+```
+
+Then approve the three gates as in "Run a governed model build". If the challenger leaves a critical or high finding open or disputed, the sign-off gate refuses `approve` and names the findings; sign off with `approve_with_conditions` or `reject` instead. `MODELFORGE_OLLAMA_MODEL` and `MODELFORGE_LMSTUDIO_MODEL` run a different local model under the same profile, and the base URL variables point at another host. Ollama runs with a 32768-token context window unless `MODELFORGE_OLLAMA_NUM_CTX` sets another; pick one the model and the machine's memory support.
+
+Every provider returns structured output through its integration's `json_schema` method by default, Anthropic included (forced tool calling is unsupported when thinking is enabled). A route's `structured` key overrides that: the Anthropic profiles set `structured: function_calling` on the `scope` route, because the modeling-plan schema exceeds the structured-output grammar's complexity limit, while the document routes keep `json_schema`. A section-writing call may use up to 8192 output tokens and a query-planning call up to 1024; on a thinking model the thinking tokens count against that limit.
+
+Results on the Polish brief through the three gates, on one machine (Apple Silicon, 48 GB), with the deterministic artifacts identical across every run (out-of-time AUC 0.874, overall validation `fail`, 13 features). The `fake` row's findings, rounds, regenerated sections and LLM calls were measured on 10 November 2026 after the final-review fixes (its wall time at commit `5a11843`), with the challenger and the remediation loop; the `default` row was measured through the eval harness on 10 November 2026 at the head of this branch, and the `ci-cheap` profile has not been run. The four rows below them were measured on 10 November 2026 at commit `00e0c6b` and predate the challenger and the remediation loop, so their findings, rounds and regenerated-section columns read n/a:
+
+| Profile | Model | Outcome | Flagged sections | Ungrounded numbers | Findings (pre-check / review) | Rounds (challenge / remediation) | Sections regenerated | LLM calls | Cost (USD) | Wall time |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `fake` | `scripted-v1` | completed; signed off with `approve` | 0 of 11 | 0 | 9 (7 / 2): 8 closed, 1 disputed; max severity high, max open severity low | 2 / 1 | 2 (performance, monitoring) | 39 | 0 | 43 s |
+| `default` | `claude-opus-5-5` | completed and sealed; signed off with `approve_with_conditions` (the sign-off policy refused `approve` on four open high findings) | 0 of 11 (complete) | 0 | 13 (2 / 11): 4 high, 7 medium, 2 low; 3 closed, 10 open at sign-off; all 22 responses accepted, none disputed | 3 / 2 | 8 | 110 (0 schema retries) | 7.93 for the pipeline (scope 0.04, document 1.93, challenge 0.79, remediate 5.16) plus 3.19 for the six challenger probes | about 26 min of node time (document 540 s, challenge 113 s, remediate 911 s); 49 min wall, including a 22 min park at a 6 USD cost cap in the second remediation round, resumed with `modelforge resume --cost-cap 10.5` |
+| `ci-cheap` | `claude-sonnet-5-5` | not run in SP4 (not authorised beyond the `default` run); the `evals.yml` workflow needs a committed `evals/baselines/ci-cheap.json` before its comparison can pass | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| `default` (before the challenger) | `claude-opus-5-5` | completed; document rendered and sealed | 1 of 11 | 0 | n/a | n/a | n/a | 31 (4 sections regenerated once) | 2.03 | 10 min 30 s |
+| `local-ollama` (before the challenger) | `gpt-oss:20b` | completed; document rendered with banners | 10 of 11 | 159 | n/a | n/a | n/a | 52 (9 schema retries) | 0 | 26 min 8 s |
+| `local-lmstudio` (before the challenger) | `google/gemma-4-26b-a4b-qat` | parked in `needs_attention` at `document` (`provider`: output hit the 8192-token limit) | n/a | n/a | n/a | n/a | n/a | 6 | 0 | 3 min 28 s |
+| `local-lmstudio` with `MODELFORGE_LMSTUDIO_MODEL=meta/muse-glimmer` (before the challenger) | `meta/muse-glimmer` | parked in `needs_attention` at `document` (`provider`: a planning call hit the 1024-token limit) | n/a | n/a | n/a | n/a | n/a | 9 | 0 | 33 min 5 s |
+
+Under `fake` the seven pre-check findings are four undiscussed calibration, stability and benchmark tests (`cal.hl`, `cal.eo`, `stab.csi.max`, `bench.gap`) and three unreported passing out-of-time and sensitivity results (`disc.ks.oot`, `sens.signs`, `sens.monotonic`), all closed when the performance section was regenerated; the two review findings are the scripted monitoring finding, closed when the monitoring section was regenerated, and the scripted governance finding, which the scripted developer disputes. That dispute is low severity, so `approve` is allowed. Every number in the sealed document traces to an artifact. The `fake` findings are scripted, so this row shows the loop at work, not a review.
+
+The `default` row's eval metrics, from the committed `default` baseline: retrieval recall 1.0, grounding pass rate 1.0, scope exact match, and defect recall 0.6 over the five applicable classes (`removed_section`, `claimed_absent_test` and `miscited_regulation` detected; `undiscussed_breach` undetected because the removed test was still named elsewhere in the document; `missing_limitation` undetected because the reviewer raised the proxy issue under methodology and conceptual soundness rather than under data with the limitations section as evidence), with defect precision 0.07 (baseline findings are matched by title, which a live model rewords, so its findings on a mutated document count as extra). What these numbers mean: the document was fully grounded, with every number tracing to an artifact. The Opus reviewer raised substantive findings that a rewrite cannot resolve: the horizon file used as an out-of-time proxy, pooled horizons, failed out-of-time calibration and 401 duplicate rows. The Opus developer accepted every finding instead of disputing it or accepting it as a documented limitation, so the second remediation round repeated the cost without converging, and the run was sealed with conditions. The precision metric needs matching by category and section rather than by title before it is meaningful for live models.
+
+What the numbers mean for the earlier rows. The Anthropic run's one banner is the governance section, whose regenerated text still named SR 26-2 without a `[K:]` passage; every number in the document traces to an artifact. The Ollama model wrote fluent prose but did not follow the alias-marker rule: most of its "ungrounded numbers" are the digits of regulation names written in a form the checker's regulation-name pattern does not recognise, and its markers often misuse the path grammar, so ten sections carry the attention banner and the failure list. Gemma 4 on LM Studio never terminated its JSON for one writing call even with the larger budget, so the gateway recorded the provider error and the run parked; `resume` re-runs the node. These are measurements of the models under this prompt and checker, not of the data pipeline, which produced the same artifacts in every run.
+
+[Back to the README](../../README.md)

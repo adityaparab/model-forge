@@ -66,7 +66,7 @@ scripts-install:
 	npm ci --prefix scripts
 
 docs-check:
-	uv run python scripts/check_docs.py
+	uv run python scripts/check_docs.py --strict-readme
 
 RESULTS_DOCS = README.md docs/trade-offs.md docs/results/README.md
 
