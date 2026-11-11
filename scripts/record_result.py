@@ -139,10 +139,12 @@ def build_record(
             "total": m["n_findings"],
             "precheck": sources.get("precheck", 0),
             "review": sources.get("review", 0),
+            "critical": severities.get("critical", 0),
             "high": severities.get("high", 0),
             "medium": severities.get("medium", 0),
             "low": severities.get("low", 0),
-            "open_at_signoff": statuses.get("open", 0),
+            # Only a sealed run reached sign-off; an unsealed one has no such count.
+            "open_at_signoff": statuses.get("open", 0) if run.status == "completed" else None,
         },
         "rounds": {"challenge": m["challenge_rounds"], "remediation": m["remediation_rounds"]},
         "scope_exact_match": m["scope_exact_match"],
@@ -225,7 +227,8 @@ def _parity_row(r: dict[str, Any]) -> list[str]:
         if r["completeness_complete"] is None
         else f"{_yes_no(r['completeness_complete'])} ({r['n_flagged_sections']} flagged)",
         _cell(r["n_ungrounded_numbers"]),
-        f"{f['precheck']} / {f['review']}; {f['high']} / {f['medium']} / {f['low']}",
+        f"{f['precheck']} / {f['review']}; "
+        f"{f['critical']} / {f['high']} / {f['medium']} / {f['low']}",
         f"{rounds['challenge']} / {rounds['remediation']}",
         _cell(r["n_sections_regenerated"]),
         str(r["n_schema_retries"]),
@@ -266,7 +269,7 @@ _TABLES: dict[str, tuple[list[str], Callable[[dict[str, Any]], list[str]]]] = {
             "Grounding",
             "Complete",
             "Ungrounded numbers",
-            "Findings (pre-check / review; high / medium / low)",
+            "Findings (pre-check / review; critical / high / medium / low)",
             "Rounds (challenge / remediation)",
             "Sections regenerated",
             "Schema retries",
@@ -386,7 +389,8 @@ def lineage_report(
     ``finished_at``) and ``findings`` its findings rows (``source``, ``severity``,
     ``status``). Wall times follow the harness: last finish minus first start, and the
     summed durations of the finished steps per node. Rounds count the challenge and
-    remediate steps that ran. The eval-only metrics are None.
+    remediate steps that succeeded, so a failed or retried attempt is not a round.
+    The eval-only metrics are None.
     """
     spans = [(s.node, s.started_at, s.finished_at) for s in steps if s.finished_at is not None]
     by_node: dict[str, float] = {}
@@ -397,7 +401,7 @@ def lineage_report(
         if spans
         else 0.0
     )
-    nodes = [s.node for s in steps]
+    nodes = [s.node for s in steps if s.status == "succeeded"]
     metrics: dict[str, Any] = dict.fromkeys(EVAL_ONLY_METRICS)
     metrics |= {
         "pipeline_status": run.status,
@@ -467,6 +471,10 @@ def _add(args: argparse.Namespace) -> int:
         print(f"recorded {args.run_id} as {args.label!r} from lineage in {args.results}")
         return 0
     if args.report is None:
+        report_path = Path("evals/reports") / f"{args.profile}-{args.run_id}.json"
+        # A report left by an earlier run would pass the run-id check below even when this
+        # harness run failed before writing a new one, so it goes first.
+        report_path.unlink(missing_ok=True)
         done = subprocess.run(
             [
                 "uv",
@@ -483,14 +491,18 @@ def _add(args: argparse.Namespace) -> int:
             check=False,
         )
         # Exit 1 is a regression or budget failure, reported after the report file is
-        # written: with only these two layers, rules over the challenger layer's metrics
-        # (defect recall, probe cost) always fail as missing. The report is still the
-        # measurement; any other non-zero exit means no report was written.
+        # written: with only these two layers, a profile's rules over the challenger
+        # layer's metrics (defect recall, probe cost) fail as missing. The report is still
+        # the measurement. Any other exit, or no fresh report, means nothing to record.
         if done.returncode not in (0, 1):
             raise SystemExit(f"the eval harness exited {done.returncode}; no report recorded")
+        if not report_path.is_file():
+            raise SystemExit(
+                f"the eval harness exited {done.returncode} without writing {report_path}; "
+                "no report recorded"
+            )
         if done.returncode == 1:
             print("note: the harness reported regressions (see above); recording its report")
-        report_path = Path("evals/reports") / f"{args.profile}-{args.run_id}.json"
     else:
         report_path = Path(args.report)
     report = json.loads(report_path.read_text(encoding="utf-8"))

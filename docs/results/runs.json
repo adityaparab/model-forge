@@ -10,6 +10,7 @@
     "cost_cap_usd": 20.0,
     "cost_usd": 7.1848438,
     "findings": {
+      "critical": 0,
       "high": 4,
       "low": 0,
       "medium": 7,
@@ -37,7 +38,7 @@
     "orchestrator_version": "0.1.0",
     "output_tokens": 149474,
     "profile": "default",
-    "recorded_at": "2026-11-11T03:16:15Z",
+    "recorded_at": "2026-11-11T11:21:14Z",
     "replay_ok": true,
     "retrieval_recall_at_5": 1.0,
     "rounds": {
@@ -77,6 +78,7 @@
     "cost_cap_usd": 10.0,
     "cost_usd": 3.1933098,
     "findings": {
+      "critical": 0,
       "high": 12,
       "low": 0,
       "medium": 4,
@@ -104,7 +106,7 @@
     "orchestrator_version": "0.1.0",
     "output_tokens": 84859,
     "profile": "ci-cheap",
-    "recorded_at": "2026-11-11T03:15:18Z",
+    "recorded_at": "2026-11-11T11:21:17Z",
     "replay_ok": null,
     "retrieval_recall_at_5": 1.0,
     "rounds": {
@@ -144,10 +146,11 @@
     "cost_cap_usd": 10.0,
     "cost_usd": 0.0,
     "findings": {
+      "critical": 2,
       "high": 14,
       "low": 0,
       "medium": 1,
-      "open_at_signoff": 17,
+      "open_at_signoff": null,
       "precheck": 10,
       "review": 7,
       "total": 17
@@ -171,12 +174,12 @@
     "orchestrator_version": "0.1.0",
     "output_tokens": 150130,
     "profile": "local-ollama",
-    "recorded_at": "2026-11-11T11:15:46Z",
+    "recorded_at": "2026-11-11T11:21:20Z",
     "replay_ok": null,
     "retrieval_recall_at_5": null,
     "rounds": {
       "challenge": 1,
-      "remediation": 1
+      "remediation": 0
     },
     "run_id": "run_41b058364191",
     "scope_exact_match": null,

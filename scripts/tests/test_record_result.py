@@ -99,6 +99,7 @@ def test_build_record_from_report(fixture_report, fake_run, fake_approvals, fake
         "total": 5,
         "precheck": 3,
         "review": 2,
+        "critical": 0,
         "high": 0,
         "medium": 4,
         "low": 1,
@@ -179,7 +180,7 @@ def test_table_parity_row_values(record):
     assert header.startswith("| Profile | Model | Status |")
     assert row == (
         "| hosted-default | fake/scripted-v1 | completed, approve | 100.0% | yes (0 flagged) "
-        "| 0 | 3 / 2; 0 / 4 / 1 | 2 / 1 | 2 | 0 | 35 | 3.19 | 0:17 |"
+        "| 0 | 3 / 2; 0 / 0 / 4 / 1 | 2 / 1 | 2 | 0 | 35 | 3.19 | 0:17 |"
     )
 
 
@@ -387,6 +388,7 @@ class FakeStep:
     node: str
     started_at: Any
     finished_at: Any
+    status: str = "succeeded"
 
 
 def _parked_lineage():
@@ -405,10 +407,10 @@ def _parked_lineage():
         FakeStep("scope", t0, t0 + timedelta(seconds=10)),
         FakeStep("document", t0 + timedelta(seconds=10), t0 + timedelta(seconds=100)),
         FakeStep("challenge", t0 + timedelta(seconds=100), t0 + timedelta(seconds=130)),
-        FakeStep("remediate", t0 + timedelta(seconds=130), t0 + timedelta(seconds=200)),
+        FakeStep("remediate", t0 + timedelta(seconds=130), t0 + timedelta(seconds=200), "failed"),
     ]
     findings = [
-        {"source": "precheck", "severity": "high", "status": "open"},
+        {"source": "precheck", "severity": "critical", "status": "open"},
         {"source": "review", "severity": "high", "status": "open"},
         {"source": "review", "severity": "medium", "status": "open"},
     ]
@@ -437,17 +439,19 @@ def test_lineage_report_builds_a_record_for_an_unsealed_run():
         "total": 3,
         "precheck": 1,
         "review": 2,
-        "high": 2,
+        "critical": 1,
+        "high": 1,
         "medium": 1,
         "low": 0,
-        "open_at_signoff": 3,
+        "open_at_signoff": None,
     }
-    assert rec["rounds"] == {"challenge": 1, "remediation": 1}
+    assert rec["rounds"] == {"challenge": 1, "remediation": 0}
     for key in record_result.EVAL_ONLY_METRICS:
         assert rec[key] is None
     assert rec["replay_ok"] is None and rec["note"] == "parked"
     parity = record_result.table("parity", [rec])
     assert "needs_attention, n/a" in parity and "| - | - | - |" in parity
+    assert "| 1 / 2; 1 / 1 / 1 / 0 | 1 / 0 |" in parity
     assert "None" not in parity
 
 
@@ -474,3 +478,26 @@ def test_add_from_lineage_skips_harness_and_report(monkeypatch, tmp_path):
     wrong = ["add", "run_parked", "--profile", "default", "--label", "x", "--from-lineage"]
     with pytest.raises(SystemExit, match="local-ollama"):
         record_result.main([*wrong, "--results", str(results)])
+
+
+def test_add_refuses_a_stale_report_when_the_harness_writes_none(
+    monkeypatch, tmp_path, fake_run, fake_approvals, fake_replays
+):
+    """Exit 1 without a fresh report: an older report at the same path is not recorded."""
+    monkeypatch.chdir(tmp_path)
+    stale = tmp_path / "evals" / "reports" / "fake-run_b4b2b2f8e6d4.json"
+    stale.parent.mkdir(parents=True)
+    stale.write_text(FIXTURE_REPORT.read_text())
+
+    def crashed_harness(argv, check):
+        return subprocess.CompletedProcess(argv, 1)
+
+    monkeypatch.setattr(record_result.subprocess, "run", crashed_harness)
+    monkeypatch.setattr(
+        record_result, "load_lineage", lambda run_id: (fake_run, fake_approvals, fake_replays)
+    )
+    results = tmp_path / "runs.json"
+    argv = ["add", "run_b4b2b2f8e6d4", "--profile", "fake", "--label", "l"]
+    with pytest.raises(SystemExit, match="without writing"):
+        record_result.main([*argv, "--results", str(results)])
+    assert not results.exists() and not stale.exists()
