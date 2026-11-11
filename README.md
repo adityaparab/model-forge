@@ -150,7 +150,7 @@ The [reference pages](docs/index.md#reference) hold the detail that used to live
 
 ## Status
 
-Sub-projects 1 to 5 are complete: the core toolkit; the governed orchestrator with its lineage store and MCP servers; the LLM gateway, knowledge layer and agents; the challenger, the remediation loop and the eval harness; and the API, the console and `make demo`. Sub-project 6, this documentation with its measurements and the demo recording, is in progress. How it was built, spec by spec and plan by plan, is under [`docs/superpowers/`](docs/index.md#how-it-was-built).
+The six sub-projects are complete: the core toolkit; the governed orchestrator with its lineage store and MCP servers; the LLM gateway, knowledge layer and agents; the challenger, the remediation loop and the eval harness; the API, the console and `make demo`; and this documentation with its measurements and the demo recording. How it was built, spec by spec and plan by plan, is under [`docs/superpowers/`](docs/index.md#how-it-was-built).
 
 ## License
 
