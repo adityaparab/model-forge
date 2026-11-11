@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check results results-check ui-dev api demo demo-down fresh-clone-test
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check results results-check ui-dev api demo demo-down demo-record fresh-clone-test
 
 PROFILE ?= default
 
@@ -90,6 +90,14 @@ demo:
 		&& { [ -n "$$MODELFORGE_DEMO_NO_OPEN" ] || (open "http://localhost:8000/runs/$$id" || xdg-open "http://localhost:8000/runs/$$id") >/dev/null 2>&1 || true; }
 
 demo-down: down
+
+# a stack of its own (project modelforge-record, Postgres on 5433), always torn down with -v
+demo-record:
+	@export COMPOSE_PROJECT_NAME=modelforge-record MODELFORGE_POSTGRES_PORT=5433 MODELFORGE_AUTO_REPLAY=1; \
+	trap 'docker compose down -v' EXIT; \
+	docker compose up -d --build --wait \
+		&& for i in $$(seq 120); do curl -sf http://localhost:8000/api/v1/health | grep -q '"ok"' && break; sleep 1; done \
+		&& node scripts/demo_record.mjs --out docs/media
 
 fresh-clone-test:
 	bash scripts/fresh_clone_test.sh
