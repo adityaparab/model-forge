@@ -184,6 +184,12 @@ Each replay comes back as `{run, report, report_missing}`, the report `null` unt
 fresh-clone: awaiting_scope after 25 s
 ```
 
-That run reused Docker's build cache and base images from earlier builds on the same machine, so it measures the clone, the stack start-up and the run to its first gate, not a cold image build; on a machine that has never built the images, the first `make demo` also pulls the base images and builds the two application images. The full set of targets is in [Commands](reference/commands.md), and the stack in [Compose](reference/compose.md).
+That run reused Docker's build cache and base images from earlier builds on the same machine, so it measures the clone, the stack start-up and the run to its first gate, not a cold image build. The cold path is measured by the manual `demo.yml` workflow on a GitHub-hosted Ubuntu runner that has never built the images: it pulls the base images, builds the two application images, downloads nothing else and printed:
+
+```text
+fresh-clone: awaiting_scope after 171 s
+```
+
+The runner's measurement includes the image build and the stack start-up; on a laptop with a cold cache expect the same order of magnitude. The full set of targets is in [Commands](reference/commands.md), and the stack in [Compose](reference/compose.md).
 
 [Back to the README](../README.md)
