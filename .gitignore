@@ -29,3 +29,8 @@ console/node_modules/
 # superpowers SDD scratch (ledger, briefs, review packages)
 .superpowers/
 out/
+
+# docs tooling (SP6)
+scripts/node_modules/
+.neutrality-patterns
+docs/media/*.webm

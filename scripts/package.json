@@ -1,0 +1,11 @@
+{
+  "name": "modelforge-docs-tooling",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Pinned tooling for the demo recording and the docs checks; not part of the console.",
+  "devDependencies": {
+    "playwright": "1.64.1",
+    "@mermaid-js/mermaid-cli": "12.0.0"
+  }
+}

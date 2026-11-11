@@ -52,6 +52,7 @@ testpaths = [
     "packages/orchestrator/tests",
     "packages/evals/tests",
     "packages/api/tests",
+    "scripts/tests",
 ]
 addopts = "-ra --import-mode=importlib"
 markers = [

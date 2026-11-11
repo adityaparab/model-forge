@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures ui-dev api demo demo-down
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install ui-dev api demo demo-down
 
 PROFILE ?= default
 
@@ -61,6 +61,9 @@ console-types:
 
 console-fixtures:
 	uv run modelforge-api fixtures --out console/src/fixtures
+
+scripts-install:
+	npm ci --prefix scripts
 
 ui-dev:
 	npm run dev --prefix console
