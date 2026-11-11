@@ -1,7 +1,7 @@
 [
   {
     "model_id": "synthetic_pd@v1",
-    "run_id": "run_5b0aeecbc09d",
+    "run_id": "run_30030ee03162",
     "name": "synthetic_pd",
     "version": 1,
     "owner": "alice",
@@ -27,7 +27,7 @@
         "disc.gap.train_oot": "pass"
       }
     },
-    "approved_at": "2026-11-11T00:32:56.498826Z",
+    "approved_at": "2026-11-11T02:41:23.486683Z",
     "approver": "bob",
     "conditions": null,
     "next_review": null

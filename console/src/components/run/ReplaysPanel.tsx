@@ -85,7 +85,7 @@ export function ReplaysPanel({ replays }: { replays: ReplayItem[] }) {
             </tr>
           </thead>
           <tbody>
-            {replays.map(({ run, report }) => (
+            {replays.map(({ run, report, report_missing }) => (
               <tr key={run.id}>
                 <td className={cell}>
                   <Link
@@ -99,7 +99,11 @@ export function ReplaysPanel({ replays }: { replays: ReplayItem[] }) {
                   {run.rerun_llm ? "--rerun-llm" : "plain"}
                 </td>
                 <td className={cell}>
-                  <StatusPill status={run.status} />
+                  {report_missing ? (
+                    <span className="text-xs font-medium text-status-attention">report missing</span>
+                  ) : (
+                    <StatusPill status={run.status} />
+                  )}
                 </td>
                 <td className={`${cell} font-mono text-[0.8125rem] tabular-nums`}>
                   {report === null ? "-" : report.matched.length}

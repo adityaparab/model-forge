@@ -1,6 +1,9 @@
 import json
 import re
 import shutil
+import subprocess
+import threading
+import time
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -82,6 +85,46 @@ def test_cli_resume_and_abort(cli: Cli, settings: Settings) -> None:
     with psycopg.connect(settings.database_url, autocommit=True) as conn:
         conn.execute("update runs set status = 'completed' where id = %s", (run_id,))
     assert cli("abort", run_id).returncode == 2
+
+
+@pytest.mark.db
+def test_abort_transitions_before_release(cli: Cli, settings: Settings) -> None:
+    run_id = run_id_from(cli("run", str(SYNTHETIC), "--requester", "alice", "--detach").stdout)
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        conn.execute("update runs set status = 'awaiting_model' where id = %s", (run_id,))
+        conn.execute("update run_queue set kind = 'resume' where run_id = %s", (run_id,))
+    results: list[subprocess.CompletedProcess[str]] = []
+    with (
+        psycopg.connect(settings.database_url) as holder,
+        psycopg.connect(settings.database_url, autocommit=True) as probe,
+    ):
+        # Holding the run row, as a resume does: the abort must wait before touching the queue.
+        holder.execute("select 1 from runs where id = %s for update", (run_id,))
+        abort = threading.Thread(target=lambda: results.append(cli("abort", run_id)))
+        abort.start()
+        deadline = time.monotonic() + 60
+        while (
+            probe.execute(
+                "select 1 from pg_stat_activity where datname = current_database()"
+                " and wait_event_type = 'Lock' and pid <> pg_backend_pid()"
+            ).fetchone()
+            is None
+        ):
+            assert abort.is_alive() and time.monotonic() < deadline, "the abort never waited"
+            time.sleep(0.05)
+        unlocked = probe.execute(
+            "select 1 from run_queue where run_id = %s for update skip locked", (run_id,)
+        ).fetchone()
+        assert unlocked is not None, "the abort released the queue row before the run"
+        time.sleep(0.3)
+        holder.rollback()
+    abort.join(timeout=60)
+    (result,) = results
+    assert result.returncode == 0, result.stderr
+    assert cli("status", run_id).stdout.splitlines()[0] == f"{run_id} aborted"
+    with psycopg.connect(settings.database_url, autocommit=True) as conn:
+        queued = conn.execute("select 1 from run_queue where run_id = %s", (run_id,)).fetchone()
+        assert queued is None
 
 
 @pytest.mark.db

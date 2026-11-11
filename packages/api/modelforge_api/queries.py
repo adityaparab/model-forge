@@ -7,13 +7,13 @@ from typing import Any, LiteralString
 from modelforge_lineage import runs
 from modelforge_lineage.db import Database
 from modelforge_lineage.models import ArtifactRow, EventRecord, InventoryEntry
+from modelforge_lineage.observability import get_logger
 from modelforge_lineage.store import ArtifactNotFound, ArtifactStore
 from modelforge_orchestrator.inspect import run_refs
 from modelforge_orchestrator.schemas import ReplayReport
 from psycopg import Connection
 from psycopg.rows import DictRow
 
-from modelforge_api.errors import ApiError
 from modelforge_api.schemas import (
     CostBucket,
     CostDay,
@@ -40,6 +40,8 @@ __all__ = [
     "replay_items",
     "run_events_head",
 ]
+
+_log = get_logger(component="api")
 
 SEVERITY_ORDER = ("critical", "high", "medium", "low")
 
@@ -303,6 +305,9 @@ def run_events_head(conn: Connection[DictRow], run_id: str) -> int:
 def replay_items(db: Database, store: ArtifactStore, run_id: str) -> list[ReplayItem]:
     """The replays of ``run_id``, oldest first, each with its report once it has one.
 
+    A sealed replay whose report artifact is missing from the store is listed with
+    ``report_missing`` set (and a warning logged), not refused: the run detail lists replays.
+
     Takes the `Database`, not a connection: the report ref is read from each replay's
     checkpoint through `run_refs`.
     """
@@ -314,11 +319,8 @@ def replay_items(db: Database, store: ArtifactStore, run_id: str) -> list[Replay
         try:
             report = store.get_model(ref.id, ReplayReport) if ref is not None else None
         except ArtifactNotFound:
-            raise ApiError(
-                404,
-                "not_found",
-                f"replay report of {replay.id} is missing from the store",
-                run_id=run_id,
-            ) from None
+            _log.warning("replay.report_missing", run_id=run_id, replay_run_id=replay.id)
+            items.append(ReplayItem(run=replay, report=None, report_missing=True))
+            continue
         items.append(ReplayItem(run=replay, report=report))
     return items

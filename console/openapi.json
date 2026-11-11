@@ -2189,6 +2189,11 @@
               }
             ]
           },
+          "report_missing": {
+            "default": false,
+            "title": "Report Missing",
+            "type": "boolean"
+          },
           "run": {
             "$ref": "#/components/schemas/RunRecord"
           }

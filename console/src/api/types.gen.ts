@@ -1345,6 +1345,11 @@ export interface components {
         /** ReplayItem */
         ReplayItem: {
             report: components["schemas"]["ReplayReport"] | null;
+            /**
+             * Report Missing
+             * @default false
+             */
+            report_missing: boolean;
             run: components["schemas"]["RunRecord"];
         };
         /** ReplayMismatch */

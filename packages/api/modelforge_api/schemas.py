@@ -175,6 +175,8 @@ class ReplayItem(BaseModel):
     run: RunRecord
     report: ReplayReport | None
     """The replay's `ReplayReport`; ``None`` until the replay has sealed."""
+    report_missing: bool = False
+    """The replay sealed but its report artifact is not in the store."""
 
 
 class TraceLinks(BaseModel):

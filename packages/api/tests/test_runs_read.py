@@ -209,21 +209,29 @@ def test_json_artifact_is_served_verbatim(
 
 
 @pytest.mark.db
-def test_missing_store_files_are_404(
-    client: TestClient, auto_replay: None, completed_run: str, drive: Drive, settings: Settings
+def test_missing_manifest_is_404(
+    client: TestClient, completed_run: str, settings: Settings
 ) -> None:
     store = ArtifactStore(settings.artifact_dir)
     manifest = _get(client, f"/runs/{completed_run}")["run"]["manifest_hash"]
-    (replay,) = _get(client, f"/runs/{completed_run}/replays")
-    drive(replay["run"]["id"])
-    report = _get(client, f"/runs/{replay['run']['id']}")["refs"]["replay_report"]["id"]
-    store.path(report).unlink()
-    response = client.get(f"{API}/runs/{completed_run}/replays")
-    assert response.status_code == 404 and response.json()["error"]["kind"] == "not_found"
-
     store.path(manifest).unlink()
     response = client.get(f"{API}/runs/{completed_run}/manifest")
     assert response.status_code == 404 and response.json()["error"]["kind"] == "not_found"
+
+
+@pytest.mark.db
+def test_missing_replay_report_is_flagged_not_404(
+    client: TestClient, auto_replay: None, completed_run: str, drive: Drive, settings: Settings
+) -> None:
+    (replay,) = _get(client, f"/runs/{completed_run}/replays")
+    assert replay["report_missing"] is False  # not sealed yet: no report, none missing
+    drive(replay["run"]["id"])
+    report = _get(client, f"/runs/{replay['run']['id']}")["refs"]["replay_report"]["id"]
+    ArtifactStore(settings.artifact_dir).path(report).unlink()
+    (replay,) = _get(client, f"/runs/{completed_run}/replays")
+    assert replay["run"]["status"] == "completed"
+    assert replay["report"] is None and replay["report_missing"] is True
+    assert _get(client, f"/runs/{completed_run}")["replays"] == [replay]
 
 
 @pytest.mark.db

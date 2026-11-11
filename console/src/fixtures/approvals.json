@@ -1,7 +1,7 @@
 [
   {
-    "id": "appr_d46bef42be1d",
-    "run_id": "run_5b0aeecbc09d",
+    "id": "appr_2671456a33c5",
+    "run_id": "run_30030ee03162",
     "gate": "scope",
     "decision": "approve",
     "approver": "alice",
@@ -18,11 +18,11 @@
     "plan_diff": null,
     "conditions": null,
     "adjust_target": null,
-    "ts": "2026-11-11T00:32:54.884532Z"
+    "ts": "2026-11-11T02:41:21.891522Z"
   },
   {
-    "id": "appr_f0cf159c5e76",
-    "run_id": "run_5b0aeecbc09d",
+    "id": "appr_d199a9e837ea",
+    "run_id": "run_30030ee03162",
     "gate": "model",
     "decision": "accept",
     "approver": "bob",
@@ -39,11 +39,11 @@
     "plan_diff": null,
     "conditions": null,
     "adjust_target": null,
-    "ts": "2026-11-11T00:32:56.134796Z"
+    "ts": "2026-11-11T02:41:23.120264Z"
   },
   {
-    "id": "appr_7cd55a5a9103",
-    "run_id": "run_5b0aeecbc09d",
+    "id": "appr_602257f9d74c",
+    "run_id": "run_30030ee03162",
     "gate": "signoff",
     "decision": "approve",
     "approver": "bob",
@@ -60,6 +60,6 @@
     "plan_diff": null,
     "conditions": null,
     "adjust_target": null,
-    "ts": "2026-11-11T00:32:56.452981Z"
+    "ts": "2026-11-11T02:41:23.437260Z"
   }
 ]

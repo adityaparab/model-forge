@@ -250,7 +250,7 @@ def pause(run: Run, db: Db) -> RunRecord:
 def abort(run: Run, db: Db) -> RunRecord:
     """Mark a run aborted; a running run must be paused first."""
     with db.transaction() as conn:
-        release(conn, run.id)  # a pending start or resume; rolled back with a refusal
+        # The run row first, then its queue row: the lock order `resume` takes.
         if not runs.transition(conn, run.id, from_statuses=ABORTABLE, to="aborted"):
             status = runs.get_run(conn, run.id).status
             if status == "running":
@@ -261,6 +261,7 @@ def abort(run: Run, db: Db) -> RunRecord:
                     f" (POST /runs/{run.id}/pause), then abort it once it is paused",
                 )
             raise ApiError(409, "state", f"run {run.id} is {status} and cannot be aborted")
+        release(conn, run.id)  # a pending start or resume
         return runs.get_run(conn, run.id)
 
 

@@ -34,6 +34,7 @@ function replay(
           matched: base.report.matched.slice(0, matched),
         }
       : null,
+    report_missing: false,
   };
 }
 
@@ -76,4 +77,17 @@ test("without a reproduced plain replay an in-flight replay shows, then the late
     />,
   );
   expect(verdict()).toBe("Replay with --rerun-llm matched 20 artifacts");
+});
+
+test("a replay with a missing report shows report missing", () => {
+  const sealed = replay("run_sealed", { matched: 23, rerunLlm: false });
+  renderApp(
+    <ReplaysPanel
+      replays={[{ ...sealed, report: null, report_missing: true }]}
+    />,
+  );
+  const [, row] = screen.getAllByRole("row");
+  const status = row.querySelectorAll("td")[2];
+  expect(status.textContent).toBe("report missing");
+  expect(verdict()).not.toMatch(/^Reproduced/);
 });

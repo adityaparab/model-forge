@@ -294,9 +294,10 @@ def abort(run_id: Annotated[str, typer.Argument(metavar="RUN_ID")]) -> None:
         _get_run(db, run_id)  # exits 2 for an unknown run
         try:
             with db.transaction() as conn:
-                release(conn, run_id)  # a pending start or resume; kept when the abort is refused
+                # The run row first, then its queue row: the lock order `resume` takes.
                 if not runs.transition(conn, run_id, from_statuses=_ABORTABLE, to="aborted"):
-                    raise _RefusedError  # rolls the release back
+                    raise _RefusedError
+                release(conn, run_id)  # a pending start or resume
         except _RefusedError:
             current = _get_run(db, run_id)
             if current.status == "running":

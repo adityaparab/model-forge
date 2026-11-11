@@ -297,6 +297,58 @@ def test_resume_locks_the_run_against_a_concurrent_abort(
     assert not _queued(db, run_id)  # no resume row left on the aborted run
 
 
+def _blocked_on_a_lock(database: Database, timeout_s: float = 30.0) -> None:
+    """Wait until another session of this database waits on a lock (the abort, on the run row)."""
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        with database.transaction() as conn:
+            waiting = conn.execute(
+                "select 1 from pg_stat_activity where datname = current_database()"
+                " and wait_event_type = 'Lock' and pid <> pg_backend_pid()"
+            ).fetchone()
+        if waiting is not None:
+            return
+        time.sleep(0.05)
+    raise AssertionError("no session waited on the run row lock")
+
+
+def _queue_row_unlocked(database: Database, run_id: str) -> bool:
+    """The run's queue row exists and no open transaction has locked (or deleted) it."""
+    with database.transaction() as conn:
+        return (
+            conn.execute(
+                "select 1 from run_queue where run_id = %s for update skip locked", (run_id,)
+            ).fetchone()
+            is not None
+        )
+
+
+@pytest.mark.db
+def test_abort_locks_the_run_before_releasing_the_queue(db: Database, client: TestClient) -> None:
+    run_id = submit_via_api(client)["id"]
+    with db.transaction() as conn:
+        conn.execute("update runs set status = 'awaiting_model' where id = %s", (run_id,))
+        conn.execute("update run_queue set kind = 'resume' where run_id = %s", (run_id,))
+    answers: list[Any] = []
+    with db.transaction() as conn:
+        # Holding the run row, as a resume does: the abort must wait before touching the queue.
+        conn.execute("select 1 from runs where id = %s for update", (run_id,))
+        abort = threading.Thread(
+            target=lambda: answers.append(
+                client.post(f"{API}/runs/{run_id}/abort", headers=_as("bob"))
+            )
+        )
+        abort.start()
+        _blocked_on_a_lock(db)
+        assert _queue_row_unlocked(db, run_id), "the abort released the queue row before the run"
+        time.sleep(0.3)
+    abort.join(timeout=10)
+    (answer,) = answers
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["status"] == "aborted"
+    assert not _queued(db, run_id)
+
+
 @pytest.mark.db
 def test_pause_and_resume(
     db: Database, client: TestClient, drive: Drive, monkeypatch: pytest.MonkeyPatch
