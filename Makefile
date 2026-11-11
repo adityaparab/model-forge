@@ -1,4 +1,4 @@
-.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check results results-check ui-dev api demo demo-down
+.PHONY: lint format test test-fast sync example db-up db-down goldens migrate worker up down evals evals-live evals-baseline console console-test console-types console-fixtures scripts-install docs-check results results-check ui-dev api demo demo-down fresh-clone-test
 
 PROFILE ?= default
 
@@ -87,6 +87,9 @@ demo:
 	@for i in $$(seq 60); do curl -sf http://localhost:8000/api/v1/health | grep -q '"ok"' && break; sleep 1; done
 	@id=$$(curl -sf -X POST 'http://localhost:8000/api/v1/runs?profile=fake' -H 'X-ModelForge-User: alice' -H 'Content-Type: application/yaml' --data-binary @examples/briefs/polish-pd.yaml | python3 -c 'import json, sys; print(json.load(sys.stdin)["id"])') \
 		&& echo "run $$id" && echo "http://localhost:8000/runs/$$id" \
-		&& { (open "http://localhost:8000/runs/$$id" || xdg-open "http://localhost:8000/runs/$$id") >/dev/null 2>&1 || true; }
+		&& { [ -n "$$MODELFORGE_DEMO_NO_OPEN" ] || (open "http://localhost:8000/runs/$$id" || xdg-open "http://localhost:8000/runs/$$id") >/dev/null 2>&1 || true; }
 
 demo-down: down
+
+fresh-clone-test:
+	bash scripts/fresh_clone_test.sh
