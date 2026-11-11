@@ -92,6 +92,11 @@ def test_oversized_gif_fails(tmp_docs_ok: Path) -> None:
     assert failures[0].check == "sizes"
 
 
+def test_gif_at_the_limit_passes(tmp_docs_ok: Path) -> None:
+    (tmp_docs_ok / "docs" / "media" / "demo.gif").write_bytes(b"\0" * (8 * 1024 * 1024))
+    assert check_docs.check_sizes(tmp_docs_ok, {"docs/media/demo.gif": 8 * 1024 * 1024}) == []
+
+
 def test_neutrality_hit_fails(tmp_docs_ok: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("MODELFORGE_NEUTRALITY_PATTERNS", "Acme Bank;zephyr-box")
     (tmp_docs_ok / "docs" / "a.md").write_text("built at Acme Bank\n")

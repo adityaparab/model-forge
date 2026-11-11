@@ -18,7 +18,7 @@
 - Every document states once that ModelForge is a reference implementation, not a production system (spec 5).
 - Every number in `README.md` and `docs/trade-offs.md` comes from a results block rendered from `docs/results/runs.json`; no metric is typed by hand or passed on a command line (spec 3.2, 4.2).
 - Pinned versions: `playwright@1.64.1` (Chromium 1248), `@mermaid-js/mermaid-cli@12.0.0`; exact versions in `scripts/package.json` and its lockfile (spec 3.1, 6).
-- The README is at most 220 lines; `docs/media/demo.gif` under 8 MB; `docs/media/demo.mp4` under 25 MB (spec 2, 6).
+- The README is at most 220 lines; `docs/media/demo.gif` under 8 MiB; `docs/media/demo.mp4` under 25 MiB (spec 2, 6).
 - The reference carve-out moves text unchanged apart from the lead line, the back link and repointed relative links (spec 5.2).
 - Tests and `ci.yml` stay offline; `demo.yml` is `workflow_dispatch` only (spec 3.3, 6).
 - No live provider spend beyond the two runs already made (`run_d7e6c78b53b3` default, `run_378df0420b8c` ci-cheap); the local-ollama run is free (spec 4.1).

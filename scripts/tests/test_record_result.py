@@ -257,6 +257,15 @@ def test_render_check_detects_stale_block(tmp_path, record, capsys):
     assert record_result.main(["render", "--check", str(doc), "--results", str(results)]) == 0
 
 
+def test_render_unknown_block_fails_with_one_line(tmp_path, capsys):
+    results = tmp_path / "runs.json"
+    results.write_text("[]\n")
+    doc = tmp_path / "doc.md"
+    doc.write_text("a\n<!-- results:nope -->\n<!-- /results:nope -->\n")
+    assert record_result.main(["render", "--check", str(doc), "--results", str(results)]) == 1
+    assert capsys.readouterr().err == f"results: {doc}: unknown block 'nope'\n"
+
+
 def test_render_skips_missing_file(tmp_path, capsys):
     results = tmp_path / "runs.json"
     results.write_text("[]\n")
@@ -501,3 +510,5 @@ def test_add_refuses_a_stale_report_when_the_harness_writes_none(
     with pytest.raises(SystemExit, match="without writing"):
         record_result.main([*argv, "--results", str(results)])
     assert not results.exists() and not stale.exists()
+    backup = stale.with_name(f"{stale.name}.bak")
+    assert backup.read_text() == FIXTURE_REPORT.read_text()

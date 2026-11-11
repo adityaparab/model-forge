@@ -298,10 +298,18 @@ def _line(cells: Sequence[str]) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+class UnknownBlockError(ValueError):
+    """A results block or table name with no table behind it."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(f"unknown table {name!r}; expected one of {sorted(_TABLES)}")
+        self.name = name
+
+
 def table(name: str, records: Sequence[dict[str, Any]]) -> str:
     """The Markdown table ``name`` for ``records``, without a trailing newline."""
     if name not in _TABLES:
-        raise ValueError(f"unknown table {name!r}; expected one of {sorted(_TABLES)}")
+        raise UnknownBlockError(name)
     header, row = _TABLES[name]
     rows = [row(r) for r in records] or [["no records yet", *([""] * (len(header) - 1))]]
     lines = [_line(header), _line(["---"] * len(header)), *(_line(r) for r in rows)]
@@ -473,8 +481,12 @@ def _add(args: argparse.Namespace) -> int:
     if args.report is None:
         report_path = Path("evals/reports") / f"{args.profile}-{args.run_id}.json"
         # A report left by an earlier run would pass the run-id check below even when this
-        # harness run failed before writing a new one, so it goes first.
-        report_path.unlink(missing_ok=True)
+        # harness run failed before writing a new one, so it is moved aside to `<name>.bak`
+        # first (not deleted: it may be a full harness report with the challenger layer).
+        if report_path.is_file():
+            backup = report_path.with_name(f"{report_path.name}.bak")
+            report_path.replace(backup)
+            print(f"moved the earlier report to {backup}")
         done = subprocess.run(
             [
                 "uv",
@@ -529,7 +541,11 @@ def _render(args: argparse.Namespace) -> int:
             print(f"skipping {path}: not found", file=sys.stderr)
             continue
         current = _normalise(path.read_text(encoding="utf-8"))
-        rendered = _normalise(render(current, records))
+        try:
+            rendered = _normalise(render(current, records))
+        except UnknownBlockError as exc:
+            print(f"results: {path}: unknown block '{exc.name}'", file=sys.stderr)
+            return 1
         if rendered == current:
             continue
         if args.check:

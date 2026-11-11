@@ -32,7 +32,7 @@ The [Compose reference](docs/reference/compose.md) has the rest, and [commands](
 
 ## How it works
 
-Eight Python packages in a uv workspace, layered so that each imports only from the layers below it. import-linter enforces the direction in CI, and the `core` contracts keep it free of any model or network dependency.
+Eight Python packages in a uv workspace, layered so that each imports only from the layers below it. import-linter enforces the direction in CI, and the `core` contracts keep it free of any model dependency and of any network client except the one dataset download module.
 
 ```mermaid
 flowchart LR
@@ -107,7 +107,7 @@ The side states apply to any node, not only the ones drawn: a pause request park
 
 ## What it demonstrates
 
-- **Human accountability.** Three gates; the `model` and `signoff` decisions must come from someone other than the requester, and `approve` at sign-off is refused while a critical or high finding is open. Proof: [`packages/api/tests/test_writes.py`](packages/api/tests/test_writes.py), and the [design memo](docs/design-memo.md) for every control.
+- **Human accountability.** Three gates; the `model` and `signoff` decisions must come from someone other than the requester, and `approve` at sign-off is refused while a critical or high finding is open or disputed. Proof: [`packages/api/tests/test_writes.py`](packages/api/tests/test_writes.py), and the [design memo](docs/design-memo.md) for every control.
 - **Traceable numbers.** Every number in the development document traces to a hashed artifact and every regulatory claim to a knowledge passage, or the section is flagged. Proof: [`packages/orchestrator/tests/test_grounding.py`](packages/orchestrator/tests/test_grounding.py).
 - **Effective challenge.** The challenger is structurally isolated from the developer agent: it reads the rendered document, validation excerpts, the recorded plan and its own retrieved passages, never the brief, the scope notes or the drafts. Proof: [`packages/orchestrator/tests/test_challenger_isolation.py`](packages/orchestrator/tests/test_challenger_isolation.py), and the [challenger reference](docs/reference/challenger.md).
 - **Reproducibility and tamper evidence.** A replay of a sealed run yields byte-identical hashes for every deterministic artifact, and `verify` fails on any altered event or artifact. Proof: [`packages/orchestrator/tests/test_integration.py`](packages/orchestrator/tests/test_integration.py) and [`packages/lineage/tests/test_verify.py`](packages/lineage/tests/test_verify.py).

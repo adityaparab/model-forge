@@ -21,7 +21,7 @@ The table is the architecture spec's trade-off table with a fourth column from t
 
 ## Parity
 
-One row per recorded run. The local row ends in `needs_attention`, so the metrics only an eval report has are `-`.
+One row per recorded run. The local row ends in `needs_attention`, so the metrics only an eval report has are `-`. The runs' gates were decided differently: `hosted-default`'s by people in the console, `hosted-ci-cheap`'s and `local-ollama`'s by the eval harness's scripted approvals, where `approve_with_conditions` is the harness's fallback when the sign-off rule refuses `approve`.
 
 <!-- results:parity -->
 | Profile | Model | Status | Grounding | Complete | Ungrounded numbers | Findings (pre-check / review; critical / high / medium / low) | Rounds (challenge / remediation) | Sections regenerated | Schema retries | LLM calls | Cost USD | Wall time |

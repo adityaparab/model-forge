@@ -8,9 +8,9 @@ from modelforge_evals.config import EvalConfigError, load_config
 REPO = Path(__file__).resolve().parents[3]
 
 
-def test_committed_config_has_the_three_profiles() -> None:
+def test_committed_config_has_the_four_profiles() -> None:
     config = load_config(REPO / "evals/evals.yml")
-    assert set(config.profiles) == {"fake", "default", "ci-cheap"}
+    assert set(config.profiles) == {"fake", "default", "ci-cheap", "local-ollama"}
     fake = config.profiles["fake"]
     assert fake.compare == "exact"
     assert fake.brief == "synthetic"
@@ -30,9 +30,15 @@ def test_committed_config_has_the_three_profiles() -> None:
         ("model", "accept", "bob"),
         ("signoff", "approve", "bob"),
     ]
-    for spec in config.profiles.values():
+    local = config.profiles["local-ollama"]
+    assert local.brief == "polish"
+    assert local.layers == ["retrieval", "pipeline", "cost"]
+    assert local.budgets == {"cost_usd": 0.0, "wall_time_s": 7200}
+    assert local.tolerances == {"grounding_pass_rate": -0.20, "retrieval_recall_at_5": -0.05}
+    for name, spec in config.profiles.items():
         assert spec.brief in config.briefs
-        assert spec.layers == ["retrieval", "pipeline", "challenger", "cost"]
+        if name != "local-ollama":
+            assert spec.layers == ["retrieval", "pipeline", "challenger", "cost"]
 
 
 def test_a_config_missing_approvals_is_refused(tmp_path: Path) -> None:

@@ -39,7 +39,7 @@ The measured runs behind every published number are in [`results/`](results/READ
 
 ModelForge was built as six sub-projects, each with a design spec, an implementation plan and a hand-off note to the next: the core toolkit, the orchestrator and lineage store, the gateway with the knowledge layer and agents, the challenger with remediation and evals, the API with the console, and this documentation.
 
-The architecture design is the umbrella; its section 17.1 is the first sub-project's scope, and its sections 20 to 23 record what each later sub-project changed as built.
+The architecture design is the umbrella; its section 17.1 is the first sub-project's scope, and its sections 20 to 23 (SP3 to SP6) record what each later sub-project changed as built.
 
 | Sub-project | Design | Plan | Hand-off note |
 | --- | --- | --- | --- |

@@ -213,9 +213,11 @@ def check_sizes(root: Path, limits: dict[str, int]) -> list[Failure]:
     failures: list[Failure] = []
     for rel, limit in limits.items():
         path = root / rel
-        if path.is_file() and (size := path.stat().st_size) >= limit:
+        if path.is_file() and (size := path.stat().st_size) > limit:
             failures.append(
-                Failure("sizes", rel, f"{size} bytes, must be under {limit} ({limit / MIB:g} MiB)")
+                Failure(
+                    "sizes", rel, f"{size} bytes, must be at most {limit} ({limit / MIB:g} MiB)"
+                )
             )
     return failures
 

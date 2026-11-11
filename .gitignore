@@ -34,3 +34,5 @@ out/
 scripts/node_modules/
 .neutrality-patterns
 docs/media/*.webm
+docs/media/failure.png
+docs/media/.video-*/

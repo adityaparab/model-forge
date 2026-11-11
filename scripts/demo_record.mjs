@@ -220,9 +220,9 @@ if (VIDEO && video !== null) {
   rmSync(videoDir, { recursive: true, force: true });
 
   const sizes = { gif: statSync(gif).size, mp4: statSync(mp4).size };
-  const mb = (bytes) => `${(bytes / MIB).toFixed(2)} MB`;
-  console.log(`demo.gif ${mb(sizes.gif)} (limit ${mb(LIMITS.gif)})`);
-  console.log(`demo.mp4 ${mb(sizes.mp4)} (limit ${mb(LIMITS.mp4)})`);
+  const mib = (bytes) => `${(bytes / MIB).toFixed(2)} MiB`;
+  console.log(`demo.gif ${mib(sizes.gif)} (limit ${mib(LIMITS.gif)})`);
+  console.log(`demo.mp4 ${mib(sizes.mp4)} (limit ${mib(LIMITS.mp4)})`);
   if (sizes.gif > LIMITS.gif || sizes.mp4 > LIMITS.mp4) {
     console.error("media over the size limits");
     process.exit(2);

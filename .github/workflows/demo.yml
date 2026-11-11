@@ -16,4 +16,4 @@ jobs:
         with:
           name: fresh-clone-logs
           path: /tmp/fresh-clone-logs/*.log
-          if-no-files-found: ignore
+          if-no-files-found: warn
