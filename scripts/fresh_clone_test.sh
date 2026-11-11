@@ -102,7 +102,11 @@ cleanup() {
 		(cd "$clone" && COMPOSE_PROJECT_NAME="$PROJECT_NAME" MODELFORGE_POSTGRES_PORT="$FRESH_PORT" \
 			docker compose down -v) || true
 	fi
-	rm -rf "$work"
+	# The containers write artifacts into the clone as root, which the calling user cannot
+	# remove on Linux; fall back to passwordless sudo (GitHub runners) and never let the
+	# cleanup change the exit code of the measurement.
+	rm -rf "$work" 2>/dev/null || sudo -n rm -rf "$work" 2>/dev/null \
+		|| echo "fresh-clone: could not remove $work (container-owned files); remove it by hand" >&2
 	exit "$rc"
 }
 trap cleanup EXIT
