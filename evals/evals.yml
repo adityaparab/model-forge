@@ -36,3 +36,11 @@ profiles:
       defect_precision: -0.25
       cost_usd: 1.00
     budgets: {cost_usd: 5.0, probe_cost_usd: 1.0, wall_time_s: 2700}
+  # Local models through Ollama: free, slow. The challenger probe layer is left out
+  # because its probe runs would multiply the local wall time; the pipeline's own
+  # challenger rounds are still measured.
+  local-ollama:
+    brief: polish
+    layers: [retrieval, pipeline, cost]
+    tolerances: {grounding_pass_rate: -0.20, retrieval_recall_at_5: -0.05}
+    budgets: {cost_usd: 0.0, wall_time_s: 7200}

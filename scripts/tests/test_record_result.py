@@ -279,7 +279,7 @@ def test_add_runs_harness_when_no_report(
 
     def fake_subprocess_run(argv, check):
         calls.append(argv)
-        assert check is True
+        assert check is False
         out = tmp_path / "evals" / "reports" / "fake-run_b4b2b2f8e6d4.json"
         out.parent.mkdir(parents=True)
         out.write_text(FIXTURE_REPORT.read_text())
@@ -312,6 +312,36 @@ def test_add_runs_harness_when_no_report(
     assert rec["label"] == "fake-default" and rec["replay_ok"] is True
 
 
+@pytest.mark.parametrize("code", [1, 2])
+def test_add_tolerates_harness_regressions_only(
+    monkeypatch, tmp_path, fake_run, fake_approvals, fake_replays, code
+):
+    """Exit 1 (regressions, report written) is recorded; any other failure is not."""
+    monkeypatch.chdir(tmp_path)
+
+    def fake_subprocess_run(argv, check):
+        if code == 1:
+            out = tmp_path / "evals" / "reports" / "fake-run_b4b2b2f8e6d4.json"
+            out.parent.mkdir(parents=True)
+            out.write_text(FIXTURE_REPORT.read_text())
+        return subprocess.CompletedProcess(argv, code)
+
+    monkeypatch.setattr(record_result.subprocess, "run", fake_subprocess_run)
+    monkeypatch.setattr(
+        record_result, "load_lineage", lambda run_id: (fake_run, fake_approvals, fake_replays)
+    )
+    results = tmp_path / "runs.json"
+    argv = ["add", "run_b4b2b2f8e6d4", "--profile", "fake", "--label", "l"]
+    if code == 1:
+        assert record_result.main([*argv, "--results", str(results)]) == 0
+        (rec,) = record_result.load_records(results)
+        assert rec["label"] == "l"
+    else:
+        with pytest.raises(SystemExit, match="exited 2"):
+            record_result.main([*argv, "--results", str(results)])
+        assert not results.exists()
+
+
 def test_add_with_report_skips_harness(
     monkeypatch, tmp_path, fake_run, fake_approvals, fake_replays
 ):
@@ -336,3 +366,111 @@ def test_add_refuses_mismatched_report(monkeypatch, tmp_path, fake_run):
     args += ["--report", str(FIXTURE_REPORT), "--results", str(tmp_path / "runs.json")]
     with pytest.raises(SystemExit, match="run_b4b2b2f8e6d4"):
         record_result.main(args)
+
+
+# --- lineage-only records ------------------------------------------------------------
+
+
+@dataclass
+class FakeCall:
+    purpose: str
+    schema_valid: bool = True
+    input_tokens: int = 100
+    output_tokens: int = 10
+    cost_usd: float = 0.0
+    provider: str = "ollama"
+    model: str = "gpt-oss:20b"
+
+
+@dataclass
+class FakeStep:
+    node: str
+    started_at: Any
+    finished_at: Any
+
+
+def _parked_lineage():
+    from datetime import UTC, datetime, timedelta
+
+    t0 = datetime(2026, 11, 11, 3, 15, tzinfo=UTC)
+    run = FakeRun(id="run_parked", status="needs_attention", profile="local-ollama")
+    calls = [
+        FakeCall("scope"),
+        FakeCall("document"),
+        FakeCall("document", schema_valid=False),
+        FakeCall("challenge"),
+        FakeCall("remediate", schema_valid=False),
+    ]
+    steps = [
+        FakeStep("scope", t0, t0 + timedelta(seconds=10)),
+        FakeStep("document", t0 + timedelta(seconds=10), t0 + timedelta(seconds=100)),
+        FakeStep("challenge", t0 + timedelta(seconds=100), t0 + timedelta(seconds=130)),
+        FakeStep("remediate", t0 + timedelta(seconds=130), t0 + timedelta(seconds=200)),
+    ]
+    findings = [
+        {"source": "precheck", "severity": "high", "status": "open"},
+        {"source": "review", "severity": "high", "status": "open"},
+        {"source": "review", "severity": "medium", "status": "open"},
+    ]
+    return run, calls, steps, findings
+
+
+def test_lineage_report_builds_a_record_for_an_unsealed_run():
+    run, calls, steps, findings = _parked_lineage()
+    report = record_result.lineage_report(run, calls, steps, findings, orchestrator_version="9.9")
+    rec = record_result.build_record(report, run, [], [], label="local", note="parked")
+    assert set(rec) == RECORD_KEYS
+    assert rec["status"] == "needs_attention" and rec["signoff"] is None
+    assert rec["models"] == {p: "ollama/gpt-oss:20b" for p in record_result.PURPOSES}
+    assert (rec["n_llm_calls"], rec["n_schema_retries"]) == (5, 2)
+    assert (rec["input_tokens"], rec["output_tokens"]) == (500, 50)
+    assert rec["cost_usd"] == 0.0
+    assert rec["cost_by_purpose"] == dict.fromkeys(record_result.PURPOSES, 0.0)
+    assert rec["wall_time_s"] == 200.0
+    assert rec["wall_time_by_node_s"] == {
+        "challenge": 30.0,
+        "document": 90.0,
+        "remediate": 70.0,
+        "scope": 10.0,
+    }
+    assert rec["findings"] == {
+        "total": 3,
+        "precheck": 1,
+        "review": 2,
+        "high": 2,
+        "medium": 1,
+        "low": 0,
+        "open_at_signoff": 3,
+    }
+    assert rec["rounds"] == {"challenge": 1, "remediation": 1}
+    for key in record_result.EVAL_ONLY_METRICS:
+        assert rec[key] is None
+    assert rec["replay_ok"] is None and rec["note"] == "parked"
+    parity = record_result.table("parity", [rec])
+    assert "needs_attention, n/a" in parity and "| - | - | - |" in parity
+    assert "None" not in parity
+
+
+def test_add_from_lineage_skips_harness_and_report(monkeypatch, tmp_path):
+    run, calls, steps, findings = _parked_lineage()
+
+    def no_subprocess(*args, **kwargs):
+        raise AssertionError("harness must not run with --from-lineage")
+
+    monkeypatch.setattr(record_result.subprocess, "run", no_subprocess)
+    monkeypatch.setattr(
+        record_result,
+        "load_lineage_report",
+        lambda run_id: record_result.lineage_report(
+            run, calls, steps, findings, orchestrator_version="9.9"
+        ),
+    )
+    monkeypatch.setattr(record_result, "load_lineage", lambda run_id: (run, [], []))
+    results = tmp_path / "runs.json"
+    args = ["add", "run_parked", "--profile", "local-ollama", "--label", "local-ollama"]
+    assert record_result.main([*args, "--from-lineage", "--results", str(results)]) == 0
+    (rec,) = record_result.load_records(results)
+    assert rec["status"] == "needs_attention"
+    wrong = ["add", "run_parked", "--profile", "default", "--label", "x", "--from-lineage"]
+    with pytest.raises(SystemExit, match="local-ollama"):
+        record_result.main([*wrong, "--results", str(results)])

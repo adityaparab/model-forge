@@ -1,1 +1,201 @@
-[]
+[
+  {
+    "completeness_complete": true,
+    "cost_by_purpose": {
+      "challenge": 0.732376,
+      "document": 1.9127018000000002,
+      "remediate": 4.497614,
+      "scope": 0.042152
+    },
+    "cost_cap_usd": 20.0,
+    "cost_usd": 7.1848438,
+    "findings": {
+      "high": 4,
+      "low": 0,
+      "medium": 7,
+      "open_at_signoff": 9,
+      "precheck": 0,
+      "review": 11,
+      "total": 11
+    },
+    "grounding_pass_rate": 1.0,
+    "input_tokens": 1169281,
+    "label": "hosted-default",
+    "models": {
+      "challenge": "anthropic/claude-opus-5-5",
+      "document": "anthropic/claude-opus-5-5",
+      "remediate": "anthropic/claude-opus-5-5",
+      "scope": "anthropic/claude-opus-5-5"
+    },
+    "n_flagged_sections": 0,
+    "n_llm_calls": 92,
+    "n_schema_retries": 0,
+    "n_sections": 11,
+    "n_sections_regenerated": 7,
+    "n_ungrounded_numbers": 0,
+    "note": null,
+    "orchestrator_version": "0.1.0",
+    "output_tokens": 149474,
+    "profile": "default",
+    "recorded_at": "2026-11-11T03:16:15Z",
+    "replay_ok": true,
+    "retrieval_recall_at_5": 1.0,
+    "rounds": {
+      "challenge": 3,
+      "remediation": 2
+    },
+    "run_id": "run_d7e6c78b53b3",
+    "scope_exact_match": true,
+    "signoff": "approve_with_conditions",
+    "status": "completed",
+    "wall_time_by_node_s": {
+      "build": 2.168855,
+      "challenge": 99.22604,
+      "document": 549.145134,
+      "features": 0.618801,
+      "gate_model": 0.001174,
+      "gate_scope": 0.001355,
+      "gate_signoff": 0.001392,
+      "intake": 0.003173,
+      "profile": 1.49237,
+      "remediate": 778.234763,
+      "scope": 9.632281,
+      "seal": 0.007564,
+      "split": 0.027256,
+      "validate": 4.889972
+    },
+    "wall_time_s": 1861.76397
+  },
+  {
+    "completeness_complete": false,
+    "cost_by_purpose": {
+      "challenge": 0.225748,
+      "document": 0.8421614000000001,
+      "remediate": 2.104954400000001,
+      "scope": 0.020446
+    },
+    "cost_cap_usd": 10.0,
+    "cost_usd": 3.1933098,
+    "findings": {
+      "high": 12,
+      "low": 0,
+      "medium": 4,
+      "open_at_signoff": 9,
+      "precheck": 9,
+      "review": 7,
+      "total": 16
+    },
+    "grounding_pass_rate": 0.8181818181818181,
+    "input_tokens": 1355833,
+    "label": "hosted-ci-cheap",
+    "models": {
+      "challenge": "anthropic/claude-sonnet-5-5",
+      "document": "anthropic/claude-sonnet-5-5",
+      "remediate": "anthropic/claude-sonnet-5-5",
+      "scope": "anthropic/claude-sonnet-5-5"
+    },
+    "n_flagged_sections": 2,
+    "n_llm_calls": 139,
+    "n_schema_retries": 0,
+    "n_sections": 11,
+    "n_sections_regenerated": 11,
+    "n_ungrounded_numbers": 1,
+    "note": null,
+    "orchestrator_version": "0.1.0",
+    "output_tokens": 84859,
+    "profile": "ci-cheap",
+    "recorded_at": "2026-11-11T03:15:18Z",
+    "replay_ok": null,
+    "retrieval_recall_at_5": 1.0,
+    "rounds": {
+      "challenge": 3,
+      "remediation": 2
+    },
+    "run_id": "run_378df0420b8c",
+    "scope_exact_match": true,
+    "signoff": "approve_with_conditions",
+    "status": "completed",
+    "wall_time_by_node_s": {
+      "build": 1.065112,
+      "challenge": 28.615795,
+      "document": 249.297833,
+      "features": 0.556638,
+      "gate_model": 0.003013,
+      "gate_scope": 0.0051,
+      "gate_signoff": 0.004541,
+      "intake": 0.007628,
+      "profile": 1.337083,
+      "remediate": 384.801415,
+      "scope": 6.649465,
+      "seal": 0.015717,
+      "split": 0.025962,
+      "validate": 4.162069
+    },
+    "wall_time_s": 694.010396
+  },
+  {
+    "completeness_complete": null,
+    "cost_by_purpose": {
+      "challenge": 0.0,
+      "document": 0.0,
+      "remediate": 0.0,
+      "scope": 0.0
+    },
+    "cost_cap_usd": 10.0,
+    "cost_usd": 0.0,
+    "findings": {
+      "high": 14,
+      "low": 0,
+      "medium": 1,
+      "open_at_signoff": 17,
+      "precheck": 10,
+      "review": 7,
+      "total": 17
+    },
+    "grounding_pass_rate": null,
+    "input_tokens": 398505,
+    "label": "local-ollama",
+    "models": {
+      "challenge": "ollama/gpt-oss:20b",
+      "document": "ollama/gpt-oss:20b",
+      "remediate": "ollama/gpt-oss:20b",
+      "scope": "ollama/gpt-oss:20b"
+    },
+    "n_flagged_sections": null,
+    "n_llm_calls": 67,
+    "n_schema_retries": 10,
+    "n_sections": null,
+    "n_sections_regenerated": null,
+    "n_ungrounded_numbers": null,
+    "note": "Attempt 1 (run_41b058364191) ran the full pipeline through document and challenge on gpt-oss:20b and failed in remediation after three schema retries (no valid FindingResponseDraft: an accept needs a concrete, non-empty action), parking at needs_attention after 29 minutes. Attempt 2 (run_b22757c97c12) was terminated after 7 h 29 min still in the document node with 43 document calls, far past the profile's 7200 s wall-time budget.",
+    "orchestrator_version": "0.1.0",
+    "output_tokens": 150130,
+    "profile": "local-ollama",
+    "recorded_at": "2026-11-11T11:15:46Z",
+    "replay_ok": null,
+    "retrieval_recall_at_5": null,
+    "rounds": {
+      "challenge": 1,
+      "remediation": 1
+    },
+    "run_id": "run_41b058364191",
+    "scope_exact_match": null,
+    "signoff": null,
+    "status": "needs_attention",
+    "wall_time_by_node_s": {
+      "build": 1.05079,
+      "challenge": 140.115338,
+      "document": 1383.383153,
+      "features": 0.578763,
+      "gate_model": 0.004108,
+      "gate_scope": 0.003871,
+      "intake": 0.007218,
+      "profile": 1.357825,
+      "remediate": 178.86814,
+      "scope": 17.835235,
+      "split": 0.02727,
+      "validate": 4.162587
+    },
+    "wall_time_s": 1738.854657
+  }
+]

@@ -8,7 +8,7 @@ Every number the documents publish about a run comes from `runs.json` in this di
 uv run python scripts/record_result.py add <run_id> --profile <profile> --label <label>
 ```
 
-`add` runs the eval harness against the existing sealed run (`modelforge-evals run --profile <profile> --run-id <run_id> --layers pipeline,retrieval`, which makes no LLM call) and writes `evals/reports/<profile>-<run_id>.json`. It then reads that report, the run record, its approvals and its replays from lineage and writes one record into `runs.json`, keyed by `run_id`: recording the same run again replaces its record. `--report <path>` uses an existing report instead of running the harness, and `--note <text>` attaches a note. The file is JSON with sorted keys and a trailing newline so diffs stay small.
+`add` runs the eval harness against the existing sealed run (`modelforge-evals run --profile <profile> --run-id <run_id> --layers pipeline,retrieval`, which makes no LLM call) and writes `evals/reports/<profile>-<run_id>.json`. The harness exits 1 when a rule of the profile fails, which it always does for a rule over the challenger layer's metrics (defect recall, probe cost) that these two layers do not measure; the report is written before that check, so `add` records it and stops only on any other failure. It then reads that report, the run record, its approvals and its replays from lineage and writes one record into `runs.json`, keyed by `run_id`: recording the same run again replaces its record. `--report <path>` uses an existing report instead of running the harness, and `--note <text>` attaches a note. `--from-lineage` records a run that never sealed, which the harness refuses to evaluate: the record is built from the run's lineage rows alone (its LLM calls, steps and findings), and the metrics only an eval report has (grounding, completeness, sections, scope match, retrieval recall) are `null`, shown as `-` in the tables. The file is JSON with sorted keys and a trailing newline so diffs stay small.
 
 `make results` re-renders every results block in `README.md`, `docs/trade-offs.md` and this file; `make results-check` fails when a block is stale, and CI runs it.
 
@@ -46,5 +46,7 @@ uv run python scripts/record_result.py add <run_id> --profile <profile> --label 
 <!-- results:runs -->
 | Run id | Label | Recorded | Orchestrator version | Replay ok |
 | --- | --- | --- | --- | --- |
-| no records yet |  |  |  |  |
+| run_d7e6c78b53b3 | hosted-default | 2026-11-11 | 0.1.0 | yes |
+| run_378df0420b8c | hosted-ci-cheap | 2026-11-11 | 0.1.0 | n/a |
+| run_41b058364191 | local-ollama | 2026-11-11 | 0.1.0 | n/a |
 <!-- /results:runs -->

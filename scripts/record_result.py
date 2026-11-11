@@ -2,12 +2,16 @@
 
 Usage (through ``uv run python scripts/record_result.py``):
 
-    add RUN_ID --profile P --label L [--report PATH] [--note TEXT] [--results PATH]
+    add RUN_ID --profile P --label L [--report PATH | --from-lineage] [--note TEXT]
+        [--results PATH]
     table parity|cost|runs [--results PATH]
     render FILE... [--results PATH] [--check]
 
 Every number in a record comes from the eval report or from lineage; no metric is taken
-on the command line. ``render`` rewrites the text between ``<!-- results:NAME -->`` and
+on the command line. ``--from-lineage`` records a run that never sealed (the harness
+refuses one) from its lineage rows alone; the metrics only an eval report has are null.
+
+``render`` rewrites the text between ``<!-- results:NAME -->`` and
 ``<!-- /results:NAME -->`` markers; ``render --check`` exits 1 when a file would change.
 """
 
@@ -196,6 +200,15 @@ def _yes_no(value: bool | None) -> str:
     return "n/a" if value is None else ("yes" if value else "no")
 
 
+def _cell(value: Any) -> str:
+    """``value`` as a table cell; ``-`` for a metric the record does not have."""
+    return "-" if value is None else str(value)
+
+
+def _pct(value: float | None) -> str:
+    return "-" if value is None else f"{value * 100:.1f}%"
+
+
 def _mmss(seconds: float) -> str:
     total = round(seconds)
     return f"{total // 60}:{total % 60:02d}"
@@ -207,12 +220,14 @@ def _parity_row(r: dict[str, Any]) -> list[str]:
         r["label"],
         r["models"].get("document", "n/a"),
         f"{r['status']}, {r['signoff'] or 'n/a'}",
-        f"{r['grounding_pass_rate'] * 100:.1f}%",
-        f"{_yes_no(r['completeness_complete'])} ({r['n_flagged_sections']} flagged)",
-        str(r["n_ungrounded_numbers"]),
+        _pct(r["grounding_pass_rate"]),
+        "-"
+        if r["completeness_complete"] is None
+        else f"{_yes_no(r['completeness_complete'])} ({r['n_flagged_sections']} flagged)",
+        _cell(r["n_ungrounded_numbers"]),
         f"{f['precheck']} / {f['review']}; {f['high']} / {f['medium']} / {f['low']}",
         f"{rounds['challenge']} / {rounds['remediation']}",
-        str(r["n_sections_regenerated"]),
+        _cell(r["n_sections_regenerated"]),
         str(r["n_schema_retries"]),
         str(r["n_llm_calls"]),
         _total_usd(r["cost_usd"]),
@@ -335,12 +350,124 @@ def load_lineage(run_id: str) -> tuple[Any, list[Any], list[Any]]:
     return run, approvals, replays
 
 
+# Metrics an eval report has and lineage alone cannot give: they read the sealed
+# manifest's ref summaries, the knowledge layer or the brief.
+EVAL_ONLY_METRICS = (
+    "grounding_pass_rate",
+    "completeness_complete",
+    "n_flagged_sections",
+    "n_ungrounded_numbers",
+    "n_sections",
+    "n_sections_regenerated",
+    "scope_exact_match",
+    "retrieval_recall_at_5",
+)
+
+
+def _count(rows: Sequence[dict[str, Any]], key: str) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for row in rows:
+        counts[row[key]] = counts.get(row[key], 0) + 1
+    return counts
+
+
+def lineage_report(
+    run: Any,
+    calls: Sequence[Any],
+    steps: Sequence[Any],
+    findings: Sequence[dict[str, Any]],
+    *,
+    orchestrator_version: str,
+) -> dict[str, Any]:
+    """A report-shaped dict for a run that never sealed, from its lineage rows alone.
+
+    ``calls`` are its ``llm_calls`` (``purpose``, ``provider``, ``model``, tokens,
+    ``cost_usd``, ``schema_valid``), ``steps`` its steps (``node``, ``started_at``,
+    ``finished_at``) and ``findings`` its findings rows (``source``, ``severity``,
+    ``status``). Wall times follow the harness: last finish minus first start, and the
+    summed durations of the finished steps per node. Rounds count the challenge and
+    remediate steps that ran. The eval-only metrics are None.
+    """
+    spans = [(s.node, s.started_at, s.finished_at) for s in steps if s.finished_at is not None]
+    by_node: dict[str, float] = {}
+    for node, started, finished in spans:
+        by_node[node] = by_node.get(node, 0.0) + (finished - started).total_seconds()
+    wall = (
+        (max(f for _, _, f in spans) - min(s.started_at for s in steps)).total_seconds()
+        if spans
+        else 0.0
+    )
+    nodes = [s.node for s in steps]
+    metrics: dict[str, Any] = dict.fromkeys(EVAL_ONLY_METRICS)
+    metrics |= {
+        "pipeline_status": run.status,
+        "signoff_decision": None,
+        "n_findings": len(findings),
+        "challenge_rounds": nodes.count("challenge"),
+        "remediation_rounds": nodes.count("remediate"),
+        "n_llm_calls": len(calls),
+        "n_schema_retries": sum(not c.schema_valid for c in calls),
+        "input_tokens": sum(c.input_tokens for c in calls),
+        "output_tokens": sum(c.output_tokens for c in calls),
+        "cost_usd": float(sum(c.cost_usd for c in calls)),
+        "wall_time_s": wall,
+    }
+    for prefix, counts in (
+        ("findings_by_source", _count(findings, "source")),
+        ("findings_by_severity", _count(findings, "severity")),
+        ("findings_by_status", _count(findings, "status")),
+    ):
+        metrics |= {f"{prefix}.{k}": v for k, v in counts.items()}
+    cost_by_purpose: dict[str, float] = {}
+    for c in calls:
+        cost_by_purpose[c.purpose] = cost_by_purpose.get(c.purpose, 0.0) + float(c.cost_usd)
+    metrics |= {f"cost_by_purpose.{k}": v for k, v in cost_by_purpose.items()}
+    metrics |= {f"wall_time_by_node_s.{k}": v for k, v in by_node.items()}
+    models = {c.purpose: f"{c.provider}/{c.model}" for c in calls}
+    return {
+        "run_id": run.id,
+        "models": dict(sorted(models.items())),
+        "orchestrator_version": orchestrator_version,
+        "metrics": dict(sorted(metrics.items())),
+    }
+
+
+def load_lineage_report(run_id: str) -> dict[str, Any]:
+    """`lineage_report` for ``run_id``, read from the configured database."""
+    from modelforge_lineage import runs
+    from modelforge_lineage.db import Database
+    from modelforge_lineage.llm_calls import list_llm_calls
+    from modelforge_lineage.steps import list_steps
+    from modelforge_orchestrator import __version__
+    from modelforge_orchestrator.config import load_settings
+
+    db = Database(load_settings().database_url)
+    with db.connection() as conn:
+        run = runs.get_run(conn, run_id)
+        calls = list_llm_calls(conn, run_id)
+        steps = list_steps(conn, run_id)
+        findings = conn.execute(
+            "select source, severity, status from findings where run_id = %s order by id",
+            (run_id,),
+        ).fetchall()
+    return lineage_report(run, calls, steps, findings, orchestrator_version=__version__)
+
+
 # --- commands ------------------------------------------------------------------------
 
 
 def _add(args: argparse.Namespace) -> int:
+    if args.from_lineage:
+        report = load_lineage_report(args.run_id)
+        run, approvals, replays = load_lineage(args.run_id)
+        if run.profile != args.profile:
+            raise SystemExit(f"{args.run_id} ran under {run.profile!r}, not {args.profile!r}")
+        record = build_record(report, run, approvals, replays, label=args.label, note=args.note)
+        save_records(args.results, upsert(load_records(args.results), record))
+        print(f"recorded {args.run_id} as {args.label!r} from lineage in {args.results}")
+        return 0
     if args.report is None:
-        subprocess.run(
+        done = subprocess.run(
             [
                 "uv",
                 "run",
@@ -353,8 +480,16 @@ def _add(args: argparse.Namespace) -> int:
                 "--layers",
                 "pipeline,retrieval",
             ],
-            check=True,
+            check=False,
         )
+        # Exit 1 is a regression or budget failure, reported after the report file is
+        # written: with only these two layers, rules over the challenger layer's metrics
+        # (defect recall, probe cost) always fail as missing. The report is still the
+        # measurement; any other non-zero exit means no report was written.
+        if done.returncode not in (0, 1):
+            raise SystemExit(f"the eval harness exited {done.returncode}; no report recorded")
+        if done.returncode == 1:
+            print("note: the harness reported regressions (see above); recording its report")
         report_path = Path("evals/reports") / f"{args.profile}-{args.run_id}.json"
     else:
         report_path = Path(args.report)
@@ -404,7 +539,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     add.add_argument("run_id")
     add.add_argument("--profile", required=True)
     add.add_argument("--label", required=True)
-    add.add_argument("--report", default=None, help="an existing eval report; skips the harness")
+    source = add.add_mutually_exclusive_group()
+    source.add_argument("--report", default=None, help="an existing eval report; skips the harness")
+    source.add_argument(
+        "--from-lineage",
+        action="store_true",
+        help="a run that never sealed: build the record from lineage alone, without a report",
+    )
     add.add_argument("--note", default=None)
     add.set_defaults(func=_add)
 
