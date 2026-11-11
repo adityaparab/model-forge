@@ -11,7 +11,7 @@ The recording above is the real console on the `fake` profile. [The walkthrough]
 
 ## Try it
 
-Prerequisites: Docker, `curl` and `python3` on the host; nothing else, and no model key.
+Prerequisites: Docker with Compose v2, `make`, `curl` and `python3` on the host; nothing else, and no model key.
 
 ```bash
 git clone https://github.com/adityaparab/model-forge.git
@@ -32,7 +32,7 @@ The [Compose reference](docs/reference/compose.md) has the rest, and [commands](
 
 ## How it works
 
-Eight Python packages in a uv workspace, layered so that each imports only from the layers below it. import-linter enforces the direction in CI, and two further contracts keep `core` free of any model, network or database dependency.
+Eight Python packages in a uv workspace, layered so that each imports only from the layers below it. import-linter enforces the direction in CI, and the `core` contracts keep it free of any model or network dependency.
 
 ```mermaid
 flowchart LR

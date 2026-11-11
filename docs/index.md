@@ -1,6 +1,6 @@
 # Documentation
 
-ModelForge is a reference implementation, not a production system. This page is the map of its documentation: read the first six in order for the whole picture in about two hours, then use the reference pages for detail.
+ModelForge is a reference implementation, not a production system. This page is the map of its documentation: read the first six in order for the whole picture in under two hours, then use the reference pages for detail.
 
 ## Reading order
 
